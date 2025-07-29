@@ -23,7 +23,7 @@ This crate MUST:
   edition = "2021"
 
   [dependencies]
-  core = { path = "../core" }
+  task-core = { path = "../core" }
   sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "chrono", "migrate"] }
   tokio = { version = "1.0", features = ["full"] }
   async-trait = "0.1"

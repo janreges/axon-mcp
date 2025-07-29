@@ -24,7 +24,7 @@ This crate MUST:
   edition = "2021"
 
   [dependencies]
-  core = { path = "../core" }
+  task-core = { path = "../core" }
   tokio = { version = "1.0", features = ["sync", "macros"] }
   async-trait = "0.1"
   parking_lot = "0.12"

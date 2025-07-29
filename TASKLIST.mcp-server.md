@@ -28,7 +28,7 @@ This crate MUST:
   path = "src/main.rs"
 
   [dependencies]
-  core = { path = "../core" }
+  task-core = { path = "../core" }
   database = { path = "../database" }
   mcp-protocol = { path = "../mcp-protocol" }
   

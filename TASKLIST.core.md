@@ -17,7 +17,7 @@ This crate MUST:
 - [ ] Create `core/Cargo.toml` with dependencies:
   ```toml
   [package]
-  name = "core"
+  name = "task-core"
   version = "0.1.0"
   edition = "2021"
 

@@ -23,7 +23,7 @@ This crate MUST:
   edition = "2021"
 
   [dependencies]
-  core = { path = "../core" }
+  task-core = { path = "../core" }
   mcp-sdk = { git = "https://github.com/modelcontextprotocol/rust-sdk" }
   serde = { version = "1.0", features = ["derive"] }
   serde_json = "1.0"
