@@ -173,10 +173,17 @@ test_with_curl() {
 test_sse_connection() {
     print_info "Testing SSE connection..."
     
-    # Start SSE listener in background
-    timeout 10s curl -N -H "Accept: text/event-stream" \
-                     -H "Origin: $BASE_URL" \
-                     "$SSE_ENDPOINT" > sse_output.log 2>&1 &
+    # Start SSE listener in background (use gtimeout if available, otherwise use background job)
+    if command -v gtimeout >/dev/null 2>&1; then
+        gtimeout 10s curl -N -H "Accept: text/event-stream" \
+                         -H "Origin: $BASE_URL" \
+                         "$SSE_ENDPOINT" > sse_output.log 2>&1 &
+    else
+        # Fallback for macOS without gtimeout
+        curl -N -H "Accept: text/event-stream" \
+             -H "Origin: $BASE_URL" \
+             "$SSE_ENDPOINT" > sse_output.log 2>&1 &
+    fi
     SSE_PID=$!
     
     sleep 2
@@ -195,6 +202,7 @@ test_sse_connection() {
     
     # Stop SSE listener
     kill $SSE_PID 2>/dev/null || true
+    wait $SSE_PID 2>/dev/null || true
     
     # Check if we received SSE events
     if [ -f sse_output.log ] && [ -s sse_output.log ]; then
@@ -215,25 +223,41 @@ run_performance_tests() {
     # Simple load test with multiple requests
     print_info "Sending 10 concurrent requests..."
     
+    # Use a safer approach - create proper JSON payloads
     for i in {1..10}; do
-        curl -s -X POST "$REQUEST_ENDPOINT" \
+        # Create proper JSON payload to avoid shell escaping issues
+        JSON_PAYLOAD=$(cat <<EOF
+{
+    "jsonrpc": "2.0",
+    "method": "create_task",
+    "params": {
+        "code": "PERF-$(printf "%03d" $i)",
+        "name": "Performance Test Task $i",
+        "description": "Load testing task",
+        "owner_agent_name": "perf-tester"
+    },
+    "id": $((1000 + i))
+}
+EOF
+)
+        # Send request in background with timeout protection
+        (curl -s -m 10 -X POST "$REQUEST_ENDPOINT" \
             -H "Content-Type: application/json" \
             -H "Origin: $BASE_URL" \
-            -d "{
-                \"jsonrpc\": \"2.0\",
-                \"method\": \"create_task\",
-                \"params\": {
-                    \"code\": \"PERF-$(printf "%03d" $i)\",
-                    \"name\": \"Performance Test Task $i\",
-                    \"description\": \"Load testing task\",
-                    \"owner_agent_name\": \"perf-tester\"
-                },
-                \"id\": $((1000 + i))
-            }" > /dev/null &
+            -d "$JSON_PAYLOAD" > /dev/null 2>&1) &
     done
     
-    wait
-    print_status "Performance tests completed"
+    # Wait for all background jobs with timeout
+    local waited=0
+    while [ $(jobs -r | wc -l) -gt 0 ] && [ $waited -lt 30 ]; do
+        sleep 1
+        waited=$((waited + 1))
+    done
+    
+    # Kill any remaining jobs
+    jobs -p | xargs -r kill 2>/dev/null || true
+    
+    print_status "Performance tests completed (sent 10 requests)"
 }
 
 # Function to validate MCP Inspector setup
@@ -244,7 +268,7 @@ check_mcp_inspector() {
         print_status "npx is available"
         print_info "You can run MCP Inspector with:"
         print_info "  npx @modelcontextprotocol/inspector $BASE_URL"
-        print_info "  Request endpoint: /mcp/request"
+        print_info "  Request endpoint: /mcp/v1/rpc"
         print_info "  SSE endpoint: /mcp/v1"
     else
         print_warning "npx not found. Install Node.js to use MCP Inspector"

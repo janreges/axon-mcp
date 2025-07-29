@@ -1,4 +1,3 @@
-use anyhow::Result;
 use mcp_server::config::{Config, DatabaseConfig, LoggingConfig, LogFormat, ServerConfig};
 use mcp_server::setup::{create_repository, ensure_database_directory};
 use std::env;

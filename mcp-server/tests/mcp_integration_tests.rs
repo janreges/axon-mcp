@@ -3,7 +3,6 @@
 //! Tests the complete MCP protocol over HTTP POST + SSE transport
 //! Based on recommendations from Zen MCP analysis
 
-use std::collections::HashMap;
 use std::time::Duration;
 
 use reqwest::Client;
@@ -57,6 +56,7 @@ pub struct McpTestClient {
     http_client: Client,
     base_url: Url,
     session_id: Option<String>,
+    #[allow(dead_code)]
     last_event_id: Option<String>,
 }
 
