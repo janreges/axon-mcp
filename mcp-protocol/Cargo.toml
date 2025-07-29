@@ -1,0 +1,21 @@
+[package]
+name = "mcp-protocol"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+task-core = { path = "../core" }
+serde = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+serde_json = "1.0"
+tracing = "0.1"
+anyhow = "1.0"
+axum = { version = "0.7", features = ["ws"] }
+tokio-stream = "0.1"
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockall = "0.12"

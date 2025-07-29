@@ -1,0 +1,17 @@
+[package]
+name = "mocks"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+task-core = { path = "../core" }
+tokio = { version = "1.0", features = ["sync", "macros"] }
+async-trait = "0.1"
+parking_lot = "0.12"
+chrono = { version = "0.4", features = ["serde"] }
+fake = { version = "2.9", features = ["derive", "chrono"] }
+rand = "0.8"
+proptest = "1.0"
+
+[dev-dependencies]
+tokio-test = "0.4"

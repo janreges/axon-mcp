@@ -1,0 +1,16 @@
+[package]
+name = "database"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+task-core = { path = "../core" }
+async-trait.workspace = true
+sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "sqlite", "chrono", "migrate"] }
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+chrono = { workspace = true, features = ["serde"] }
+
+[dev-dependencies]
+tokio-test = "0.4"
+uuid = { version = "1.17.0", features = ["v4"] }
