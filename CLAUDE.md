@@ -21,6 +21,26 @@ You are working on a professional Rust MCP development project. Start immediatel
 
 Develop a production-ready Model Context Protocol (MCP) server in Rust for comprehensive task management. This server provides essential task tracking, assignment, and lifecycle management capabilities through a clean, multi-crate architecture that enables parallel development by specialized teams.
 
+## 🚨 CRITICAL DEVELOPMENT RULES 🚨
+
+**1. DEPENDENCY MANAGEMENT - USE CARGO COMMANDS ONLY**
+- ❌ **NEVER** manually edit Cargo.toml files
+- ✅ **ALWAYS** use cargo commands to add dependencies
+- This ensures latest compatible versions and proper feature flags
+
+Examples:
+```bash
+cargo add serde --features derive        # Add with features
+cargo add tokio --features full          # Add tokio with all features
+cargo add --dev mockall                  # Add dev dependency
+cargo add core --path ../core            # Add workspace dependency
+```
+
+**2. AGGRESSIVE PARALLELIZATION**
+- Phase 2 MUST launch 4 agents SIMULTANEOUSLY
+- Use ONE Task tool call for all parallel agents
+- Sequential launches are FORBIDDEN in parallel phases
+
 ## Technical Specifications
 
 ### Core Task Data Model
@@ -66,7 +86,17 @@ enum TaskState {
 
 ## Multi-Crate Architecture
 
-The project is structured as a Rust workspace with 5 independent crates, each owned by specialized agent teams:
+The project is structured as a Rust workspace with 5 crates with clear dependencies:
+
+### Crate Dependency Graph
+```
+core (no dependencies - base layer)
+  ├── database (depends on core)
+  ├── mcp-protocol (depends on core)
+  └── mocks (depends on core)
+      │
+      └── mcp-server (depends on core, database, mcp-protocol)
+```
 
 ### Crate Ownership (Phase 1 - Core Development)
 
@@ -111,41 +141,79 @@ The project is structured as a Rust workspace with 5 independent crates, each ow
 
 ## Development Methodology
 
-### Two-Phase Development Process
+### Dependency-Aware Development Process
 
-**PHASE 1 - Core Development (Parallel)**
-- Launch 5 crate owners simultaneously
-- Each develops their crate independently
-- Communication via ./log.sh
-- Develop against trait interfaces
+**Why This Order?**
+- `core` must be completed first as all other crates depend on its traits
+- `database`, `mcp-protocol`, and `mocks` can be developed in parallel
+- `mcp-server` assembles all components, so needs others to be ready
+- Documentation comes after implementation
+- Finalization ensures production readiness
+
+**Development Principles**
+- Core defines stable trait interfaces early
+- Other crates develop against these interfaces
+- Use mock implementations for testing
 - Regular commits of working code
-
-**PHASE 2 - Documentation & Finalization (Sequential)**
-- Launch documentation-specialist after core development
-- Launch project-finalizer after documentation
-- Comprehensive testing and validation
-- Production readiness verification
-- Final release preparation
+- Communication via ./log.sh
 
 ### MANDATORY Execution Rules for Control Agent
 
 **CONTROL AGENT REQUIREMENTS**:
-- **Phase 1**: Launch ALL 5 crate owners simultaneously using Task tool
-- **Phase 2**: Launch documentation-specialist when crates are ready
-- **Phase 3**: Launch project-finalizer for final validation
+- **Phase 1**: Launch ONLY core-architect first (WAIT for completion)
+- **Phase 2**: ⚠️ IMMEDIATELY launch ALL 4 agents SIMULTANEOUSLY
+  - Use ONE Task invocation with all 4 agents
+  - DO NOT launch them one by one
+  - DO NOT wait between launches
+- **Phase 3**: Launch documentation-specialist when Phase 2 is ready
+- **Phase 4**: Launch project-finalizer for final validation
 - **DO NOT DO ANY WORK YOURSELF** - you only coordinate
 - **NO AGENT SIMULATION** - do not pretend to be any agent
 - **LET AGENTS COMMUNICATE DIRECTLY** - do not mediate
 
+**PARALLELIZATION ENFORCEMENT**:
+```python
+# CORRECT - Launch all Phase 2 agents at once:
+Task(agents=["database-designer", "mcp-integrator", "qa-tester", "integration-lead"])
+
+# WRONG - Sequential launches:
+Task(agent="database-designer")
+Task(agent="mcp-integrator")  # NO! This wastes time!
+```
+
 ### Development Requirements for All Agents
 
 **ALL AGENT REQUIREMENTS**:
+- **USE CARGO COMMANDS**: NEVER manually edit Cargo.toml files
+  - Use `cargo add <crate> --features <features>` for dependencies
+  - Use `cargo add <crate> --dev` for dev dependencies
+  - This ensures latest compatible versions
 - **USE TEMPORARY DIRECTORIES**: Create `./tmp/` in your work area
 - **GITIGNORE TEMP FILES**: Ensure ./tmp/ is in .gitignore
 - **SELECTIVE COMMITS**: NEVER use `git add .` or `git add -A`
 - **REVIEW BEFORE COMMIT**: Always run `git status` and review
 - **CLEAN COMMITS**: Remove all temp files before committing
 - **COMMIT YOUR WORK**: Commit completed work with clear messages
+
+### Cargo Command Examples
+
+```bash
+# Add dependencies with features
+cargo add serde --features derive
+cargo add tokio --features full
+cargo add sqlx --features runtime-tokio-rustls,sqlite,migrate
+
+# Add dev dependencies
+cargo add --dev tokio-test
+cargo add --dev proptest
+
+# Create new crate in workspace
+cargo new --lib core
+cargo new --lib database
+
+# Add workspace dependency
+cargo add core --path ../core
+```
 
 ### Communication Requirements
 **ALL team members MUST use `./log.sh "message"` for coordination logging**
@@ -240,38 +308,52 @@ task-manager/
 
 ## MANDATORY EXECUTION PROTOCOL
 
-### Three-Phase Execution Plan
+### Optimized Four-Phase Execution Plan
 
-**PHASE 1 - Core Development (Parallel)**
+**PHASE 1 - Core Foundation (Sequential)**
 
-Use Task tool to launch ALL 5 crate owners simultaneously:
+Launch ONLY the core architect first:
 ```
 - core-architect (for core crate)
-- database-designer (for database crate)  
-- mcp-integrator (for mcp-protocol crate)
-- integration-lead (for mcp-server crate)
-- qa-tester (for mocks crate)
 ```
 
-Wait for all crates to be implemented and integrated.
+Wait for core crate to define all traits and domain models.
+This is the foundation that all other crates depend on.
 
-**PHASE 2 - Documentation**
+**PHASE 2 - Parallel Development**
 
-When Phase 1 is complete, launch:
+⚠️ **MANDATORY**: Once core traits are defined, you MUST launch ALL 4 crate owners AT THE SAME TIME:
+```
+LAUNCH SIMULTANEOUSLY - NO DELAYS:
+- database-designer (for database crate - depends on core)
+- mcp-integrator (for mcp-protocol crate - depends on core)  
+- qa-tester (for mocks crate - depends on core)
+- integration-lead (for mcp-server crate skeleton)
+```
+
+**PARALLELIZATION IS CRITICAL**: These crates can and MUST work in parallel!
+- They only depend on core traits, not on each other
+- Launching them sequentially wastes time and defeats the architecture
+- Use a single Task tool invocation to launch all 4 agents
+- DO NOT wait for one to finish before launching another
+
+**PHASE 3 - Documentation**
+
+When Phase 2 crates are substantially complete, launch:
 ```
 - documentation-specialist
 ```
 
-Wait for comprehensive documentation to be completed.
+Creates comprehensive documentation for all implemented functionality.
 
-**PHASE 3 - Finalization**
+**PHASE 4 - Finalization**
 
-When Phase 2 is complete, launch:
+When documentation is complete, launch:
 ```
 - project-finalizer
 ```
 
-Wait for production readiness verification.
+Final integration, testing, and production readiness verification.
 
 ### CONTROL AGENT EXECUTION REQUIREMENTS
 
@@ -327,7 +409,13 @@ Example .gitignore entries:
 ---
 
 **SUCCESS CRITERIA**: 
-- Phase 1: All 5 crates developed, tested, and integrated
-- Phase 2: Complete documentation with examples and guides
-- Phase 3: Production-ready system with all quality gates passed
+- Phase 1: Core crate complete with all traits and domain models
+- Phase 2: Database, mcp-protocol, mocks crates working; mcp-server integrated
+- Phase 3: Complete documentation with examples and guides
+- Phase 4: Production-ready system with all quality gates passed
 - Final: Clean repository with no development artifacts
+
+**DEPENDENCY VALIDATION**:
+- No crate should have compilation errors due to missing dependencies
+- All trait implementations must satisfy contract tests
+- Integration must be seamless with proper error handling
