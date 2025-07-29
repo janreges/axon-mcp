@@ -100,17 +100,17 @@ core (no dependencies - base layer)
 
 ### Crate Ownership (Phase 1 - Core Development)
 
-**1. `core` crate** - Owner: core-architect
+**1. `core` crate** - Owner: rust-architect
    - Domain models, business logic, trait interfaces
    - Task struct, TaskState enum, error types
    - Repository and protocol handler traits
 
-**2. `database` crate** - Owner: database-designer
+**2. `database` crate** - Owner: database-engineer
    - SQLite implementation of TaskRepository trait
    - Database migrations and schema management
    - Connection pooling and error mapping
 
-**3. `mcp-protocol` crate** - Owner: mcp-integrator
+**3. `mcp-protocol` crate** - Owner: protocol-specialist
    - MCP server implementation with SSE transport
    - Protocol handler implementation
    - JSON-RPC message handling
@@ -120,7 +120,7 @@ core (no dependencies - base layer)
    - Configuration management
    - Dependency injection and startup logic
 
-**5. `mocks` crate** - Owner: qa-tester
+**5. `mocks` crate** - Owner: testing-expert
    - Mock implementations for testing
    - Test fixtures and generators
    - Contract test helpers
@@ -160,7 +160,7 @@ core (no dependencies - base layer)
 ### MANDATORY Execution Rules for Control Agent
 
 **CONTROL AGENT REQUIREMENTS**:
-- **Phase 1**: Launch ONLY core-architect first (WAIT for completion)
+- **Phase 1**: Launch ONLY rust-architect first (WAIT for completion)
 - **Phase 2**: ⚠️ IMMEDIATELY launch ALL 4 agents SIMULTANEOUSLY
   - Use ONE Task invocation with all 4 agents
   - DO NOT launch them one by one
@@ -174,11 +174,11 @@ core (no dependencies - base layer)
 **PARALLELIZATION ENFORCEMENT**:
 ```python
 # CORRECT - Launch all Phase 2 agents at once:
-Task(agents=["database-designer", "mcp-integrator", "qa-tester", "integration-lead"])
+Task(agents=["database-engineer", "protocol-specialist", "testing-expert", "integration-lead"])
 
 # WRONG - Sequential launches:
-Task(agent="database-designer")
-Task(agent="mcp-integrator")  # NO! This wastes time!
+Task(agent="database-engineer")
+Task(agent="protocol-specialist")  # NO! This wastes time!
 ```
 
 ### Development Requirements for All Agents
@@ -219,12 +219,32 @@ cargo add core --path ../core
 **ALL team members MUST use `./log.sh "message"` for coordination logging**
 
 Examples:
-- `./log.sh "CORE-ARCHITECT → DATABASE-DESIGNER: TaskRepository trait defined, ready for implementation"`
-- `./log.sh "DATABASE-DESIGNER → QA-TESTER: Need mock repository for testing"`
-- `./log.sh "MCP-INTEGRATOR → ALL: SSE endpoint ready at /mcp/v1"`
+- `./log.sh "RUST-ARCHITECT → DATABASE-ENGINEER: TaskRepository trait defined, ready for implementation"`
+- `./log.sh "DATABASE-ENGINEER → TESTING-EXPERT: Need mock repository for testing"`
+- `./log.sh "PROTOCOL-SPECIALIST → ALL: SSE endpoint ready at /mcp/v1"`
 - `./log.sh "INTEGRATION-LEAD: All crates integrated, server starting successfully"`
 - `./log.sh "DOCUMENTATION: API documentation complete, ready for review"`
 - `./log.sh "FINALIZER → ALL: Found performance issue in task listing, needs optimization"`
+
+### Phase Completion Protocol
+**CRITICAL**: Agents MUST report phase completion to enable transitions:
+
+```bash
+# Phase 1 completion
+./log.sh "PHASE_1_COMPLETE: core crate ready with all traits defined"
+
+# Phase 2 completion (each agent reports)
+./log.sh "PHASE_2_COMPLETE: database crate ready, all tests passing"
+./log.sh "PHASE_2_COMPLETE: mcp-protocol crate ready, SSE working"
+./log.sh "PHASE_2_COMPLETE: mocks crate ready, all fixtures created"
+./log.sh "PHASE_2_COMPLETE: mcp-server skeleton ready, awaiting integration"
+
+# Phase 3 completion
+./log.sh "PHASE_3_COMPLETE: documentation complete, all READMEs updated"
+
+# Phase 4 completion
+./log.sh "PHASE_4_COMPLETE: production ready, all quality gates passed"
+```
 
 ### Git Commit Best Practices
 
@@ -314,20 +334,27 @@ task-manager/
 
 Launch ONLY the core architect first:
 ```
-- core-architect (for core crate)
+- rust-architect (for core crate)
 ```
 
 Wait for core crate to define all traits and domain models.
 This is the foundation that all other crates depend on.
+
+**Definition of Done - Phase 1**:
+- ✅ Core crate created with proper structure
+- ✅ All traits defined (TaskRepository, ProtocolHandler)
+- ✅ All domain models defined (Task, TaskState, errors)
+- ✅ Crate compiles without errors
+- ✅ Basic documentation in place
 
 **PHASE 2 - Parallel Development**
 
 ⚠️ **MANDATORY**: Once core traits are defined, you MUST launch ALL 4 crate owners AT THE SAME TIME:
 ```
 LAUNCH SIMULTANEOUSLY - NO DELAYS:
-- database-designer (for database crate - depends on core)
-- mcp-integrator (for mcp-protocol crate - depends on core)  
-- qa-tester (for mocks crate - depends on core)
+- database-engineer (for database crate - depends on core)
+- protocol-specialist (for mcp-protocol crate - depends on core)  
+- testing-expert (for mocks crate - depends on core)
 - integration-lead (for mcp-server crate skeleton)
 ```
 
@@ -336,6 +363,14 @@ LAUNCH SIMULTANEOUSLY - NO DELAYS:
 - Launching them sequentially wastes time and defeats the architecture
 - Use a single Task tool invocation to launch all 4 agents
 - DO NOT wait for one to finish before launching another
+
+**Definition of Done - Phase 2**:
+- ✅ All 4 crates compile independently
+- ✅ All unit tests pass in each crate
+- ✅ Database migrations work (database crate)
+- ✅ SSE endpoint responds (mcp-protocol crate)
+- ✅ Mock implementations complete (mocks crate)
+- ✅ Server binary starts (mcp-server crate)
 
 **PHASE 3 - Documentation**
 
@@ -346,6 +381,14 @@ When Phase 2 crates are substantially complete, launch:
 
 Creates comprehensive documentation for all implemented functionality.
 
+**Definition of Done - Phase 3**:
+- ✅ All public APIs have rustdoc comments
+- ✅ README.md exists for each crate
+- ✅ Main README.md comprehensive
+- ✅ API.md with all MCP functions documented
+- ✅ User guide with examples
+- ✅ All documentation examples compile and run
+
 **PHASE 4 - Finalization**
 
 When documentation is complete, launch:
@@ -354,6 +397,16 @@ When documentation is complete, launch:
 ```
 
 Final integration, testing, and production readiness verification.
+
+**Definition of Done - Phase 4**:
+- ✅ All crates build without warnings
+- ✅ All tests pass (unit, integration, E2E)
+- ✅ Production build optimized
+- ✅ Docker image builds and runs
+- ✅ No development artifacts remain
+- ✅ Clean clone builds and runs successfully
+- ✅ Performance benchmarks acceptable
+- ✅ Security best practices verified
 
 ### CONTROL AGENT EXECUTION REQUIREMENTS
 
