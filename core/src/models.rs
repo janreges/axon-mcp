@@ -141,6 +141,12 @@ pub struct TaskFilter {
     
     /// Filter tasks created on or before this date
     pub date_to: Option<DateTime<Utc>>,
+    
+    /// Maximum number of tasks to return (for pagination)
+    pub limit: Option<u32>,
+    
+    /// Number of tasks to skip (for pagination)
+    pub offset: Option<u32>,
 }
 
 impl Task {

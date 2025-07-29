@@ -161,6 +161,8 @@ impl ListTasksParams {
             state: self.state,
             date_from: created_after,
             date_to: created_before,
+            limit: self.limit,
+            offset: None, // Currently not exposed in MCP protocol, but could be added later
         })
     }
 }
