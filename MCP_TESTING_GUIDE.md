@@ -46,9 +46,9 @@ npx @modelcontextprotocol/inspector
 
 **Usage**:
 1. Start your MCP server: `cargo run -p mcp-server`
-2. Run the inspector: `npx @modelcontextprotocol/inspector http://127.0.0.1:8080`
+2. Run the inspector: `npx @modelcontextprotocol/inspector http://127.0.0.1:3000`
 3. Configure endpoints:
-   - **Request Endpoint**: `/mcp/request`
+   - **Request Endpoint**: `/mcp/v1/rpc`
    - **SSE Endpoint**: `/mcp/v1`
 4. Send test requests and observe SSE responses in real-time
 
@@ -57,9 +57,9 @@ npx @modelcontextprotocol/inspector
 **Send MCP Request**:
 ```bash
 # Create a task
-curl -X POST http://127.0.0.1:8080/mcp/request \
+curl -X POST http://127.0.0.1:3000/mcp/v1/rpc \
   -H "Content-Type: application/json" \
-  -H "Origin: http://127.0.0.1:8080" \
+  -H "Origin: http://127.0.0.1:3000" \
   -d '{
     "jsonrpc": "2.0",
     "method": "create_task",
@@ -77,8 +77,8 @@ curl -X POST http://127.0.0.1:8080/mcp/request \
 ```bash
 # Listen to SSE responses (use in separate terminal)
 curl -N -H "Accept: text/event-stream" \
-     -H "Origin: http://127.0.0.1:8080" \
-     http://127.0.0.1:8080/mcp/v1
+     -H "Origin: http://127.0.0.1:3000" \
+     http://127.0.0.1:3000/mcp/v1
 ```
 
 ## MCP Protocol Compliance
@@ -86,7 +86,7 @@ curl -N -H "Accept: text/event-stream" \
 ### Transport: Streamable HTTP
 
 Based on MCP specification 2024-11-05+, the protocol uses:
-- **HTTP POST** for requests to `/mcp/request`
+- **HTTP POST** for requests to `/mcp/v1/rpc`
 - **Server-Sent Events** for responses via `/mcp/v1`
 - **Session management** via `Session-ID` header
 - **Event replay** via `Last-Event-ID` header
@@ -144,7 +144,7 @@ Based on MCP specification 2024-11-05+, the protocol uses:
 #### Happy Path: Complete Task Lifecycle
 ```javascript
 // 1. Create task
-POST /mcp/request
+POST /mcp/v1/rpc
 {
   "jsonrpc": "2.0",
   "method": "create_task",
@@ -253,12 +253,12 @@ async fn test_concurrent_task_creation() {
 ### Origin Header Validation
 ```bash
 # Valid origin (should work)
-curl -X POST http://127.0.0.1:8080/mcp/request \
-  -H "Origin: http://127.0.0.1:8080" \
+curl -X POST http://127.0.0.1:3000/mcp/v1/rpc \
+  -H "Origin: http://127.0.0.1:3000" \
   -d '{"jsonrpc":"2.0","method":"health_check","id":1}'
 
 # Invalid origin (should be rejected)
-curl -X POST http://127.0.0.1:8080/mcp/request \
+curl -X POST http://127.0.0.1:3000/mcp/v1/rpc \
   -H "Origin: http://malicious-site.com" \
   -d '{"jsonrpc":"2.0","method":"health_check","id":1}'
 ```
@@ -266,8 +266,8 @@ curl -X POST http://127.0.0.1:8080/mcp/request \
 ### Input Validation
 ```bash
 # SQL injection attempt (should be safely handled)
-curl -X POST http://127.0.0.1:8080/mcp/request \
-  -H "Origin: http://127.0.0.1:8080" \
+curl -X POST http://127.0.0.1:3000/mcp/v1/rpc \
+  -H "Origin: http://127.0.0.1:3000" \
   -d '{
     "jsonrpc": "2.0",
     "method": "get_task_by_code",
@@ -289,8 +289,8 @@ RUST_LOG=debug cargo run -p mcp-server
 ```bash
 # Monitor SSE events with timestamps
 curl -N -H "Accept: text/event-stream" \
-     -H "Origin: http://127.0.0.1:8080" \
-     http://127.0.0.1:8080/mcp/v1 | \
+     -H "Origin: http://127.0.0.1:3000" \
+     http://127.0.0.1:3000/mcp/v1 | \
      while IFS= read -r line; do
        echo "[$(date)] $line"
      done
@@ -370,7 +370,7 @@ Add to your CI pipeline:
     sleep 5
     
     # Run protocol compliance tests
-    npx @modelcontextprotocol/test-suite http://127.0.0.1:8080
+    npx @modelcontextprotocol/test-suite http://127.0.0.1:3000
     
     # Cleanup
     kill $SERVER_PID

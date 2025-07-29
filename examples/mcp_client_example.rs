@@ -50,7 +50,7 @@ impl SimpleMcpClient {
         self.request_counter += 1;
         let request_id = self.request_counter;
         
-        let request_url = self.base_url.join("/mcp/request")?;
+        let request_url = self.base_url.join("/mcp/v1/rpc")?;
         
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
@@ -143,7 +143,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("====================");
     
     // Initialize client
-    let server_url = "http://127.0.0.1:8080";
+    let server_url = "http://127.0.0.1:3000";
     let mut client = SimpleMcpClient::new(server_url)?;
     
     // Start SSE listener in background task
