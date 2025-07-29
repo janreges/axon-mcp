@@ -191,8 +191,8 @@ make status-start AGENT=testing-expert CRATE=mocks
 
 ### Sharing Test Utilities
 ```bash
-# When mock implementations are ready (not a standard status, use custom message)
-echo "[MOCKS-AVAILABLE] $(date +%Y-%m-%d\ %H:%M:%S) testing-expert: MockTaskRepository ready for use" >> STATUS.md
+# When mock implementations are ready, use custom status
+make status-custom AGENT=testing-expert CODE=MOCKS-AVAILABLE MSG='MockTaskRepository ready for use'
 ```
 
 ### Recording Decisions

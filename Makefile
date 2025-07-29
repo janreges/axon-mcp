@@ -12,6 +12,7 @@ help:
 	@echo "  make status-complete AGENT=name CRATE=crate  - Mark crate work completed"
 	@echo "  make status-blocked AGENT=name TYPE=type MSG='message' - Report blocker"
 	@echo "  make status-unblocked AGENT=name TYPE=type  - Mark blocker resolved"
+	@echo "  make status-custom AGENT=name CODE=code MSG='message' - Add custom status"
 	@echo ""
 	@echo "Interface Operations:"
 	@echo "  make interface-add AGENT=name INTERFACE=name FILE=path - Share interface"
@@ -72,6 +73,15 @@ status-unblocked:
 	@test -n "$(TYPE)" || (echo "ERROR: TYPE is required"; exit 1)
 	$(call add-entry,STATUS.md,BLOCKED-$(TYPE)-RESOLVED,$(AGENT),Blocker resolved)
 	@echo "✓ Marked $(TYPE) blocker as resolved"
+
+# Custom status message
+.PHONY: status-custom
+status-custom:
+	@test -n "$(AGENT)" || (echo "ERROR: AGENT is required"; exit 1)
+	@test -n "$(CODE)" || (echo "ERROR: CODE is required"; exit 1)
+	@test -n "$(MSG)" || (echo "ERROR: MSG is required"; exit 1)
+	$(call add-entry,STATUS.md,$(CODE),$(AGENT),$(MSG))
+	@echo "✓ Added custom status: $(CODE)"
 
 # Interface operations
 .PHONY: interface-add

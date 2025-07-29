@@ -98,6 +98,7 @@ Agents MUST use Makefile commands when:
 5. **Interface ready**: `make interface-add AGENT=agent-name INTERFACE=name FILE=path/to/file`
 6. **Decision made**: `make decision AGENT=agent-name SUMMARY='what' RATIONALE='why' ALTERNATIVES='other options'`
 7. **Phase complete**: `make phase-complete AGENT=agent-name PHASE=number`
+8. **Custom status**: `make status-custom AGENT=agent-name CODE=code MSG='message'` (for non-standard statuses like MOCKS-AVAILABLE)
 
 ### 6. READING STATUS
 
