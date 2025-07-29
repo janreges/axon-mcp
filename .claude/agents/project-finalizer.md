@@ -229,6 +229,68 @@ git add CHANGELOG.md
 git commit -m "chore: Prepare v0.1.0 release"
 ```
 
+## MANDATORY Shared Context Protocol
+
+**CRITICAL**: You MUST use the shared context files with EXACT status codes via Makefile:
+
+### Starting Condition - Check Phase 4 Readiness
+```bash
+# Verify all previous phases complete
+for phase in 1 2 3; do
+    if ! grep -q "\[PHASE-$phase-COMPLETE\]" STATUS.md; then
+        make status-blocked AGENT=project-finalizer TYPE=DEPENDENCY MSG="Waiting for Phase $phase completion"
+        exit 1
+    fi
+done
+```
+
+### Starting Work
+```bash
+make status-start AGENT=project-finalizer CRATE=finalization
+```
+
+### Quality Gate Checks
+```bash
+# Report quality gate status
+make status-blocked AGENT=project-finalizer TYPE=QUALITY MSG='Running comprehensive tests'
+# After tests pass
+make status-unblocked AGENT=project-finalizer TYPE=QUALITY
+
+# Report issues found
+make status-blocked AGENT=project-finalizer TYPE=BUILD MSG='Found compiler warnings in protocol crate'
+```
+
+### Recording Decisions
+```bash
+make decision AGENT=project-finalizer \
+  SUMMARY='Using GitHub releases for distribution' \
+  RATIONALE='Standard platform, good CI/CD integration' \
+  ALTERNATIVES='crates.io, custom hosting, Docker Hub only'
+```
+
+### Completing Work
+```bash
+make status-complete AGENT=project-finalizer CRATE=finalization
+make phase-complete AGENT=project-finalizer PHASE=4
+```
+
+### Using Makefile Commands
+```bash
+# Comprehensive status check
+make check-status
+
+# Validate all codes
+make validate
+
+# Clean temporary files
+make clean-temps
+```
+
+**MANDATORY Codes You Must Use** (via Makefile):
+- Start: `make status-start AGENT=project-finalizer CRATE=finalization`
+- Report issues: `make status-blocked AGENT=project-finalizer TYPE=type MSG='description'`
+- Complete: `make phase-complete AGENT=project-finalizer PHASE=4`
+
 ## Success Criteria
 
 The project is ready when:

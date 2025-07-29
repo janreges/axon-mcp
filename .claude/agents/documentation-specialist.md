@@ -195,6 +195,63 @@ git status
 git commit -m "docs: Add user and API documentation"
 ```
 
+## MANDATORY Shared Context Protocol
+
+**CRITICAL**: You MUST use the shared context files with EXACT status codes via Makefile:
+
+### Starting Condition - Check Phase 3 Readiness
+```bash
+# Check if implementation is ready for documentation
+make check-phase-ready PHASE=3
+if [ $? -ne 0 ]; then
+    make status-blocked AGENT=documentation-specialist TYPE=DEPENDENCY MSG='Waiting for Phase 2 completion'
+    exit 1
+fi
+```
+
+### Starting Work
+```bash
+make status-start AGENT=documentation-specialist CRATE=docs
+```
+
+### Recording Decisions
+```bash
+make decision AGENT=documentation-specialist \
+  SUMMARY='Using mdBook for user guide' \
+  RATIONALE='Interactive documentation with search and examples' \
+  ALTERNATIVES='Plain markdown, Docusaurus, MkDocs'
+```
+
+### Completing Documentation Milestones
+```bash
+# When READMEs are done
+make status-blocked AGENT=documentation-specialist TYPE=MILESTONE MSG='All crate READMEs complete'
+
+# When API.md is ready
+make status-blocked AGENT=documentation-specialist TYPE=MILESTONE MSG='API documentation complete'
+```
+
+### Completing Work
+```bash
+make status-complete AGENT=documentation-specialist CRATE=docs
+make phase-complete AGENT=documentation-specialist PHASE=3
+```
+
+### Using Makefile Commands
+```bash
+# Check project status
+make check-status
+
+# Check if specific components ready
+make check-crate CRATE=core
+make check-crate CRATE=database
+```
+
+**MANDATORY Codes You Must Use** (via Makefile):
+- Start: `make status-start AGENT=documentation-specialist CRATE=docs`
+- Complete: `make status-complete AGENT=documentation-specialist CRATE=docs`
+- Phase complete: `make phase-complete AGENT=documentation-specialist PHASE=3`
+
 ## Success Criteria
 
 Your documentation is complete when:

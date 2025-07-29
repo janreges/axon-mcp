@@ -2,15 +2,15 @@
 
 ## MANDATORY RULES - ALL AGENTS MUST FOLLOW
 
-### 1. APPEND-ONLY PROTOCOL
-**NEVER overwrite these files. ALWAYS append using `>>`**
+### 1. USE MAKEFILE FOR ALL OPERATIONS
+**NEVER write directly to files. ALWAYS use make commands**
 
 ```bash
-# CORRECT - Append to file
-echo "[CORE-COMPLETE] 2025-01-29 14:32 rust-architect: Core crate ready" >> STATUS.md
+# CORRECT - Use Makefile targets
+make status-complete AGENT=rust-architect CRATE=core
 
-# WRONG - This overwrites!
-echo "Core complete" > STATUS.md  # FORBIDDEN!
+# WRONG - Direct file manipulation is FORBIDDEN!
+echo "[CORE-COMPLETE] ..." >> STATUS.md  # NO!
 ```
 
 ### 2. STANDARDIZED STATUS CODES
@@ -42,23 +42,25 @@ These EXACT codes must be used for grep operations. NO VARIATIONS ALLOWED:
 - `[INTERFACE-TASK-MODEL]` - Task struct ready
 - `[INTERFACE-ERROR-TYPES]` - Error types ready
 
-### 3. GREP USAGE EXAMPLES
+### 3. MAKEFILE USAGE EXAMPLES
 
 ```bash
 # Check if core is complete before starting
-if grep -q "\[CORE-COMPLETE\]" STATUS.md; then
-    echo "[DATABASE-START] $(date +%Y-%m-%d\ %H:%M) database-engineer: Starting database crate" >> STATUS.md
+if make check-crate CRATE=core | grep -q "complete"; then
+    make status-start AGENT=database-engineer CRATE=database
 fi
 
-# Check for blocking issues
-if grep "\[BLOCKED-" STATUS.md | grep -v RESOLVED; then
-    echo "Found blocking issues, investigating..."
-fi
+# Check for dependencies
+make check-deps  # Will exit with error if core not ready
 
 # Check specific interface readiness
-if grep -q "\[INTERFACE-TASK-REPOSITORY\]" INTERFACES.md; then
-    echo "TaskRepository trait available, implementing..."
-fi
+make interface-check INTERFACE=TASK-REPOSITORY
+
+# Report being blocked
+make status-blocked AGENT=database-engineer TYPE=INTERFACE MSG="Need TaskRepository trait"
+
+# Mark as unblocked when resolved
+make status-unblocked AGENT=database-engineer TYPE=INTERFACE
 ```
 
 ### 4. FILE STRUCTURE
@@ -66,8 +68,8 @@ fi
 #### STATUS.md Format
 ```
 [STATUS-CODE] TIMESTAMP AGENT: Message
-[CORE-COMPLETE] 2025-01-29 14:32 rust-architect: Core crate ready with all traits
-[DATABASE-START] 2025-01-29 14:35 database-engineer: Beginning SQLite implementation
+[CORE-COMPLETE] 2025-01-29 14:32:17 rust-architect: Core crate ready with all traits
+[DATABASE-START] 2025-01-29 14:35:42 database-engineer: Beginning SQLite implementation
 ```
 
 #### INTERFACES.md Format
@@ -87,25 +89,31 @@ ALTERNATIVES: What else was considered
 
 ### 5. MANDATORY WRITING TRIGGERS
 
-Agents MUST write to shared files when:
+Agents MUST use Makefile commands when:
 
-1. **Starting work**: `echo "[CRATE-START] $(date +%Y-%m-%d\ %H:%M) agent: Starting X crate" >> STATUS.md`
-2. **Completing work**: `echo "[CRATE-COMPLETE] $(date +%Y-%m-%d\ %H:%M) agent: X crate ready" >> STATUS.md`
-3. **Blocked**: `echo "[BLOCKED-TYPE] $(date +%Y-%m-%d\ %H:%M) agent: Blocked because..." >> STATUS.md`
-4. **Unblocked**: `echo "[BLOCKED-TYPE-RESOLVED] $(date +%Y-%m-%d\ %H:%M) agent: Unblocked" >> STATUS.md`
-5. **Interface ready**: `echo "[INTERFACE-NAME] $(date +%Y-%m-%d\ %H:%M) agent: Interface ready" >> INTERFACES.md`
+1. **Starting work**: `make status-start AGENT=agent-name CRATE=crate-name`
+2. **Completing work**: `make status-complete AGENT=agent-name CRATE=crate-name`
+3. **Blocked**: `make status-blocked AGENT=agent-name TYPE=type MSG='reason'`
+4. **Unblocked**: `make status-unblocked AGENT=agent-name TYPE=type`
+5. **Interface ready**: `make interface-add AGENT=agent-name INTERFACE=name FILE=path/to/file`
+6. **Decision made**: `make decision AGENT=agent-name SUMMARY='what' RATIONALE='why' ALTERNATIVES='other options'`
+7. **Phase complete**: `make phase-complete AGENT=agent-name PHASE=number`
 
-### 6. READING BEFORE WRITING
+### 6. READING STATUS
 
-Always check current status before adding:
+Use Makefile commands to check status:
 ```bash
-# Check last status for your crate
-grep "\[DATABASE-" STATUS.md | tail -5
+# Check overall project status
+make check-status
 
-# Check if already marked complete
-if ! grep -q "\[DATABASE-COMPLETE\]" STATUS.md; then
-    echo "[DATABASE-COMPLETE] $(date +%Y-%m-%d\ %H:%M) database-engineer: Database crate ready" >> STATUS.md
-fi
+# Check specific crate
+make check-crate CRATE=database
+
+# Check if ready for next phase
+make check-phase-ready PHASE=2
+
+# Validate all status codes
+make validate
 ```
 
 ## ENFORCEMENT

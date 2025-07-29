@@ -163,6 +163,77 @@ Use `./log.sh` for critical updates:
 ./log.sh "TESTING-EXPERT → ALL: Mock crate v0.1 ready"
 ```
 
+## MANDATORY Shared Context Protocol
+
+**CRITICAL**: You MUST use the shared context files with EXACT status codes:
+
+### Starting Condition - Check Dependencies
+```bash
+# DO NOT START until core is ready
+make check-deps
+if [ $? -ne 0 ]; then
+    make status-blocked AGENT=testing-expert TYPE=DEPENDENCY MSG='Waiting for core crate'
+    exit 1
+fi
+
+# Check for TaskRepository interface
+make interface-check INTERFACE=TASK-REPOSITORY
+if [ $? -ne 0 ]; then
+    make status-blocked AGENT=testing-expert TYPE=INTERFACE MSG='Need TaskRepository trait'
+    exit 1
+fi
+```
+
+### Starting Work
+```bash
+make status-start AGENT=testing-expert CRATE=mocks
+```
+
+### Sharing Test Utilities
+```bash
+# When mock implementations are ready (not a standard status, use custom message)
+echo "[MOCKS-AVAILABLE] $(date +%Y-%m-%d\ %H:%M:%S) testing-expert: MockTaskRepository ready for use" >> STATUS.md
+```
+
+### Recording Decisions
+```bash
+make decision AGENT=testing-expert \
+  SUMMARY='Using parking_lot for mock synchronization' \
+  RATIONALE='Better performance than std::sync, no poisoning' \
+  ALTERNATIVES='std::sync::Mutex, tokio::sync::Mutex'
+```
+
+### If Blocked
+```bash
+make status-blocked AGENT=testing-expert TYPE=INTERFACE MSG='Need error types definition'
+```
+
+### When Unblocked
+```bash
+make status-unblocked AGENT=testing-expert TYPE=INTERFACE
+```
+
+### Completing Work
+```bash
+make status-complete AGENT=testing-expert CRATE=mocks
+```
+
+### Using Makefile Commands
+```bash
+# Check project status
+make check-status
+
+# Check specific dependencies
+make interface-check INTERFACE=ERROR-TYPES
+```
+
+**MANDATORY Codes You Must Use**:
+- `[MOCKS-START]`, `[MOCKS-COMPLETE]`
+- `[MOCKS-AVAILABLE]` when utilities ready for other crates
+- `[BLOCKED-DEPENDENCY]`, `[BLOCKED-INTERFACE]`
+- Check for `[CORE-COMPLETE]` before starting
+- Check for `[INTERFACE-TASK-REPOSITORY]` in INTERFACES.md
+
 ## Mock Implementation Checklist
 
 Critical mock features:

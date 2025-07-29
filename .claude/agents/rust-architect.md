@@ -55,29 +55,37 @@ You are the Rust Architect, the technical leader and chief architect for this pr
 
 ### Starting Work
 ```bash
-echo "[CORE-START] $(date +%Y-%m-%d\ %H:%M) rust-architect: Beginning core crate development" >> STATUS.md
+make status-start AGENT=rust-architect CRATE=core
 ```
 
 ### Sharing Interfaces
 When you define a trait or key interface:
 ```bash
-echo "[INTERFACE-TASK-REPOSITORY] $(date +%Y-%m-%d\ %H:%M) rust-architect: TaskRepository trait defined" >> INTERFACES.md
-echo "--- BEGIN DEFINITION ---" >> INTERFACES.md
-cat core/src/repository.rs >> INTERFACES.md
-echo "--- END DEFINITION ---" >> INTERFACES.md
+# Share TaskRepository trait
+make interface-add AGENT=rust-architect INTERFACE=TASK-REPOSITORY FILE=core/src/repository.rs
+
+# Share ProtocolHandler trait
+make interface-add AGENT=rust-architect INTERFACE=PROTOCOL-HANDLER FILE=core/src/protocol.rs
+
+# Share Task model
+make interface-add AGENT=rust-architect INTERFACE=TASK-MODEL FILE=core/src/models.rs
+
+# Share Error types
+make interface-add AGENT=rust-architect INTERFACE=ERROR-TYPES FILE=core/src/error.rs
 ```
 
 ### Completing Work
 ```bash
-echo "[CORE-COMPLETE] $(date +%Y-%m-%d\ %H:%M) rust-architect: Core crate ready with all traits" >> STATUS.md
-echo "[PHASE-1-COMPLETE] $(date +%Y-%m-%d\ %H:%M) rust-architect: Phase 1 complete" >> STATUS.md
+make status-complete AGENT=rust-architect CRATE=core
+make phase-complete AGENT=rust-architect PHASE=1
 ```
 
 ### Recording Decisions
 ```bash
-echo "[DECISION-004] $(date +%Y-%m-%d\ %H:%M) rust-architect: Using async-trait for repositories" >> DECISIONS.md
-echo "RATIONALE: Cleaner async interface definitions" >> DECISIONS.md
-echo "ALTERNATIVES: Manual future implementations" >> DECISIONS.md
+make decision AGENT=rust-architect \
+  SUMMARY='Using async-trait for repositories' \
+  RATIONALE='Cleaner async interface definitions' \
+  ALTERNATIVES='Manual future implementations'
 ```
 
 **MANDATORY Codes You Must Use**:

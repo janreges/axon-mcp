@@ -232,13 +232,12 @@ Examples:
 
 #### 1. STATUS.md - Real-time Status Tracking
 ```bash
-# ALWAYS append, NEVER overwrite
-echo "[CORE-COMPLETE] $(date +%Y-%m-%d\ %H:%M) rust-architect: Core crate ready" >> STATUS.md
+# Use Makefile for ALL operations
+make status-complete AGENT=rust-architect CRATE=core
 
 # Check dependencies before starting
-if grep -q "\[CORE-COMPLETE\]" STATUS.md; then
-    echo "[DATABASE-START] $(date +%Y-%m-%d\ %H:%M) database-engineer: Starting work" >> STATUS.md
-fi
+make check-deps  # Exits with error if not ready
+make status-start AGENT=database-engineer CRATE=database
 ```
 
 **MANDATORY Status Codes**:
@@ -248,11 +247,11 @@ fi
 
 #### 2. INTERFACES.md - Shared Interface Definitions
 ```bash
-# Share finalized interfaces
-echo "[INTERFACE-TASK-REPOSITORY] $(date +%Y-%m-%d\ %H:%M) rust-architect: TaskRepository trait ready" >> INTERFACES.md
-echo "--- BEGIN DEFINITION ---" >> INTERFACES.md
-cat core/src/repository.rs >> INTERFACES.md
-echo "--- END DEFINITION ---" >> INTERFACES.md
+# Share finalized interfaces using Makefile
+make interface-add AGENT=rust-architect INTERFACE=TASK-REPOSITORY FILE=core/src/repository.rs
+
+# Check if interface is available
+make interface-check INTERFACE=TASK-REPOSITORY
 ```
 
 **MANDATORY Interface Codes**:
@@ -261,30 +260,45 @@ echo "--- END DEFINITION ---" >> INTERFACES.md
 
 #### 3. DECISIONS.md - Architectural Decisions
 ```bash
-# Record important decisions
-echo "[DECISION-003] $(date +%Y-%m-%d\ %H:%M) database-engineer: Using connection pooling" >> DECISIONS.md
-echo "RATIONALE: Better performance under concurrent load" >> DECISIONS.md
-echo "ALTERNATIVES: Single connection, connection per request" >> DECISIONS.md
+# Record important decisions using Makefile
+make decision AGENT=database-engineer \
+  SUMMARY='Using connection pooling' \
+  RATIONALE='Better performance under concurrent load' \
+  ALTERNATIVES='Single connection, connection per request'
 ```
 
-**ENFORCEMENT**: Control agent monitors proper usage. Agents MUST use exact codes for grep compatibility.
+#### 4. Makefile Operations
+```bash
+# Check overall status
+make check-status
+
+# Check specific crate
+make check-crate CRATE=database
+
+# Clean temporary files
+make clean-temps
+
+# Get help on all commands
+make help
+```
+
+**ENFORCEMENT**: Control agent monitors proper usage. Agents MUST use Makefile commands, not direct file operations.
 
 ### Phase Completion Protocol
 **CRITICAL**: Agents MUST report phase completion to enable transitions:
 
 ```bash
-# Phase 1 completion - Write to STATUS.md
-echo "[PHASE-1-COMPLETE] $(date +%Y-%m-%d\ %H:%M) rust-architect: Core development complete" >> STATUS.md
+# Phase 1 completion - Use Makefile
+make status-complete AGENT=rust-architect CRATE=core
+make phase-complete AGENT=rust-architect PHASE=1
 ./log.sh "PHASE_1_COMPLETE: core crate ready with all traits defined"
 
-# Phase 2 completion - Each agent writes to STATUS.md
-echo "[DATABASE-COMPLETE] $(date +%Y-%m-%d\ %H:%M) database-engineer: Database crate ready" >> STATUS.md
+# Phase 2 completion - Each agent reports
+make status-complete AGENT=database-engineer CRATE=database
 ./log.sh "PHASE_2_COMPLETE: database crate ready, all tests passing"
 
-# Control agent checks completion
-if [ $(grep -c "\[.*-COMPLETE\]" STATUS.md | grep -E "(DATABASE|PROTOCOL|MOCKS|SERVER)" | wc -l) -eq 4 ]; then
-    echo "[PHASE-2-COMPLETE] $(date +%Y-%m-%d\ %H:%M) control-agent: All Phase 2 crates complete" >> STATUS.md
-fi
+# Control agent checks readiness for next phase
+make check-phase-ready PHASE=3  # Will verify Phase 2 crates are complete
 ```
 
 ### Git Commit Best Practices
@@ -481,6 +495,30 @@ Final integration, testing, and production readiness verification.
 - **Error Mapping**: Map all errors to appropriate MCP error codes
 - **State Validation**: Enforce valid task state transitions
 - **Contract Tests**: Each trait implementation must pass standardized tests
+
+### Timing and Synchronization Guidelines
+
+**CRITICAL**: Agents must check shared context at these times:
+
+1. **Before Starting Work**:
+   - Run `make check-deps` to verify Phase 1 is complete
+   - Run `make interface-check INTERFACE=name` for required interfaces
+   - Only proceed if all dependencies are satisfied
+
+2. **During Work**:
+   - Check for new interfaces when implementing traits
+   - If blocked, immediately report: `make status-blocked`
+   - Poll for resolution every 30-60 seconds when blocked
+
+3. **When Sharing Interfaces**:
+   - Share interfaces IMMEDIATELY after defining them
+   - Use `make interface-add` as soon as trait is stable
+   - Don't wait until crate is complete
+
+4. **Phase Transitions**:
+   - Control agent monitors `[*-COMPLETE]` statuses
+   - Agents report completion immediately when done
+   - Next phase starts only after all required completions
 
 ### Temporary File Management
 

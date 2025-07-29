@@ -144,30 +144,46 @@ Use `./log.sh` for critical updates:
 ### Before Starting - Check Dependencies
 ```bash
 # Check if core is ready before starting
-if ! grep -q "\[CORE-COMPLETE\]" STATUS.md; then
-    echo "[BLOCKED-DEPENDENCY] $(date +%Y-%m-%d\ %H:%M) database-engineer: Waiting for core crate" >> STATUS.md
+make check-deps
+if [ $? -ne 0 ]; then
+    make status-blocked AGENT=database-engineer TYPE=DEPENDENCY MSG='Waiting for core crate'
+    exit 1
+fi
+
+# Check for required interface
+make interface-check INTERFACE=TASK-REPOSITORY
+if [ $? -ne 0 ]; then
+    make status-blocked AGENT=database-engineer TYPE=INTERFACE MSG='Need TaskRepository trait'
     exit 1
 fi
 ```
 
 ### Starting Work
 ```bash
-echo "[DATABASE-START] $(date +%Y-%m-%d\ %H:%M) database-engineer: Beginning database crate" >> STATUS.md
+make status-start AGENT=database-engineer CRATE=database
+```
+
+### Recording Decisions
+```bash
+make decision AGENT=database-engineer \
+  SUMMARY='Using sqlx for SQLite access' \
+  RATIONALE='Compile-time SQL verification, async support' \
+  ALTERNATIVES='rusqlite, diesel'
 ```
 
 ### If Blocked
 ```bash
-echo "[BLOCKED-INTERFACE] $(date +%Y-%m-%d\ %H:%M) database-engineer: Need TaskRepository trait definition" >> STATUS.md
+make status-blocked AGENT=database-engineer TYPE=INTERFACE MSG='Need TaskRepository trait definition'
 ```
 
 ### When Unblocked
 ```bash
-echo "[BLOCKED-INTERFACE-RESOLVED] $(date +%Y-%m-%d\ %H:%M) database-engineer: Got interface, continuing" >> STATUS.md
+make status-unblocked AGENT=database-engineer TYPE=INTERFACE
 ```
 
 ### Completing Work
 ```bash
-echo "[DATABASE-COMPLETE] $(date +%Y-%m-%d\ %H:%M) database-engineer: Database crate ready, all tests pass" >> STATUS.md
+make status-complete AGENT=database-engineer CRATE=database
 ```
 
 **MANDATORY Codes You Must Use**:

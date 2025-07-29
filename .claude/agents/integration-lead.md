@@ -220,6 +220,84 @@ Your work is successful when:
 - Deployment is simple
 - Zero crashes in production
 
+## MANDATORY Shared Context Protocol
+
+**CRITICAL**: You MUST use the shared context files with EXACT status codes:
+
+### Starting Condition - Check Dependencies
+```bash
+# Can start skeleton early in Phase 2
+make check-crate CRATE=core
+if [ $? -eq 0 ]; then
+    make status-start AGENT=integration-lead CRATE=server
+else
+    make status-blocked AGENT=integration-lead TYPE=DEPENDENCY MSG='Waiting for core crate'
+    exit 1
+fi
+```
+
+### Full Implementation Condition
+```bash
+# Before implementing main.rs, check all dependencies
+for crate in database protocol mocks; do
+    make check-crate CRATE=$crate
+    if [ $? -ne 0 ]; then
+        make status-blocked AGENT=integration-lead TYPE=DEPENDENCY MSG="Need $crate crate"
+    fi
+done
+```
+
+### Starting Work
+```bash
+make status-start AGENT=integration-lead CRATE=server
+```
+
+### Recording Decisions
+```bash
+make decision AGENT=integration-lead \
+  SUMMARY='Using clap for CLI parsing' \
+  RATIONALE='Industry standard, derive macros, great docs' \
+  ALTERNATIVES='structopt, pico-args'
+```
+
+### When Integration Ready
+```bash
+# Check if all components ready for integration
+all_ready=true
+for crate in database protocol mocks; do
+    if ! make check-crate CRATE=$crate | grep -q "complete"; then
+        all_ready=false
+        break
+    fi
+done
+
+if [ "$all_ready" = true ]; then
+    echo "[INTEGRATION-READY] All dependencies available, beginning final integration"
+fi
+```
+
+### Completing Work
+```bash
+make status-complete AGENT=integration-lead CRATE=server
+```
+
+### Using Makefile Commands
+```bash
+# Check component readiness
+make check-status
+
+# Check specific crates
+make check-crate CRATE=database
+make check-crate CRATE=protocol
+make check-crate CRATE=mocks
+```
+
+**MANDATORY Codes You Must Use**:
+- `[SERVER-START]`, `[SERVER-COMPLETE]`
+- `[INTEGRATION-READY]` when all dependencies available
+- `[BLOCKED-DEPENDENCY]` if waiting for other crates
+- Monitor `[DATABASE-COMPLETE]`, `[PROTOCOL-COMPLETE]`, `[MOCKS-COMPLETE]`
+
 ## Final Checklist
 
 Before declaring the mcp-server crate complete:

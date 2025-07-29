@@ -157,6 +157,70 @@ Use `./log.sh` for critical updates:
 ./log.sh "PROTOCOL-SPECIALIST → DATABASE: Testing with real repository"
 ```
 
+## MANDATORY Shared Context Protocol
+
+**CRITICAL**: You MUST use the shared context files with EXACT status codes:
+
+### Starting Condition - Check Dependencies
+```bash
+# DO NOT START until core is ready
+make check-deps
+if [ $? -ne 0 ]; then
+    make status-blocked AGENT=protocol-specialist TYPE=DEPENDENCY MSG='Waiting for core crate'
+    exit 1
+fi
+
+# Also check for required interfaces
+make interface-check INTERFACE=PROTOCOL-HANDLER
+if [ $? -ne 0 ]; then
+    make status-blocked AGENT=protocol-specialist TYPE=INTERFACE MSG='Need ProtocolHandler trait'
+    exit 1
+fi
+```
+
+### Starting Work
+```bash
+make status-start AGENT=protocol-specialist CRATE=protocol
+```
+
+### Recording Decisions
+```bash
+make decision AGENT=protocol-specialist \
+  SUMMARY='Using axum for SSE endpoint' \
+  RATIONALE='Mature, well-tested async web framework' \
+  ALTERNATIVES='Warp, Rocket, Actix-web'
+```
+
+### If Blocked
+```bash
+make status-blocked AGENT=protocol-specialist TYPE=DEPENDENCY MSG='Need TaskRepository implementation'
+```
+
+### When Unblocked
+```bash
+make status-unblocked AGENT=protocol-specialist TYPE=DEPENDENCY
+```
+
+### Completing Work
+```bash
+make status-complete AGENT=protocol-specialist CRATE=protocol
+```
+
+### Using Makefile Commands
+```bash
+# Check overall project status
+make check-status
+
+# Check specific dependencies
+make check-crate CRATE=database
+```
+
+**MANDATORY Codes You Must Use**:
+- `[PROTOCOL-START]`, `[PROTOCOL-COMPLETE]`
+- `[BLOCKED-DEPENDENCY]`, `[BLOCKED-INTERFACE]`, `[BLOCKED-TEST]`, `[BLOCKED-BUILD]`
+- Check for `[CORE-COMPLETE]` before starting
+- Check for `[INTERFACE-PROTOCOL-HANDLER]` in INTERFACES.md
+
 ## MCP Function Checklist
 
 Implement each function with exact compliance:
