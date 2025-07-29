@@ -1,0 +1,55 @@
+[Unit]
+Description=MCP Task Management Server
+Documentation=https://github.com/your-org/mcp-server
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=mcp-server
+Group=mcp-server
+WorkingDirectory=/opt/mcp-server
+ExecStart=/usr/local/bin/mcp-server
+
+# Environment variables
+Environment=DATABASE_URL=sqlite:///opt/mcp-server/data/db.sqlite
+Environment=LISTEN_ADDR=127.0.0.1
+Environment=LOG_LEVEL=info
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/mcp-server/data
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RemoveIPC=true
+LockPersonality=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectHostname=true
+ProtectClock=true
+SystemCallArchitectures=native
+MemoryDenyWriteExecute=true
+
+# Restart configuration
+Restart=always
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mcp-server
+
+# Process limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

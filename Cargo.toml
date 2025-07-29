@@ -1,0 +1,18 @@
+[workspace]
+members = [
+    "core",
+    "mcp-server", "database", "mcp-protocol", "mocks",
+]
+resolver = "2"
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1.0"
+async-trait = "0.1"
+tokio = { version = "1.0", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+config = "0.13"
+anyhow = "1.0"
+clap = { version = "4.0", features = ["derive", "env"] }
