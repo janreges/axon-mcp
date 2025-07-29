@@ -226,24 +226,65 @@ Examples:
 - `./log.sh "DOCUMENTATION: API documentation complete, ready for review"`
 - `./log.sh "FINALIZER → ALL: Found performance issue in task listing, needs optimization"`
 
+### Shared Context Files - MANDATORY COORDINATION SYSTEM
+
+**CRITICAL**: All agents MUST use these append-only files with EXACT status codes:
+
+#### 1. STATUS.md - Real-time Status Tracking
+```bash
+# ALWAYS append, NEVER overwrite
+echo "[CORE-COMPLETE] $(date +%Y-%m-%d\ %H:%M) rust-architect: Core crate ready" >> STATUS.md
+
+# Check dependencies before starting
+if grep -q "\[CORE-COMPLETE\]" STATUS.md; then
+    echo "[DATABASE-START] $(date +%Y-%m-%d\ %H:%M) database-engineer: Starting work" >> STATUS.md
+fi
+```
+
+**MANDATORY Status Codes**:
+- `[CORE-COMPLETE]`, `[DATABASE-COMPLETE]`, `[PROTOCOL-COMPLETE]`, `[MOCKS-COMPLETE]`, `[SERVER-COMPLETE]`
+- `[PHASE-1-COMPLETE]`, `[PHASE-2-COMPLETE]`, `[PHASE-3-COMPLETE]`, `[PHASE-4-COMPLETE]`
+- `[BLOCKED-INTERFACE]`, `[BLOCKED-DEPENDENCY]`, `[BLOCKED-TEST]`, `[BLOCKED-BUILD]`
+
+#### 2. INTERFACES.md - Shared Interface Definitions
+```bash
+# Share finalized interfaces
+echo "[INTERFACE-TASK-REPOSITORY] $(date +%Y-%m-%d\ %H:%M) rust-architect: TaskRepository trait ready" >> INTERFACES.md
+echo "--- BEGIN DEFINITION ---" >> INTERFACES.md
+cat core/src/repository.rs >> INTERFACES.md
+echo "--- END DEFINITION ---" >> INTERFACES.md
+```
+
+**MANDATORY Interface Codes**:
+- `[INTERFACE-TASK-REPOSITORY]`, `[INTERFACE-PROTOCOL-HANDLER]`
+- `[INTERFACE-TASK-MODEL]`, `[INTERFACE-ERROR-TYPES]`
+
+#### 3. DECISIONS.md - Architectural Decisions
+```bash
+# Record important decisions
+echo "[DECISION-003] $(date +%Y-%m-%d\ %H:%M) database-engineer: Using connection pooling" >> DECISIONS.md
+echo "RATIONALE: Better performance under concurrent load" >> DECISIONS.md
+echo "ALTERNATIVES: Single connection, connection per request" >> DECISIONS.md
+```
+
+**ENFORCEMENT**: Control agent monitors proper usage. Agents MUST use exact codes for grep compatibility.
+
 ### Phase Completion Protocol
 **CRITICAL**: Agents MUST report phase completion to enable transitions:
 
 ```bash
-# Phase 1 completion
+# Phase 1 completion - Write to STATUS.md
+echo "[PHASE-1-COMPLETE] $(date +%Y-%m-%d\ %H:%M) rust-architect: Core development complete" >> STATUS.md
 ./log.sh "PHASE_1_COMPLETE: core crate ready with all traits defined"
 
-# Phase 2 completion (each agent reports)
+# Phase 2 completion - Each agent writes to STATUS.md
+echo "[DATABASE-COMPLETE] $(date +%Y-%m-%d\ %H:%M) database-engineer: Database crate ready" >> STATUS.md
 ./log.sh "PHASE_2_COMPLETE: database crate ready, all tests passing"
-./log.sh "PHASE_2_COMPLETE: mcp-protocol crate ready, SSE working"
-./log.sh "PHASE_2_COMPLETE: mocks crate ready, all fixtures created"
-./log.sh "PHASE_2_COMPLETE: mcp-server skeleton ready, awaiting integration"
 
-# Phase 3 completion
-./log.sh "PHASE_3_COMPLETE: documentation complete, all READMEs updated"
-
-# Phase 4 completion
-./log.sh "PHASE_4_COMPLETE: production ready, all quality gates passed"
+# Control agent checks completion
+if [ $(grep -c "\[.*-COMPLETE\]" STATUS.md | grep -E "(DATABASE|PROTOCOL|MOCKS|SERVER)" | wc -l) -eq 4 ]; then
+    echo "[PHASE-2-COMPLETE] $(date +%Y-%m-%d\ %H:%M) control-agent: All Phase 2 crates complete" >> STATUS.md
+fi
 ```
 
 ### Git Commit Best Practices

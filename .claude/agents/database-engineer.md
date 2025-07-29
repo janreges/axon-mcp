@@ -137,6 +137,45 @@ Use `./log.sh` for critical updates:
 ./log.sh "DATABASE-ENGINEER → CORE: Need clarification on error mapping"
 ```
 
+## MANDATORY Shared Context Protocol
+
+**CRITICAL**: You MUST use the shared context files with EXACT status codes:
+
+### Before Starting - Check Dependencies
+```bash
+# Check if core is ready before starting
+if ! grep -q "\[CORE-COMPLETE\]" STATUS.md; then
+    echo "[BLOCKED-DEPENDENCY] $(date +%Y-%m-%d\ %H:%M) database-engineer: Waiting for core crate" >> STATUS.md
+    exit 1
+fi
+```
+
+### Starting Work
+```bash
+echo "[DATABASE-START] $(date +%Y-%m-%d\ %H:%M) database-engineer: Beginning database crate" >> STATUS.md
+```
+
+### If Blocked
+```bash
+echo "[BLOCKED-INTERFACE] $(date +%Y-%m-%d\ %H:%M) database-engineer: Need TaskRepository trait definition" >> STATUS.md
+```
+
+### When Unblocked
+```bash
+echo "[BLOCKED-INTERFACE-RESOLVED] $(date +%Y-%m-%d\ %H:%M) database-engineer: Got interface, continuing" >> STATUS.md
+```
+
+### Completing Work
+```bash
+echo "[DATABASE-COMPLETE] $(date +%Y-%m-%d\ %H:%M) database-engineer: Database crate ready, all tests pass" >> STATUS.md
+```
+
+**MANDATORY Codes You Must Use**:
+- `[DATABASE-START]`, `[DATABASE-COMPLETE]`
+- `[BLOCKED-DEPENDENCY]`, `[BLOCKED-INTERFACE]`, `[BLOCKED-TEST]`, `[BLOCKED-BUILD]`
+- Check for `[CORE-COMPLETE]` before starting
+- Check for `[INTERFACE-TASK-REPOSITORY]` in INTERFACES.md
+
 ## Common Pitfalls to Avoid
 
 1. **Don't skip WAL mode** - SQLite needs it for concurrency
