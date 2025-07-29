@@ -3,7 +3,7 @@
 //! Implements the ProtocolHandler trait for MCP communication.
 
 use std::sync::Arc;
-use ::task_core::{TaskRepository, ProtocolHandler, Task, NewTask, HealthStatus};
+use ::task_core::{TaskRepository, ProtocolHandler, Task, NewTask, UpdateTask, HealthStatus};
 use ::task_core::error::Result;
 use crate::serialization::*;
 use async_trait::async_trait;

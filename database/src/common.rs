@@ -245,6 +245,8 @@ mod tests {
             state: Some(TaskState::Done),
             date_from: Some(Utc::now()),
             date_to: Some(Utc::now()),
+            completed_after: None,
+            completed_before: None,
             limit: None,
             offset: None,
         };
@@ -268,6 +270,8 @@ mod tests {
             state: Some(TaskState::InProgress),
             date_from: Some(Utc::now()),
             date_to: Some(Utc::now()),
+            completed_after: None,
+            completed_before: None,
             limit: Some(10),
             offset: Some(5),
         };

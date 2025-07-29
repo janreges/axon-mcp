@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 use mcp_protocol::*;
-use task_core::{TaskRepository, Task, NewTask, TaskState, TaskFilter, RepositoryStats};
+use task_core::{TaskRepository, Task, NewTask, UpdateTask, TaskState, TaskFilter, RepositoryStats};
 use task_core::error::{Result, TaskError};
 use async_trait::async_trait;
 use chrono::Utc;
@@ -205,10 +205,12 @@ async fn test_update_task_performance() {
     let handler = McpTaskHandler::new(repository);
     
     let params = UpdateTaskParams {
-        id: 1,
-        name: Some("Updated Name".to_string()),
-        description: None,
-        owner_agent_name: None,
+        id: 1,  
+        update_data: UpdateTask {
+            name: Some("Updated Name".to_string()),
+            description: None,
+            owner_agent_name: None,
+        },
     };
     
     let (result, duration) = measure_operation(|| handler.update_task(params.clone())).await;

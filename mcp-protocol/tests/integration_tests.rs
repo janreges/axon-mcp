@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 use mcp_protocol::*;
-use task_core::{Task, NewTask, TaskState, TaskRepository, TaskFilter, RepositoryStats};
+use task_core::{Task, NewTask, UpdateTask, TaskState, TaskRepository, TaskFilter, RepositoryStats};
 use task_core::error::{Result, TaskError};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -232,9 +232,11 @@ async fn test_task_lifecycle_integration() {
     // Update task
     let update_params = UpdateTaskParams {
         id: task_id,
-        name: Some("Updated Task".to_string()),
-        description: None,
-        owner_agent_name: None,
+        update_data: UpdateTask {
+            name: Some("Updated Task".to_string()),
+            description: None,
+            owner_agent_name: None,
+        },
     };
     
     let updated_task = handler.update_task(update_params).await.unwrap();
