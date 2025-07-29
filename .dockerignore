@@ -1,0 +1,50 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+target/
+**/*.log
+
+# Documentation
+*.md
+!README.md
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+**/tmp/
+*.tmp
+*.temp
+
+# Test files (but keep integration tests)
+**/target/
+**/*.orig
+
+# Development configuration
+.env
+.env.local
+.env.development
+.env.test
+
+# Docker files
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Cache directories
+.cache/
+node_modules/
