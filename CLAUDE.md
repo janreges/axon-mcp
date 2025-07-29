@@ -68,9 +68,9 @@ enum TaskState {
 
 The project is structured as a Rust workspace with 5 independent crates, each owned by specialized agent teams:
 
-### Crate Ownership
+### Crate Ownership (Phase 1 - Core Development)
 
-**1. `core` crate** - Owners: rust-architect + backend-developer
+**1. `core` crate** - Owner: core-architect
    - Domain models, business logic, trait interfaces
    - Task struct, TaskState enum, error types
    - Repository and protocol handler traits
@@ -85,7 +85,7 @@ The project is structured as a Rust workspace with 5 independent crates, each ow
    - Protocol handler implementation
    - JSON-RPC message handling
 
-**4. `mcp-server` crate** - Owner: git-coordinator
+**4. `mcp-server` crate** - Owner: integration-lead
    - Main binary assembling all components
    - Configuration management
    - Dependency injection and startup logic
@@ -95,27 +95,57 @@ The project is structured as a Rust workspace with 5 independent crates, each ow
    - Test fixtures and generators
    - Contract test helpers
 
-### Supporting Team Members
+### Supporting Team Members (Phase 2 - Documentation & Finalization)
 
-**documentation-specialist** - Creates PRD.md, ARCHITECTURE.md, API documentation
-**devops-engineer** - CI/CD pipelines, Docker support, deployment automation
+**6. documentation-specialist** - Creates comprehensive documentation
+   - README files for all crates
+   - API.md with complete MCP reference
+   - User guides and examples
+   - Rustdoc for all public APIs
+
+**7. project-finalizer** - Ensures production readiness
+   - Final integration testing
+   - Performance validation
+   - Security audit
+   - Cleanup and release preparation
 
 ## Development Methodology
 
-### MANDATORY Aggressive Parallel Development
+### Two-Phase Development Process
+
+**PHASE 1 - Core Development (Parallel)**
+- Launch 5 crate owners simultaneously
+- Each develops their crate independently
+- Communication via ./log.sh
+- Develop against trait interfaces
+- Regular commits of working code
+
+**PHASE 2 - Documentation & Finalization (Sequential)**
+- Launch documentation-specialist after core development
+- Launch project-finalizer after documentation
+- Comprehensive testing and validation
+- Production readiness verification
+- Final release preparation
+
+### MANDATORY Execution Rules for Control Agent
 
 **CONTROL AGENT REQUIREMENTS**:
-- **IMMEDIATELY launch ALL 5 crate owners using Task tool** - no delays, no sequential activation
-- **DO NOT DO ANY WORK YOURSELF** - you only coordinate, never implement
-- **NO AGENT SIMULATION** - do not pretend to be any agent or use their log.sh
-- **LET AGENTS COMMUNICATE DIRECTLY** - do not mediate their conversations
+- **Phase 1**: Launch ALL 5 crate owners simultaneously using Task tool
+- **Phase 2**: Launch documentation-specialist when crates are ready
+- **Phase 3**: Launch project-finalizer for final validation
+- **DO NOT DO ANY WORK YOURSELF** - you only coordinate
+- **NO AGENT SIMULATION** - do not pretend to be any agent
+- **LET AGENTS COMMUNICATE DIRECTLY** - do not mediate
 
-**CRATE OWNER REQUIREMENTS**:
-- **START IMMEDIATELY**: Begin work on your crate the moment you are activated
-- **FOLLOW YOUR TASKLIST**: Each crate has a detailed TASKLIST.[crate-name].md file
-- **COMMUNICATE DIRECTLY**: Use ./log.sh to coordinate with other crate owners
-- **WORK IN PARALLEL**: Do not wait for others - develop against trait interfaces
-- **MARK PROGRESS**: Update your TASKLIST as you complete items
+### Development Requirements for All Agents
+
+**ALL AGENT REQUIREMENTS**:
+- **USE TEMPORARY DIRECTORIES**: Create `./tmp/` in your work area
+- **GITIGNORE TEMP FILES**: Ensure ./tmp/ is in .gitignore
+- **SELECTIVE COMMITS**: NEVER use `git add .` or `git add -A`
+- **REVIEW BEFORE COMMIT**: Always run `git status` and review
+- **CLEAN COMMITS**: Remove all temp files before committing
+- **COMMIT YOUR WORK**: Commit completed work with clear messages
 
 ### Communication Requirements
 **ALL team members MUST use `./log.sh "message"` for coordination logging**
@@ -124,7 +154,45 @@ Examples:
 - `./log.sh "CORE-ARCHITECT → DATABASE-DESIGNER: TaskRepository trait defined, ready for implementation"`
 - `./log.sh "DATABASE-DESIGNER → QA-TESTER: Need mock repository for testing"`
 - `./log.sh "MCP-INTEGRATOR → ALL: SSE endpoint ready at /mcp/v1"`
-- `./log.sh "GIT-COORDINATOR: All crates integrated, server starting successfully"`
+- `./log.sh "INTEGRATION-LEAD: All crates integrated, server starting successfully"`
+- `./log.sh "DOCUMENTATION: API documentation complete, ready for review"`
+- `./log.sh "FINALIZER → ALL: Found performance issue in task listing, needs optimization"`
+
+### Git Commit Best Practices
+
+**CRITICAL**: All agents must follow these rules:
+
+1. **Check Status First**
+   ```bash
+   git status  # See what's changed
+   git diff    # Review changes
+   ```
+
+2. **Add Files Selectively**
+   ```bash
+   # GOOD - Add specific files
+   git add src/models.rs
+   git add src/handlers.rs
+   
+   # BAD - Never do this
+   git add .
+   git add -A
+   ```
+
+3. **Clean Before Commit**
+   ```bash
+   # Remove temp files
+   rm -rf ./tmp/
+   find . -name "*.tmp" -delete
+   find . -name "*.log" -delete
+   ```
+
+4. **Meaningful Commit Messages**
+   ```bash
+   git commit -m "feat(core): Add Task and TaskState models"
+   git commit -m "fix(database): Handle connection timeouts"
+   git commit -m "docs: Add API reference for all MCP functions"
+   ```
 
 ## Project Deliverables
 
@@ -172,11 +240,12 @@ task-manager/
 
 ## MANDATORY EXECUTION PROTOCOL
 
-### CONTROL AGENT EXECUTION REQUIREMENTS
+### Three-Phase Execution Plan
 
-**STEP 1 - IMMEDIATE PARALLEL ACTIVATION**:
-```
+**PHASE 1 - Core Development (Parallel)**
+
 Use Task tool to launch ALL 5 crate owners simultaneously:
+```
 - core-architect (for core crate)
 - database-designer (for database crate)  
 - mcp-integrator (for mcp-protocol crate)
@@ -184,11 +253,34 @@ Use Task tool to launch ALL 5 crate owners simultaneously:
 - qa-tester (for mocks crate)
 ```
 
-**STEP 2 - HANDS-OFF COORDINATION**:
+Wait for all crates to be implemented and integrated.
+
+**PHASE 2 - Documentation**
+
+When Phase 1 is complete, launch:
+```
+- documentation-specialist
+```
+
+Wait for comprehensive documentation to be completed.
+
+**PHASE 3 - Finalization**
+
+When Phase 2 is complete, launch:
+```
+- project-finalizer
+```
+
+Wait for production readiness verification.
+
+### CONTROL AGENT EXECUTION REQUIREMENTS
+
+**HANDS-OFF COORDINATION**:
 - **DO NOT write any code, documentation, or implementations**
 - **DO NOT call ./log.sh pretending to be an agent**
 - **DO NOT simulate agent work or responses**
-- **ONLY monitor and coordinate if agents request help**
+- **ONLY monitor and coordinate between phases**
+- **Wait for agents to report completion before next phase**
 
 ### CRATE OWNER EXECUTION REQUIREMENTS
 
@@ -214,6 +306,28 @@ Use Task tool to launch ALL 5 crate owners simultaneously:
 - **State Validation**: Enforce valid task state transitions
 - **Contract Tests**: Each trait implementation must pass standardized tests
 
+### Temporary File Management
+
+**ALL AGENTS MUST**:
+1. Create `./tmp/` directory in their work area
+2. Add `**/tmp/` to .gitignore (if not already present)
+3. Use ./tmp/ for all temporary files, test outputs, scripts
+4. Clean ./tmp/ before any commit
+5. Never commit temporary or test files
+
+Example .gitignore entries:
+```
+**/tmp/
+**/*.tmp
+**/*.log
+**/*.bak
+**/target/
+```
+
 ---
 
-**SUCCESS CRITERIA**: All 5 crates developed in parallel, integrated seamlessly, with comprehensive testing and documentation. The final MCP server must handle all 8 required functions via SSE with SQLite persistence.
+**SUCCESS CRITERIA**: 
+- Phase 1: All 5 crates developed, tested, and integrated
+- Phase 2: Complete documentation with examples and guides
+- Phase 3: Production-ready system with all quality gates passed
+- Final: Clean repository with no development artifacts

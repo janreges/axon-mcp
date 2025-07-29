@@ -1,0 +1,43 @@
+# Rust build artifacts
+target/
+Cargo.lock
+
+# Temporary files and directories
+**/tmp/
+**/*.tmp
+**/*.log
+**/*.bak
+**/.DS_Store
+
+# Test outputs
+**/*.profraw
+**/*.profdata
+**/coverage/
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Development artifacts
+**/test-output/
+**/bench-results/
+**/debug/
+
+# Release artifacts (except the release directory itself)
+release/*.tar.gz
+release/*.zip
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Backup files
+*~
+*.orig
+
+# SQLite temporary files
+*.db-journal
+*.db-wal
+*.db-shm
