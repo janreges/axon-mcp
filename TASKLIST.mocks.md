@@ -289,8 +289,6 @@ This crate MUST:
   /// Create in-memory SQLite for testing
   pub async fn create_test_sqlite() -> SqliteTaskRepository
   
-  /// Create test PostgreSQL with Docker
-  pub async fn create_test_postgres() -> PostgresTaskRepository
   ```
 
 ## Public Interface Checklist ✓ MUST MATCH ARCHITECTURE.md

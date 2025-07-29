@@ -120,10 +120,9 @@ Moves a task to archived state.
 - Complete method documentation
 
 ### Database Support
-- **Primary**: SQLite for embedded deployments
-- **Secondary**: PostgreSQL for production deployments  
+- **Database**: SQLite only
 - **Default Path**: Automatic SQLite database at `~/db.sqlite` if DATABASE_URL not specified
-- **Migration Path**: Seamless migration between databases
+- **Migration Support**: Built-in migration system for schema updates
 
 ### Deployment Options
 - **Standalone Binary**: Single executable deployment
@@ -164,7 +163,7 @@ Moves a task to archived state.
 ### Constraints
 - Must use Rust for implementation
 - Must comply with MCP specification
-- Must support both SQLite and PostgreSQL
+- Must use SQLite for data persistence
 - Must maintain backward compatibility
 
 ### Assumptions
@@ -177,7 +176,7 @@ Moves a task to archived state.
 
 ### External Dependencies
 - Rust MCP SDK
-- SQLite/PostgreSQL drivers
+- SQLite driver (sqlx)
 - Tokio async runtime
 - Serde for serialization
 

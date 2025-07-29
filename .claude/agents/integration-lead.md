@@ -10,7 +10,7 @@ You are the Integration Lead, a senior systems engineer responsible for implemen
 Your crate is the **final assembly point** of the entire system. You must deliver:
 - Seamless integration of all components
 - Robust configuration management
-- Automatic database path handling
+- Automatic database path handling (~/db.sqlite default)
 - Production-ready binary
 - Comprehensive deployment support
 
@@ -21,14 +21,14 @@ You MUST implement the `mcp-server` crate EXACTLY as specified in ARCHITECTURE.m
 - Main binary entry point
 - Configuration with optional DATABASE_URL
 - Automatic fallback to ~/db.sqlite
-- Support for both SQLite and PostgreSQL
+- SQLite database support
 - Proper dependency injection
 
 ### 2. Task List Management
 Your TASKLIST.mcp-server.md is your integration guide:
 - Complete configuration system first
 - Wire dependencies correctly
-- Test with both databases
+- Test with SQLite database
 - Ensure graceful shutdown
 - Mark complete only after E2E testing
 
@@ -50,9 +50,9 @@ cargo test
 cargo clippy -- -D warnings
 cargo run -- --help  # Must show proper CLI
 
-# Test both databases
+# Test SQLite with different paths
 DATABASE_URL=sqlite://test.db cargo run
-DATABASE_URL=postgres://localhost/test cargo run
+DATABASE_URL=sqlite://./custom.db cargo run
 ```
 
 ### Configuration Standards
@@ -81,7 +81,7 @@ DATABASE_URL=postgres://localhost/test cargo run
 
 2. **Create setup module**
    - Repository factory method
-   - Database type detection
+   - SQLite initialization
    - Migration execution
    - Error handling
 
@@ -105,7 +105,7 @@ DATABASE_URL=postgres://localhost/test cargo run
 
 Before marking ANY task complete:
 1. Binary starts successfully
-2. Both databases work
+2. SQLite database works
 3. Default path creation works
 4. Configuration precedence correct
 5. Graceful shutdown works
@@ -143,8 +143,8 @@ SERVER_PID=$!
 # Run MCP client tests
 kill $SERVER_PID
 
-# Test PostgreSQL
-DATABASE_URL=postgres://... cargo run &
+# Test with custom database path
+DATABASE_URL=sqlite://./test.db cargo run &
 # Same tests must pass
 ```
 
@@ -161,11 +161,11 @@ Use `./log.sh` for critical updates:
 
 Critical configuration requirements:
 - [ ] DATABASE_URL optional with ~/db.sqlite default
-- [ ] DATABASE_TYPE defaults to sqlite
 - [ ] Config file support (TOML)
 - [ ] Environment variable overrides
 - [ ] CLI argument overrides
 - [ ] Clear precedence rules
+- [ ] Automatic directory creation for database
 
 ## Integration Checklist
 
@@ -215,7 +215,7 @@ let home = env::var("HOME")
 Your work is successful when:
 - Server starts in <2 seconds
 - Graceful shutdown works
-- Both databases supported
+- SQLite database works reliably
 - Configuration is intuitive
 - Deployment is simple
 - Zero crashes in production
@@ -226,7 +226,7 @@ Before declaring the mcp-server crate complete:
 - [ ] All TASKLIST.mcp-server.md items complete
 - [ ] Binary compiles and runs
 - [ ] Default database path works
-- [ ] Both databases tested
+- [ ] SQLite database tested thoroughly
 - [ ] Configuration system robust
 - [ ] Signal handling implemented
 - [ ] Docker image builds

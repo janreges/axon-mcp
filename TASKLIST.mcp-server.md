@@ -10,7 +10,7 @@ This crate MUST:
 - Wire together all other crates correctly
 - Handle configuration from environment and files
 - Provide proper startup/shutdown handling
-- Support both SQLite and PostgreSQL backends
+- Support SQLite backend with automatic database creation
 - Include comprehensive logging and monitoring
 
 ## Phase 1: Project Setup ✓ Required
@@ -72,16 +72,9 @@ This crate MUST:
   
   #[derive(Debug, Deserialize, Clone)]
   pub struct DatabaseConfig {
-      pub database_type: DatabaseType,
-      pub url: String,
+      pub url: Option<String>,  // Optional, defaults to ~/db.sqlite
       pub max_connections: u32,
       pub connection_timeout: u64,
-  }
-  
-  #[derive(Debug, Deserialize, Clone)]
-  pub enum DatabaseType {
-      Sqlite,
-      Postgres,
   }
   
   #[derive(Debug, Deserialize, Clone)]
@@ -107,7 +100,6 @@ This crate MUST:
   ```
 - [ ] Support environment variable overrides:
   - `DATABASE_URL`
-  - `DATABASE_TYPE`
   - `LISTEN_ADDR`
   - `LOG_LEVEL`
 
@@ -115,7 +107,6 @@ This crate MUST:
 - [ ] Create `config/default.toml`:
   ```toml
   [database]
-  database_type = "sqlite"
   # url is optional, defaults to ~/db.sqlite
   max_connections = 5
   connection_timeout = 30
@@ -138,20 +129,18 @@ This crate MUST:
   ```rust
   pub async fn create_repository(config: &DatabaseConfig) -> Result<Arc<dyn TaskRepository>>
   ```
-- [ ] Implement database selection:
+- [ ] Implement repository creation:
   ```rust
-  match config.database_type {
-      DatabaseType::Sqlite => {
-          let repo = SqliteTaskRepository::new(&config.url).await?;
-          repo.migrate().await?;
-          Ok(Arc::new(repo))
-      }
-      DatabaseType::Postgres => {
-          let repo = PostgresTaskRepository::new(&config.url).await?;
-          repo.migrate().await?;
-          Ok(Arc::new(repo))
-      }
-  }
+  // Get database URL with default fallback
+  let database_url = config.database.url.unwrap_or_else(|| {
+      let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+      format!("sqlite://{}/db.sqlite", home)
+  });
+  
+  // Create SQLite repository
+  let repo = SqliteTaskRepository::new(&database_url).await?;
+  repo.migrate().await?;
+  Ok(Arc::new(repo))
   ```
 - [ ] Create server factory:
   ```rust
@@ -235,7 +224,6 @@ This crate MUST:
 
 ### Task 7: Create Integration Tests
 - [ ] Test server startup with SQLite
-- [ ] Test server startup with PostgreSQL
 - [ ] Test configuration loading
 - [ ] Test environment overrides
 - [ ] Test default database path creation
@@ -285,7 +273,6 @@ This crate MUST:
 ### Environment Variables
 - [ ] `CONFIG_FILE` - Config file path
 - [ ] `DATABASE_URL` - Database connection
-- [ ] `DATABASE_TYPE` - sqlite or postgres
 - [ ] `LISTEN_ADDR` - Server address
 - [ ] `LOG_LEVEL` - Logging level
 
@@ -316,7 +303,7 @@ Use `./log.sh` to communicate:
 
 ## Success Criteria
 
-1. Server starts successfully with both databases
+1. Server starts successfully with SQLite
 2. All MCP functions accessible
 3. Configuration system works properly
 4. Graceful shutdown implemented

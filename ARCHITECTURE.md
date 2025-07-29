@@ -216,16 +216,15 @@ impl Task {
 - `thiserror`: Error derive macro
 - `async-trait`: Async trait support
 
-### 2. `database` - Database Implementations
+### 2. `database` - Database Implementation
 **Owner Agent**: database-designer  
-**Purpose**: Provide SQLite and PostgreSQL implementations of the TaskRepository trait.
+**Purpose**: Provide SQLite implementation of the TaskRepository trait.
 
 #### Public API
 
 ```rust
 // lib.rs - Public exports
 pub use sqlite::SqliteTaskRepository;
-pub use postgres::PostgresTaskRepository;
 
 // sqlite.rs - SQLite implementation
 pub struct SqliteTaskRepository {
@@ -234,32 +233,19 @@ pub struct SqliteTaskRepository {
 
 impl SqliteTaskRepository {
     /// Create new SQLite repository with connection string
-    pub async fn new(database_url: &str) -> Result<Self>;
+    pub async fn new(database_url: &str) -> core::Result<Self>;
     
     /// Run database migrations
-    pub async fn migrate(&self) -> Result<()>;
+    pub async fn migrate(&self) -> core::Result<()>;
 }
 
-// postgres.rs - PostgreSQL implementation  
-pub struct PostgresTaskRepository {
-    pool: PgPool,
-}
-
-impl PostgresTaskRepository {
-    /// Create new PostgreSQL repository with connection string
-    pub async fn new(database_url: &str) -> Result<Self>;
-    
-    /// Run database migrations
-    pub async fn migrate(&self) -> Result<()>;
-}
-
-// Both implement core::TaskRepository trait
+// Implements core::TaskRepository trait
 ```
 
 #### Database Schema
 
 ```sql
--- tasks table (same for both SQLite and PostgreSQL)
+-- SQLite tasks table
 CREATE TABLE tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     code VARCHAR(50) UNIQUE NOT NULL,
@@ -279,7 +265,7 @@ CREATE INDEX idx_tasks_inserted_at ON tasks(inserted_at);
 
 #### Dependencies
 - `core`: Domain models and traits
-- `sqlx`: Database driver with SQLite and PostgreSQL features
+- `sqlx`: Database driver with SQLite features
 - `tokio`: Async runtime
 
 ### 3. `mcp-protocol` - MCP Protocol Implementation
@@ -335,6 +321,32 @@ match method {
 }
 ```
 
+#### Error Code Mapping
+
+```rust
+// MCP error codes for JSON-RPC 2.0
+pub const ERROR_NOT_FOUND: i32 = -32001;
+pub const ERROR_INVALID_STATE: i32 = -32002;
+pub const ERROR_DUPLICATE: i32 = -32003;
+pub const ERROR_VALIDATION: i32 = -32004;
+pub const ERROR_DATABASE: i32 = -32005;
+pub const ERROR_INTERNAL: i32 = -32006;
+
+// Map TaskError to MCP error codes
+impl From<TaskError> for McpError {
+    fn from(err: TaskError) -> Self {
+        match err {
+            TaskError::NotFound(_) => McpError::new(ERROR_NOT_FOUND, err.to_string()),
+            TaskError::InvalidStateTransition(_, _) => McpError::new(ERROR_INVALID_STATE, err.to_string()),
+            TaskError::DuplicateCode(_) => McpError::new(ERROR_DUPLICATE, err.to_string()),
+            TaskError::Validation(_) => McpError::new(ERROR_VALIDATION, err.to_string()),
+            TaskError::Database(_) => McpError::new(ERROR_DATABASE, err.to_string()),
+            TaskError::Protocol(_) => McpError::new(ERROR_INTERNAL, err.to_string()),
+        }
+    }
+}
+```
+
 #### Dependencies
 - `core`: Domain models and traits
 - `mcp-sdk`: Official Rust MCP SDK with SSE support
@@ -361,15 +373,9 @@ async fn main() -> Result<()> {
         format!("sqlite://{}/db.sqlite", home)
     });
     
-    // Initialize repository based on config
-    let repository: Arc<dyn TaskRepository> = match config.database_type {
-        DatabaseType::Sqlite => {
-            Arc::new(SqliteTaskRepository::new(&database_url).await?)
-        }
-        DatabaseType::Postgres => {
-            Arc::new(PostgresTaskRepository::new(&database_url).await?)
-        }
-    };
+    // Initialize SQLite repository
+    let repository: Arc<dyn TaskRepository> = 
+        Arc::new(SqliteTaskRepository::new(&database_url).await?);
     
     // Run migrations
     repository.migrate().await?;
@@ -384,16 +390,9 @@ async fn main() -> Result<()> {
 // config.rs - Configuration management
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    pub database_type: DatabaseType,
     pub database_url: Option<String>,  // Optional, defaults to ~/db.sqlite
     pub listen_addr: String,
     pub log_level: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub enum DatabaseType {
-    Sqlite,
-    Postgres,
 }
 ```
 

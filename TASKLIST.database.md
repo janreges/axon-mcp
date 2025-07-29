@@ -1,16 +1,16 @@
 # Task List: `database` Crate
 
 **Owner Agent**: database-designer  
-**Purpose**: Provide SQLite and PostgreSQL implementations of the TaskRepository trait from core.
+**Purpose**: Provide SQLite implementation of the TaskRepository trait from core.
 
 ## Critical Requirements
 
 This crate MUST:
 - Implement the `TaskRepository` trait from `core` EXACTLY as specified
-- Support both SQLite and PostgreSQL with feature flags
+- Support SQLite with all required features
 - Handle all database operations with proper error mapping
-- Provide migration support for both databases
-- Be thoroughly tested with in-memory databases
+- Provide migration support for SQLite
+- Be thoroughly tested with in-memory database
 
 ## Phase 1: Project Setup ✓ Required
 
@@ -24,7 +24,7 @@ This crate MUST:
 
   [dependencies]
   core = { path = "../core" }
-  sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "postgres", "chrono", "migrate"] }
+  sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "chrono", "migrate"] }
   tokio = { version = "1.0", features = ["full"] }
   async-trait = "0.1"
   tracing = "0.1"
@@ -38,12 +38,10 @@ This crate MUST:
   ├── src/
   │   ├── lib.rs
   │   ├── sqlite.rs
-  │   ├── postgres.rs
   │   ├── migrations.rs
   │   └── common.rs
   ├── migrations/
-  │   ├── sqlite/
-  │   └── postgres/
+  │   └── sqlite/
   └── tests/
   ```
 
@@ -71,21 +69,6 @@ This crate MUST:
   CREATE INDEX idx_tasks_inserted_at ON tasks(inserted_at);
   ```
 
-### Task 2: Create PostgreSQL Migrations
-- [ ] Create `migrations/postgres/001_create_tasks.sql`:
-  ```sql
-  CREATE TABLE tasks (
-      id SERIAL PRIMARY KEY,
-      code VARCHAR(50) UNIQUE NOT NULL,
-      name VARCHAR(255) NOT NULL,
-      description TEXT NOT NULL,
-      owner_agent_name VARCHAR(100) NOT NULL,
-      state VARCHAR(20) NOT NULL,
-      inserted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      done_at TIMESTAMPTZ NULL
-  );
-  ```
-- [ ] Create same indices as SQLite
 
 ## Phase 3: Implementation ✓ Required
 
@@ -124,29 +107,13 @@ This crate MUST:
   - [ ] `assign()` - update owner field
   - [ ] `archive()` - validate state before archiving
 
-### Task 5: Implement PostgreSQL Repository (`src/postgres.rs`)
-- [ ] Create `PostgresTaskRepository` struct:
-  ```rust
-  pub struct PostgresTaskRepository {
-      pool: PgPool,
-  }
-  ```
-- [ ] Implement constructor with same signature
-- [ ] Implement migration method
-- [ ] Implement ALL methods from `TaskRepository` trait
-- [ ] Ensure timezone handling (use TIMESTAMPTZ)
-- [ ] Handle PostgreSQL-specific features
 
 ### Task 6: Create Library Root (`src/lib.rs`)
-- [ ] Export both repository implementations
+- [ ] Export SQLite repository implementation
 - [ ] Re-export common types
-- [ ] Add feature flags:
+- [ ] Simple public API:
   ```rust
-  #[cfg(feature = "sqlite")]
   pub use sqlite::SqliteTaskRepository;
-  
-  #[cfg(feature = "postgres")]
-  pub use postgres::PostgresTaskRepository;
   ```
 
 ## Phase 4: Testing ✓ Required
@@ -157,9 +124,6 @@ This crate MUST:
   - Test all repository methods
   - Test error conditions
   - Test concurrent operations
-- [ ] Create `tests/postgres_integration.rs`:
-  - Use Docker or test container
-  - Same test coverage as SQLite
 - [ ] Create `tests/contract.rs`:
   - Generic tests that both implementations must pass
   - Ensure identical behavior
@@ -187,11 +151,6 @@ This crate MUST:
 - [ ] `migrate(&self) -> Result<()>` method
 - [ ] Implements `core::TaskRepository` trait fully
 
-### PostgreSQL Repository (`postgres.rs`)
-- [ ] `PostgresTaskRepository` struct
-- [ ] `new(database_url: &str) -> Result<Self>` constructor
-- [ ] `migrate(&self) -> Result<()>` method
-- [ ] Implements `core::TaskRepository` trait fully
 
 ## Error Handling Requirements
 
@@ -222,7 +181,7 @@ Use `./log.sh` to communicate:
 
 ## Success Criteria
 
-1. Both SQLite and PostgreSQL implementations work identically
+1. SQLite implementation works perfectly
 2. All trait methods implemented correctly
 3. Comprehensive test coverage (>90%)
 4. Performance meets requirements (<100ms operations)
