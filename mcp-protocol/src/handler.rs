@@ -3,7 +3,7 @@
 //! Implements the ProtocolHandler trait for MCP communication.
 
 use std::sync::Arc;
-use ::task_core::{TaskRepository, ProtocolHandler, Task, NewTask, UpdateTask, HealthStatus};
+use ::task_core::{TaskRepository, ProtocolHandler, Task, NewTask, HealthStatus};
 use ::task_core::error::Result;
 use crate::serialization::*;
 use async_trait::async_trait;
@@ -39,13 +39,7 @@ impl<R: TaskRepository + Send + Sync> ProtocolHandler for McpTaskHandler<R> {
     }
     
     async fn update_task(&self, params: UpdateTaskParams) -> Result<Task> {
-        let updates = UpdateTask {
-            name: params.name,
-            description: params.description,
-            owner_agent_name: params.owner_agent_name,
-        };
-        
-        self.repository.update(params.id, updates).await
+        self.repository.update(params.id, params.into_update_data()).await
     }
     
     async fn set_task_state(&self, params: SetStateParams) -> Result<Task> {

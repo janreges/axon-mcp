@@ -101,7 +101,7 @@ pub enum TaskState {
 }
 
 /// Data transfer object for creating new tasks
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NewTask {
     /// Human-readable identifier (e.g., "ARCH-01", "DB-15")
     pub code: String,
@@ -114,7 +114,7 @@ pub struct NewTask {
 }
 
 /// Data transfer object for updating existing tasks
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct UpdateTask {
     /// Optional new task name
     pub name: Option<String>,
@@ -141,6 +141,12 @@ pub struct TaskFilter {
     
     /// Filter tasks created on or before this date
     pub date_to: Option<DateTime<Utc>>,
+    
+    /// Filter tasks completed on or after this date
+    pub completed_after: Option<DateTime<Utc>>,
+    
+    /// Filter tasks completed on or before this date
+    pub completed_before: Option<DateTime<Utc>>,
     
     /// Maximum number of tasks to return (for pagination)
     pub limit: Option<u32>,

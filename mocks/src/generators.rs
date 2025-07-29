@@ -168,6 +168,8 @@ pub fn task_filter_strategy() -> impl Strategy<Value = TaskFilter> {
         state,
         date_from: None,
         date_to: None,
+        completed_after: None,
+        completed_before: None,
         limit: None,
         offset: None,
     })

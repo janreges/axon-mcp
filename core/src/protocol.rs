@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use crate::{
     error::Result,
-    models::{Task, TaskFilter, TaskState},
+    models::{Task, TaskFilter, TaskState, NewTask, UpdateTask},
 };
 
 /// Protocol handler trait for MCP operations
@@ -40,21 +40,45 @@ pub trait ProtocolHandler: Send + Sync {
 }
 
 /// MCP parameters for creating a new task
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateTaskParams {
-    pub code: String,
-    pub name: String,
-    pub description: String,
-    pub owner_agent_name: String,
-}
+/// 
+/// This is a wrapper around the core NewTask model that provides MCP-specific
+/// serialization and validation while reusing the domain model.
+pub type CreateTaskParams = NewTask;
 
 /// MCP parameters for updating a task
+/// 
+/// Contains the task ID and the update data. The update data reuses
+/// the core UpdateTask model to avoid duplication.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateTaskParams {
     pub id: i32,
-    pub name: Option<String>,
-    pub description: Option<String>,
-    pub owner_agent_name: Option<String>,
+    #[serde(flatten)]
+    pub update_data: UpdateTask,
+}
+
+impl UpdateTaskParams {
+    /// Extract the update data for use with repository layer
+    pub fn into_update_data(self) -> UpdateTask {
+        self.update_data
+    }
+
+    /// Get a reference to the update data
+    pub fn update_data(&self) -> &UpdateTask {
+        &self.update_data
+    }
+
+    /// Backward compatibility accessors for individual fields
+    pub fn name(&self) -> &Option<String> {
+        &self.update_data.name
+    }
+
+    pub fn description(&self) -> &Option<String> {
+        &self.update_data.description
+    }
+
+    pub fn owner_agent_name(&self) -> &Option<String> {
+        &self.update_data.owner_agent_name
+    }
 }
 
 /// MCP parameters for changing task state
@@ -144,14 +168,12 @@ impl ListTasksParams {
             None => None,
         };
 
-        // TODO: Add support for completion date filtering to TaskFilter
-        // Currently unused because TaskFilter doesn't have completed_after/completed_before fields
-        let _completed_after = match &self.completed_after {
+        let completed_after = match &self.completed_after {
             Some(s) => Some(parse_datetime(s)?),
             None => None,
         };
 
-        let _completed_before = match &self.completed_before {
+        let completed_before = match &self.completed_before {
             Some(s) => Some(parse_datetime(s)?),
             None => None,
         };
@@ -161,6 +183,8 @@ impl ListTasksParams {
             state: self.state,
             date_from: created_after,
             date_to: created_before,
+            completed_after,
+            completed_before,
             limit: self.limit,
             offset: None, // Currently not exposed in MCP protocol, but could be added later
         })
@@ -178,8 +202,9 @@ mod tests {
             state: Some(TaskState::InProgress),
             created_after: Some("2023-12-01T00:00:00Z".to_string()),
             created_before: Some("2023-12-31T23:59:59Z".to_string()),
+            completed_after: Some("2023-12-15T00:00:00Z".to_string()),
+            completed_before: Some("2023-12-30T23:59:59Z".to_string()),
             limit: Some(10),
-            ..Default::default()
         };
 
         let filter = params.to_task_filter().unwrap();
@@ -187,7 +212,35 @@ mod tests {
         assert_eq!(filter.state, Some(TaskState::InProgress));
         assert!(filter.date_from.is_some());
         assert!(filter.date_to.is_some());
-        // Note: limit is not stored in TaskFilter, it's handled at the protocol layer
+        assert!(filter.completed_after.is_some());
+        assert!(filter.completed_before.is_some());
+        assert_eq!(filter.limit, Some(10));
+        assert_eq!(filter.offset, None);
+    }
+
+    #[test]
+    fn test_update_task_params_methods() {
+        let update_data = UpdateTask {
+            name: Some("Updated Task".to_string()),
+            description: Some("Updated description".to_string()),
+            owner_agent_name: Some("new-owner".to_string()),
+        };
+
+        let params = UpdateTaskParams {
+            id: 42,
+            update_data: update_data.clone(),
+        };
+
+        assert_eq!(params.id, 42);
+        assert_eq!(params.name(), &Some("Updated Task".to_string()));
+        assert_eq!(params.description(), &Some("Updated description".to_string()));
+        assert_eq!(params.owner_agent_name(), &Some("new-owner".to_string()));
+        assert_eq!(params.update_data(), &update_data);
+
+        let extracted = params.into_update_data();
+        assert_eq!(extracted.name, Some("Updated Task".to_string()));
+        assert_eq!(extracted.description, Some("Updated description".to_string()));
+        assert_eq!(extracted.owner_agent_name, Some("new-owner".to_string()));
     }
 
     #[test]
