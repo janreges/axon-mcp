@@ -1,0 +1,16 @@
+# Default Configuration for MCP Task Management Server
+
+[database]
+# Database URL is optional - if not provided, defaults to ~/db.sqlite
+# url = "sqlite:///path/to/database.db"
+max_connections = 5
+connection_timeout = 30
+
+[server]
+listen_addr = "127.0.0.1"
+port = 3000
+workers = 4
+
+[logging]
+level = "info"
+format = "pretty"

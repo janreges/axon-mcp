@@ -1,0 +1,39 @@
+[package]
+name = "mcp-server"
+version = "0.1.0"
+edition = "2021"
+
+# Library for testing and integration
+[lib]
+name = "mcp_server"
+path = "src/lib.rs"
+
+# Binary executable
+[[bin]]
+name = "mcp-server"
+path = "src/main.rs"
+
+[dependencies]
+task-core = { path = "../core" }
+tokio = { workspace = true, features = ["full", "signal"] }
+
+# Configuration management
+config = { workspace = true }
+serde = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+
+# Logging and tracing
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# For reading .env files
+dotenv = "0.15"
+database = { version = "0.1.0", path = "../database" }
+mcp-protocol = { version = "0.1.0", path = "../mcp-protocol" }
+toml = "0.9.3"
+
+[dev-dependencies]
+mocks = { path = "../mocks" }
+tempfile = "3.20.0"
+# Testing utilities will be added when mocks crate is available

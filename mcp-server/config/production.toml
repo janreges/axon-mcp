@@ -1,0 +1,16 @@
+# Production Configuration for MCP Task Management Server
+
+[database]
+# Production should use explicit database URL
+url = "sqlite:///var/lib/mcp-server/production.db"
+max_connections = 10
+connection_timeout = 60
+
+[server]
+listen_addr = "0.0.0.0"
+port = 8080
+workers = 8
+
+[logging]
+level = "info"
+format = "json"
