@@ -1,12 +1,14 @@
 mod config;
 mod setup;
+mod stdio;
 mod telemetry;
 
 use anyhow::{Context, Result};
 use clap::Parser;
 use config::Config;
-use setup::{initialize_app, ensure_database_directory_from_config};
-use telemetry::{init_telemetry, log_startup_info, log_config_validation};
+use setup::{create_repository, initialize_app, ensure_database_directory_from_config};
+use stdio::StdioMcpServer;
+use telemetry::{init_telemetry, init_telemetry_with_writer, log_startup_info, log_config_validation};
 use tracing::{info, error};
 
 #[derive(Parser)]
@@ -29,6 +31,10 @@ struct Cli {
     /// Log level override
     #[arg(long, env = "LOG_LEVEL")]
     log_level: Option<String>,
+    
+    /// Transport mode: 'http' for web server (default) or 'stdio' for stdin/stdout
+    #[arg(long, default_value = "http")]
+    transport: String,
 }
 
 fn load_config(cli: &Cli) -> Result<Config> {
@@ -73,8 +79,17 @@ async fn main() -> Result<()> {
     // Load configuration
     let config = load_config(&cli).context("Failed to load configuration")?;
     
-    // Initialize telemetry/logging system
-    init_telemetry(&config.logging).context("Failed to initialize telemetry")?;
+    // Initialize telemetry/logging system - use stderr for STDIO mode
+    match cli.transport.as_str() {
+        "stdio" => {
+            init_telemetry_with_writer(&config.logging, std::io::stderr)
+                .context("Failed to initialize telemetry")?;
+        }
+        _ => {
+            init_telemetry(&config.logging)
+                .context("Failed to initialize telemetry")?;
+        }
+    }
     
     // Log configuration validation
     log_config_validation(&config);
@@ -91,57 +106,87 @@ async fn main() -> Result<()> {
     // Ensure database directory exists
     ensure_database_directory_from_config(&config)
         .context("Failed to create database directory")?;
-    
-    // Initialize application (repository and server)
-    info!("Initializing MCP server components");
-    let server = initialize_app(&config)
-        .await
-        .context("Failed to initialize application")?;
-    
-    // Create server address
-    let addr = config.server_address();
-    info!("Starting MCP server on {}", addr);
-    
-    // Setup graceful shutdown handling
-    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
-    
-    // Spawn a task to handle shutdown signals
-    tokio::spawn(async move {
-        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .expect("Failed to register SIGTERM handler");
-        let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
-            .expect("Failed to register SIGINT handler");
-        
-        tokio::select! {
-            _ = sigterm.recv() => {
-                info!("Received SIGTERM, initiating graceful shutdown");
-            }
-            _ = sigint.recv() => {
-                info!("Received SIGINT, initiating graceful shutdown");
-            }
+
+    // Handle different transport modes
+    match cli.transport.as_str() {
+        "stdio" => {
+            // For STDIO mode, log startup to stderr only
+            eprintln!("Starting MCP server in STDIO mode");
+            
+            // Create repository only (no HTTP server needed)
+            let repository = create_repository(&config)
+                .await
+                .context("Failed to create repository")?;
+            
+            // Create STDIO server
+            let stdio_server = StdioMcpServer::new(repository);
+            
+            // Run STDIO server (blocks until stdin is closed)
+            stdio_server.serve()
+                .await
+                .context("STDIO MCP server error")?;
+            
+            eprintln!("STDIO MCP server shut down cleanly");
+            Ok(())
         }
-        
-        let _ = shutdown_tx.send(());
-    });
-    
-    // Start the server with graceful shutdown
-    tokio::select! {
-        result = server.serve(&addr) => {
-            match result {
-                Ok(_) => {
-                    info!("MCP server shut down cleanly");
+        "http" => {
+            info!("Starting MCP server in HTTP mode");
+            
+            // Initialize application (repository and HTTP server)
+            let server = initialize_app(&config)
+                .await
+                .context("Failed to initialize application")?;
+            
+            // Create server address
+            let addr = config.server_address();
+            info!("Starting MCP server on {}", addr);
+            
+            // Setup graceful shutdown handling
+            let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+            
+            // Spawn a task to handle shutdown signals
+            tokio::spawn(async move {
+                let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                    .expect("Failed to register SIGTERM handler");
+                let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+                    .expect("Failed to register SIGINT handler");
+                
+                tokio::select! {
+                    _ = sigterm.recv() => {
+                        info!("Received SIGTERM, initiating graceful shutdown");
+                    }
+                    _ = sigint.recv() => {
+                        info!("Received SIGINT, initiating graceful shutdown");
+                    }
+                }
+                
+                let _ = shutdown_tx.send(());
+            });
+            
+            // Start the server with graceful shutdown
+            tokio::select! {
+                result = server.serve(&addr) => {
+                    match result {
+                        Ok(_) => {
+                            info!("MCP server shut down cleanly");
+                            Ok(())
+                        }
+                        Err(e) => {
+                            error!(error = %e, "MCP server error");
+                            std::process::exit(3);
+                        }
+                    }
+                }
+                _ = shutdown_rx => {
+                    info!("Shutdown signal received, stopping server");
+                    // Server will be dropped here, triggering cleanup
                     Ok(())
                 }
-                Err(e) => {
-                    error!(error = %e, "MCP server error");
-                    std::process::exit(3);
-                }
             }
         }
-        _ = shutdown_rx => {
-            info!("Shutdown signal received, stopping server");
-            // Server will be dropped here, triggering cleanup
-            Ok(())
+        _ => {
+            error!("Invalid transport mode: {}. Use 'http' or 'stdio'", cli.transport);
+            std::process::exit(1);
         }
     }
 }

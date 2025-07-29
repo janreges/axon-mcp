@@ -32,6 +32,7 @@ dotenv = "0.15"
 database = { version = "0.1.0", path = "../database" }
 mcp-protocol = { version = "0.1.0", path = "../mcp-protocol" }
 toml = "0.9.3"
+serde_json = "1.0.141"
 
 [dev-dependencies]
 futures-util = "0.3.31"

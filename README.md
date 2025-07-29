@@ -9,7 +9,8 @@ The MCP Task Management Server provides essential task tracking, assignment, and
 ## Key Features
 
 - **Complete Task Lifecycle Management**: Create, update, assign, and track tasks through defined states
-- **MCP Protocol Compliance**: Full Server-Sent Events (SSE) based MCP implementation  
+- **Dual Transport Support**: HTTP/SSE and STDIO modes for flexible MCP integration
+- **MCP Protocol Compliance**: Full Server-Sent Events (SSE) and JSON-RPC STDIO implementations  
 - **High Performance**: <100ms response times, 1000+ ops/second throughput
 - **Production Ready**: ACID compliance, graceful error handling, comprehensive logging
 - **Multi-Agent Coordination**: Designed for AI agent teams with unique identifiers
@@ -32,11 +33,23 @@ cd task-manager
 # Build the server
 cargo build --release
 
-# Run the server
+# Run the server (HTTP mode - default)
 ./target/release/mcp-server
+
+# Run in STDIO mode for MCP client integration
+./target/release/mcp-server --transport stdio
 ```
 
-The server will start on the default MCP SSE endpoint and automatically create a SQLite database at `~/db.sqlite` if no `DATABASE_URL` is specified.
+The server will start on the default MCP SSE endpoint (HTTP mode) or JSON-RPC stdin/stdout (STDIO mode) and automatically create a SQLite database at `~/db.sqlite` if no `DATABASE_URL` is specified.
+
+### Transport Modes
+
+The server supports two transport modes:
+
+- **HTTP Mode** (default): Web server with REST API and Server-Sent Events for MCP
+- **STDIO Mode**: JSON-RPC 2.0 over stdin/stdout for direct MCP client integration
+
+See [STDIO_USAGE.md](STDIO_USAGE.md) for detailed STDIO mode documentation and examples.
 
 ### Configuration
 
@@ -45,6 +58,9 @@ Set the database path via environment variable:
 ```bash
 export DATABASE_URL="sqlite:///path/to/your/database.sqlite"
 ./target/release/mcp-server
+
+# Or for STDIO mode
+./target/release/mcp-server --transport stdio --database-url sqlite:///custom/path/tasks.db
 ```
 
 ## MCP Function Reference

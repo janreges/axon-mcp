@@ -76,6 +76,27 @@ impl From<TaskError> for McpError {
     }
 }
 
+/// Convert from anyhow::Error to McpError
+impl From<anyhow::Error> for McpError {
+    fn from(err: anyhow::Error) -> Self {
+        // Try to downcast to TaskError first
+        if let Some(task_error) = err.downcast_ref::<TaskError>() {
+            return Self::from(task_error.clone());
+        }
+        
+        // Check if it's a serialization error
+        let error_msg = err.to_string();
+        if error_msg.contains("serialize") || error_msg.contains("deserialize") || error_msg.contains("JSON") {
+            McpError::Serialization(error_msg)
+        } else if error_msg.contains("parse") || error_msg.contains("invalid") {
+            McpError::Validation(error_msg)
+        } else {
+            // Default to protocol error for other anyhow errors
+            McpError::Protocol(error_msg)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

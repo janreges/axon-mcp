@@ -6,8 +6,10 @@
 
 pub mod config;
 pub mod setup;
+pub mod stdio;
 pub mod telemetry;
 
 pub use config::Config;
 pub use setup::{create_repository, create_server, initialize_app, ensure_database_directory};
+pub use stdio::StdioMcpServer;
 pub use telemetry::init_telemetry;

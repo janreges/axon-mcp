@@ -7,6 +7,14 @@ use crate::config::{LogFormat, LoggingConfig};
 
 /// Initialize the tracing subscriber for logging and telemetry
 pub fn init_telemetry(config: &LoggingConfig) -> Result<()> {
+    init_telemetry_with_writer(config, std::io::stdout)
+}
+
+/// Initialize the tracing subscriber with a custom writer (for STDIO mode)
+pub fn init_telemetry_with_writer<W>(config: &LoggingConfig, make_writer: W) -> Result<()>
+where
+    W: for<'writer> tracing_subscriber::fmt::MakeWriter<'writer> + Send + Sync + 'static,
+{
     // Parse the log level from config
     let env_filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new(&config.level))
@@ -24,7 +32,8 @@ pub fn init_telemetry(config: &LoggingConfig) -> Result<()> {
                 .with_thread_ids(true)
                 .with_thread_names(true)
                 .with_file(true)
-                .with_line_number(true);
+                .with_line_number(true)
+                .with_writer(make_writer);
 
             registry.with(fmt_layer).init();
         }
@@ -37,7 +46,8 @@ pub fn init_telemetry(config: &LoggingConfig) -> Result<()> {
                 .with_file(true)
                 .with_line_number(true)
                 .with_span_list(true)
-                .flatten_event(true);
+                .flatten_event(true)
+                .with_writer(make_writer);
 
             registry.with(fmt_layer).init();
         }
@@ -48,7 +58,8 @@ pub fn init_telemetry(config: &LoggingConfig) -> Result<()> {
                 .with_thread_ids(false)
                 .with_thread_names(false)
                 .with_file(false)
-                .with_line_number(false);
+                .with_line_number(false)
+                .with_writer(make_writer);
 
             registry.with(fmt_layer).init();
         }
