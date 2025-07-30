@@ -22,12 +22,12 @@
 //!     validation::TaskValidator,
 //! };
 //!
-//! let new_task = NewTask {
-//!     code: "ARCH-01".to_string(),
-//!     name: "System Architecture".to_string(),
-//!     description: "Design the overall system architecture".to_string(),
-//!     owner_agent_name: "rust-architect".to_string(),
-//! };
+//! let new_task = NewTask::new(
+//!     "ARCH-01".to_string(),
+//!     "System Architecture".to_string(),
+//!     "Design the overall system architecture".to_string(),
+//!     Some("rust-architect".to_string()),
+//! );
 //!
 //! // Validate the task before creation
 //! TaskValidator::validate_new_task(&new_task).unwrap();
@@ -38,6 +38,8 @@ pub mod error;
 pub mod repository;
 pub mod protocol;
 pub mod validation;
+pub mod circuit_breaker;
+pub mod mcp_v2_extensions;
 
 // Re-export commonly used types at the crate root for convenience
 pub use models::{
@@ -58,6 +60,11 @@ pub use protocol::{
     StartWorkSessionParams, EndWorkSessionParams, WorkSessionInfo,
 };
 pub use validation::TaskValidator;
+pub use circuit_breaker::{CircuitBreaker, FailureType, CircuitState, CircuitBreakerAction};
+pub use mcp_v2_extensions::{
+    DiscoverWorkResponse, PrerequisiteAction, WorkDiscoveryConfig, ClaimResult,
+    CapabilityMatcher, PriorityCalculator, SimpleWorkSession, AgentWorkload, SimpleKnowledgeEntry,
+};
 
 /// Current version of the core crate
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -39,6 +39,14 @@ impl TaskRepository for AuditTestMockRepository {
             state: TaskState::Created,
             inserted_at: Utc::now(),
             done_at: None,
+            workflow_definition_id: None,
+            workflow_cursor: None,
+            priority_score: 5.0,
+            parent_task_id: None,
+            failure_count: 0,
+            required_capabilities: vec![],
+            estimated_effort: None,
+            confidence_threshold: 0.8,
         };
         tasks.push(new_task.clone());
         Ok(new_task)
@@ -56,7 +64,7 @@ impl TaskRepository for AuditTestMockRepository {
             task.description = description;
         }
         if let Some(owner) = updates.owner_agent_name {
-            task.owner_agent_name = owner;
+            task.owner_agent_name = Some(owner);
         }
         
         Ok(task.clone())
@@ -85,7 +93,7 @@ impl TaskRepository for AuditTestMockRepository {
         let mut filtered: Vec<_> = tasks.iter()
             .filter(|task| {
                 if let Some(ref owner) = filter.owner {
-                    if task.owner_agent_name != *owner {
+                    if task.owner_agent_name.as_deref() != Some(owner) {
                         return false;
                     }
                 }
@@ -121,7 +129,7 @@ impl TaskRepository for AuditTestMockRepository {
         let mut tasks = self.tasks.lock().await;
         let task = tasks.iter_mut().find(|t| t.id == id)
             .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
-        task.owner_agent_name = new_owner.to_string();
+        task.owner_agent_name = Some(new_owner.to_string());
         Ok(task.clone())
     }
 
@@ -140,6 +148,39 @@ impl TaskRepository for AuditTestMockRepository {
     async fn get_stats(&self) -> Result<RepositoryStats> {
         Ok(RepositoryStats::default())
     }
+    
+    async fn discover_work(&self, _agent_name: &str, _capabilities: &[String], _max_tasks: u32) -> Result<Vec<Task>> {
+        Ok(vec![])
+    }
+    
+    async fn claim_task(&self, task_id: i32, agent_name: &str) -> Result<Task> {
+        let mut tasks = self.tasks.lock().await;
+        let task = tasks.iter_mut().find(|t| t.id == task_id)
+            .ok_or_else(|| TaskError::NotFound(task_id.to_string()))?;
+        
+        task.owner_agent_name = Some(agent_name.to_string());
+        task.state = TaskState::InProgress;
+        
+        Ok(task.clone())
+    }
+    
+    async fn release_task(&self, task_id: i32, _agent_name: &str) -> Result<Task> {
+        let mut tasks = self.tasks.lock().await;
+        let task = tasks.iter_mut().find(|t| t.id == task_id)
+            .ok_or_else(|| TaskError::NotFound(task_id.to_string()))?;
+        
+        task.state = TaskState::Created;
+        
+        Ok(task.clone())
+    }
+    
+    async fn start_work_session(&self, task_id: i32, _agent_name: &str) -> Result<i32> {
+        Ok(task_id * 100) // Mock session ID
+    }
+    
+    async fn end_work_session(&self, _session_id: i32, _notes: Option<String>, _productivity_score: Option<f64>) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// K01: Test that list_tasks now implements pagination at the database level
@@ -154,7 +195,13 @@ async fn test_k01_database_level_pagination() {
             code: format!("PERF-{:03}", i),
             name: format!("Performance Test {}", i),
             description: "Database-level pagination test".to_string(),
-            owner_agent_name: "test-agent".to_string(),
+            owner_agent_name: Some("test-agent".to_string()),
+            confidence_threshold: 0.8,
+            estimated_effort: None,
+            parent_task_id: None,
+            required_capabilities: vec![],
+            priority_score: 5.0,
+            workflow_definition_id: None,
         };
         handler.create_task(params).await.unwrap();
     }
@@ -231,7 +278,13 @@ async fn test_integrated_audit_fixes() {
             code: format!("INTEG-{:03}", i),
             name: format!("Integration Test {}", i),
             description: "Integration test for all audit fixes".to_string(),
-            owner_agent_name: format!("agent-{}", i % 2),
+            owner_agent_name: Some(format!("agent-{}", i % 2)),
+            confidence_threshold: 0.8,
+            estimated_effort: None,
+            parent_task_id: None,
+            required_capabilities: vec![],
+            priority_score: 5.0,
+            workflow_definition_id: None,
         };
         handler.create_task(params).await.unwrap();
     }
@@ -245,7 +298,7 @@ async fn test_integrated_audit_fixes() {
     
     let filtered_tasks = handler.list_tasks(list_params).await.unwrap();
     assert_eq!(filtered_tasks.len(), 1, "Combined filtering and pagination should work");
-    assert_eq!(filtered_tasks[0].owner_agent_name, "agent-0");
+    assert_eq!(filtered_tasks[0].owner_agent_name.as_deref(), Some("agent-0"));
     
     // Test health check (M01 fix)
     let health = handler.health_check().await.unwrap();

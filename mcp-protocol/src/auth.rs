@@ -175,9 +175,14 @@ impl McpAuth {
         }
         
         let required_scope = match method {
+            // MCP v1 Core Functions
             "create_task" | "update_task" | "set_task_state" | "assign_task" | "archive_task" => McpScope::TaskWrite,
             "get_task_by_id" | "get_task_by_code" | "list_tasks" => McpScope::TaskRead,
             "health_check" => McpScope::Health,
+            // MCP v2 Advanced Multi-Agent Functions
+            "discover_work" => McpScope::TaskRead, // Reading available work
+            "claim_task" | "release_task" => McpScope::TaskWrite, // Modifying task ownership
+            "start_work_session" | "end_work_session" => McpScope::TaskWrite, // Time tracking modifications
             _ => return false, // Unknown method
         };
         

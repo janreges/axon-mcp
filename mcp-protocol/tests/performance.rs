@@ -26,6 +26,14 @@ impl TaskRepository for FastMockRepository {
             state: TaskState::Created,
             inserted_at: Utc::now(),
             done_at: None,
+            workflow_definition_id: task.workflow_definition_id,
+            workflow_cursor: None, // NewTask doesn't have workflow_cursor
+            priority_score: task.priority_score,
+            parent_task_id: task.parent_task_id,
+            failure_count: 0,
+            required_capabilities: task.required_capabilities,
+            estimated_effort: task.estimated_effort,
+            confidence_threshold: task.confidence_threshold,
         })
     }
     
@@ -35,10 +43,18 @@ impl TaskRepository for FastMockRepository {
             code: "TEST-001".to_string(),
             name: updates.name.unwrap_or_else(|| "Test Task".to_string()),
             description: updates.description.unwrap_or_else(|| "Test description".to_string()),
-            owner_agent_name: updates.owner_agent_name.unwrap_or_else(|| "test-agent".to_string()),
+            owner_agent_name: Some(updates.owner_agent_name.unwrap_or_else(|| "test-agent".to_string())),
             state: TaskState::Created,
             inserted_at: Utc::now(),
             done_at: None,
+            workflow_definition_id: updates.workflow_definition_id.flatten(),
+            workflow_cursor: updates.workflow_cursor.flatten(),
+            priority_score: updates.priority_score.unwrap_or(5.0),
+            parent_task_id: updates.parent_task_id.flatten(),
+            failure_count: 0,
+            required_capabilities: updates.required_capabilities.unwrap_or_default(),
+            estimated_effort: updates.estimated_effort.flatten(),
+            confidence_threshold: updates.confidence_threshold.unwrap_or(0.8),
         })
     }
     
@@ -48,10 +64,18 @@ impl TaskRepository for FastMockRepository {
             code: "TEST-001".to_string(),
             name: "Test Task".to_string(),
             description: "Test description".to_string(),
-            owner_agent_name: "test-agent".to_string(),
+            owner_agent_name: Some("test-agent".to_string()),
             state,
             inserted_at: Utc::now(),
             done_at: if state == TaskState::Done { Some(Utc::now()) } else { None },
+            workflow_definition_id: None,
+            workflow_cursor: None,
+            priority_score: 5.0,
+            parent_task_id: None,
+            failure_count: 0,
+            required_capabilities: vec![],
+            estimated_effort: None,
+            confidence_threshold: 0.8,
         })
     }
     
@@ -61,10 +85,18 @@ impl TaskRepository for FastMockRepository {
             code: "TEST-001".to_string(),
             name: "Test Task".to_string(),
             description: "Test description".to_string(),
-            owner_agent_name: "test-agent".to_string(),
+            owner_agent_name: Some("test-agent".to_string()),
             state: TaskState::Created,
             inserted_at: Utc::now(),
             done_at: None,
+            workflow_definition_id: None,
+            workflow_cursor: None,
+            priority_score: 5.0,
+            parent_task_id: None,
+            failure_count: 0,
+            required_capabilities: vec![],
+            estimated_effort: None,
+            confidence_threshold: 0.8,
         }))
     }
     
@@ -74,10 +106,18 @@ impl TaskRepository for FastMockRepository {
             code: "TEST-001".to_string(),
             name: "Test Task".to_string(),
             description: "Test description".to_string(),
-            owner_agent_name: "test-agent".to_string(),
+            owner_agent_name: Some("test-agent".to_string()),
             state: TaskState::Created,
             inserted_at: Utc::now(),
             done_at: None,
+            workflow_definition_id: None,
+            workflow_cursor: None,
+            priority_score: 5.0,
+            parent_task_id: None,
+            failure_count: 0,
+            required_capabilities: vec![],
+            estimated_effort: None,
+            confidence_threshold: 0.8,
         }))
     }
     
@@ -88,21 +128,37 @@ impl TaskRepository for FastMockRepository {
                 code: "TEST-001".to_string(),
                 name: "Test Task 1".to_string(),
                 description: "Test description 1".to_string(),
-                owner_agent_name: "test-agent".to_string(),
+                owner_agent_name: Some("test-agent".to_string()),
                 state: TaskState::Created,
                 inserted_at: Utc::now(),
                 done_at: None,
-            },
+            workflow_definition_id: None,
+            workflow_cursor: None,
+            priority_score: 5.0,
+            parent_task_id: None,
+            failure_count: 0,
+            required_capabilities: vec![],
+            estimated_effort: None,
+            confidence_threshold: 0.8,
+        },
             Task {
                 id: 2,
                 code: "TEST-002".to_string(),
                 name: "Test Task 2".to_string(),
                 description: "Test description 2".to_string(),
-                owner_agent_name: "test-agent".to_string(),
+                owner_agent_name: Some("test-agent".to_string()),
                 state: TaskState::InProgress,
                 inserted_at: Utc::now(),
                 done_at: None,
-            },
+            workflow_definition_id: None,
+            workflow_cursor: None,
+            priority_score: 5.0,
+            parent_task_id: None,
+            failure_count: 0,
+            required_capabilities: vec![],
+            estimated_effort: None,
+            confidence_threshold: 0.8,
+        },
         ])
     }
     
@@ -112,10 +168,18 @@ impl TaskRepository for FastMockRepository {
             code: "TEST-001".to_string(),
             name: "Test Task".to_string(),
             description: "Test description".to_string(),
-            owner_agent_name: new_owner.to_string(),
+            owner_agent_name: Some(new_owner.to_string()),
             state: TaskState::Created,
             inserted_at: Utc::now(),
             done_at: None,
+            workflow_definition_id: None,
+            workflow_cursor: None,
+            priority_score: 5.0,
+            parent_task_id: None,
+            failure_count: 0,
+            required_capabilities: vec![],
+            estimated_effort: None,
+            confidence_threshold: 0.8,
         })
     }
     
@@ -125,10 +189,18 @@ impl TaskRepository for FastMockRepository {
             code: "TEST-001".to_string(),
             name: "Test Task".to_string(),
             description: "Test description".to_string(),
-            owner_agent_name: "test-agent".to_string(),
+            owner_agent_name: Some("test-agent".to_string()),
             state: TaskState::Archived,
             inserted_at: Utc::now(),
             done_at: None,
+            workflow_definition_id: None,
+            workflow_cursor: None,
+            priority_score: 5.0,
+            parent_task_id: None,
+            failure_count: 0,
+            required_capabilities: vec![],
+            estimated_effort: None,
+            confidence_threshold: 0.8,
         })
     }
     
@@ -138,6 +210,60 @@ impl TaskRepository for FastMockRepository {
     
     async fn get_stats(&self) -> Result<RepositoryStats> {
         Ok(RepositoryStats::default())
+    }
+    
+    async fn discover_work(&self, _agent_name: &str, _capabilities: &[String], _max_tasks: u32) -> Result<Vec<Task>> {
+        Ok(vec![])
+    }
+    
+    async fn claim_task(&self, task_id: i32, agent_name: &str) -> Result<Task> {
+        Ok(Task {
+            id: task_id,
+            code: "TEST-001".to_string(),
+            name: "Test Task".to_string(),
+            description: "Test description".to_string(),
+            owner_agent_name: Some(agent_name.to_string()),
+            state: TaskState::InProgress,
+            inserted_at: Utc::now(),
+            done_at: None,
+            workflow_definition_id: None,
+            workflow_cursor: None,
+            priority_score: 5.0,
+            parent_task_id: None,
+            failure_count: 0,
+            required_capabilities: vec![],
+            estimated_effort: None,
+            confidence_threshold: 0.8,
+        })
+    }
+    
+    async fn release_task(&self, task_id: i32, agent_name: &str) -> Result<Task> {
+        Ok(Task {
+            id: task_id,
+            code: "TEST-001".to_string(),
+            name: "Test Task".to_string(),
+            description: "Test description".to_string(),
+            owner_agent_name: Some(agent_name.to_string()),
+            state: TaskState::Created,
+            inserted_at: Utc::now(),
+            done_at: None,
+            workflow_definition_id: None,
+            workflow_cursor: None,
+            priority_score: 5.0,
+            parent_task_id: None,
+            failure_count: 0,
+            required_capabilities: vec![],
+            estimated_effort: None,
+            confidence_threshold: 0.8,
+        })
+    }
+    
+    async fn start_work_session(&self, task_id: i32, _agent_name: &str) -> Result<i32> {
+        Ok(task_id * 100) // Mock session ID
+    }
+    
+    async fn end_work_session(&self, _session_id: i32, _notes: Option<String>, _productivity_score: Option<f64>) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -161,7 +287,13 @@ async fn test_create_task_performance() {
         code: "PERF-001".to_string(),
         name: "Performance Test".to_string(),
         description: "Testing create task performance".to_string(),
-        owner_agent_name: "perf-agent".to_string(),
+        owner_agent_name: Some("perf-agent".to_string()),
+        confidence_threshold: 0.8,
+        estimated_effort: None,
+        parent_task_id: None,
+        required_capabilities: vec![],
+        priority_score: 5.0,
+        workflow_definition_id: None,
     };
     
     let (result, duration) = measure_operation(|| handler.create_task(params.clone())).await;
@@ -210,6 +342,13 @@ async fn test_update_task_performance() {
             name: Some("Updated Name".to_string()),
             description: None,
             owner_agent_name: None,
+            workflow_definition_id: None,
+            workflow_cursor: None,
+            priority_score: Some(5.0),
+            parent_task_id: None,
+            required_capabilities: None,
+            estimated_effort: None,
+            confidence_threshold: Some(0.8),
         },
     };
     
@@ -246,11 +385,19 @@ async fn test_serialization_performance() {
         code: "PERF-SERIAL".to_string(),
         name: "Serialization Performance Test".to_string(),
         description: "Testing task serialization performance".to_string(),
-        owner_agent_name: "perf-agent".to_string(),
+        owner_agent_name: Some("perf-agent".to_string()),
         state: TaskState::InProgress,
         inserted_at: Utc::now(),
         done_at: None,
-    };
+        workflow_definition_id: None,
+        workflow_cursor: None,
+        priority_score: 5.0,
+        parent_task_id: None,
+        failure_count: 0,
+        required_capabilities: vec![],
+        estimated_effort: None,
+        confidence_threshold: 0.8,
+        };
     
     let start = Instant::now();
     for _ in 0..1000 {
@@ -280,7 +427,13 @@ async fn test_concurrent_operations_performance() {
                 code: format!("CONCURRENT-{:03}", i),
                 name: format!("Concurrent Test {}", i),
                 description: "Concurrent performance test".to_string(),
-                owner_agent_name: "concurrent-agent".to_string(),
+                owner_agent_name: Some("concurrent-agent".to_string()),
+                confidence_threshold: 0.8,
+                estimated_effort: None,
+                parent_task_id: None,
+                required_capabilities: vec![],
+                priority_score: 5.0,
+                workflow_definition_id: None,
             };
             
             handler_clone.create_task(params).await

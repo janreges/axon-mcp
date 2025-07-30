@@ -103,7 +103,10 @@ mod tests {
         };
 
         let repo = create_repository(&config).await;
-        assert!(repo.is_ok());
+        match repo {
+            Ok(_) => {}, // Test passes
+            Err(e) => panic!("Failed to create repository: {:?}", e),
+        }
     }
 
     #[tokio::test]

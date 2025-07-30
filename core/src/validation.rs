@@ -189,7 +189,9 @@ impl TaskValidator {
         Self::validate_task_code(&task.code)?;
         Self::validate_task_name(&task.name)?;
         Self::validate_task_description(&task.description)?;
-        Self::validate_agent_name(&task.owner_agent_name)?;
+        if let Some(ref owner) = task.owner_agent_name {
+            Self::validate_agent_name(owner)?;
+        }
         Ok(())
     }
 
@@ -320,37 +322,37 @@ mod tests {
 
     #[test]
     fn test_validate_new_task() {
-        let valid_task = NewTask {
-            code: "ARCH-01".to_string(),
-            name: "Architecture Task".to_string(),
-            description: "Design the system architecture".to_string(),
-            owner_agent_name: "rust-architect".to_string(),
-        };
+        let valid_task = NewTask::new(
+            "ARCH-01".to_string(),
+            "Architecture Task".to_string(),
+            "Design the system architecture".to_string(),
+            Some("rust-architect".to_string()),
+        );
         
         assert!(TaskValidator::validate_new_task(&valid_task).is_ok());
 
-        let invalid_task = NewTask {
-            code: "".to_string(), // Invalid code
-            name: "Architecture Task".to_string(),
-            description: "Design the system architecture".to_string(),
-            owner_agent_name: "rust-architect".to_string(),
-        };
+        let invalid_task = NewTask::new(
+            "".to_string(), // Invalid code
+            "Architecture Task".to_string(),
+            "Design the system architecture".to_string(),
+            Some("rust-architect".to_string()),
+        );
         
         assert!(TaskValidator::validate_new_task(&invalid_task).is_err());
     }
 
     #[test]
     fn test_validate_state_transition() {
-        let task = Task {
-            id: 1,
-            code: "TEST-01".to_string(),
-            name: "Test Task".to_string(),
-            description: "Test description".to_string(),
-            owner_agent_name: "test-agent".to_string(),
-            state: TaskState::Created,
-            inserted_at: Utc::now(),
-            done_at: None,
-        };
+        let task = Task::new(
+            1,
+            "TEST-01".to_string(),
+            "Test Task".to_string(),
+            "Test description".to_string(),
+            Some("test-agent".to_string()),
+            TaskState::Created,
+            Utc::now(),
+            None,
+        );
 
         // Valid transition
         assert!(TaskValidator::validate_state_transition(&task, TaskState::InProgress).is_ok());

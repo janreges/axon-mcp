@@ -27,12 +27,7 @@ async fn test_health_check<R: TaskRepository>(repo: Arc<R>) {
 }
 
 async fn test_create_task_contract<R: TaskRepository>(repo: Arc<R>) {
-    let new_task = NewTask {
-        code: "CONTRACT-CREATE".to_string(),
-        name: "Contract Create Test".to_string(),
-        description: "Test task creation contract".to_string(),
-        owner_agent_name: "contract-agent".to_string(),
-    };
+    let new_task = NewTask::new("CONTRACT-CREATE".to_string(), "Contract Create Test".to_string(), "Test task creation contract".to_string(), Some("contract-agent".to_string()),  );
     
     let created = repo.create(new_task).await.unwrap();
     
@@ -40,7 +35,7 @@ async fn test_create_task_contract<R: TaskRepository>(repo: Arc<R>) {
     assert_eq!(created.code, "CONTRACT-CREATE");
     assert_eq!(created.name, "Contract Create Test");
     assert_eq!(created.description, "Test task creation contract");
-    assert_eq!(created.owner_agent_name, "contract-agent");
+    assert_eq!(created.owner_agent_name.as_deref(), Some("contract-agent"));
     assert_eq!(created.state, TaskState::Created);
     assert!(created.id > 0);
     assert!(created.done_at.is_none());
@@ -49,12 +44,7 @@ async fn test_create_task_contract<R: TaskRepository>(repo: Arc<R>) {
 
 async fn test_get_by_id_contract<R: TaskRepository>(repo: Arc<R>) {
     // Create a task to retrieve
-    let new_task = NewTask {
-        code: "CONTRACT-GET-ID".to_string(),
-        name: "Contract Get ID Test".to_string(),
-        description: "Test get by ID contract".to_string(),
-        owner_agent_name: "contract-agent".to_string(),
-    };
+    let new_task = NewTask::new("CONTRACT-GET-ID".to_string(), "Contract Get ID Test".to_string(), "Test get by ID contract".to_string(), Some("contract-agent".to_string()),  );
     
     let created = repo.create(new_task).await.unwrap();
     
@@ -70,12 +60,7 @@ async fn test_get_by_id_contract<R: TaskRepository>(repo: Arc<R>) {
 
 async fn test_get_by_code_contract<R: TaskRepository>(repo: Arc<R>) {
     // Create a task to retrieve
-    let new_task = NewTask {
-        code: "CONTRACT-GET-CODE".to_string(),
-        name: "Contract Get Code Test".to_string(),
-        description: "Test get by code contract".to_string(),
-        owner_agent_name: "contract-agent".to_string(),
-    };
+    let new_task = NewTask::new("CONTRACT-GET-CODE".to_string(), "Contract Get Code Test".to_string(), "Test get by code contract".to_string(), Some("contract-agent".to_string()),  );
     
     let _created = repo.create(new_task).await.unwrap();
     
@@ -91,12 +76,7 @@ async fn test_get_by_code_contract<R: TaskRepository>(repo: Arc<R>) {
 
 async fn test_update_task_contract<R: TaskRepository>(repo: Arc<R>) {
     // Create a task to update
-    let new_task = NewTask {
-        code: "CONTRACT-UPDATE".to_string(),
-        name: "Original Name".to_string(),
-        description: "Original description".to_string(),
-        owner_agent_name: "original-agent".to_string(),
-    };
+    let new_task = NewTask::new("CONTRACT-UPDATE".to_string(), "Original Name".to_string(), "Original description".to_string(), Some("original-agent".to_string()),  );
     
     let created = repo.create(new_task).await.unwrap();
     
@@ -105,12 +85,19 @@ async fn test_update_task_contract<R: TaskRepository>(repo: Arc<R>) {
         name: Some("Updated Name".to_string()),
         description: Some("Updated description".to_string()),
         owner_agent_name: Some("updated-agent".to_string()),
+        required_capabilities: None,
+        priority_score: None,
+        confidence_threshold: None,
+        estimated_effort: None,
+        parent_task_id: None,
+        workflow_definition_id: None,
+        workflow_cursor: None,
     };
     
     let updated = repo.update(created.id, updates).await.unwrap();
     assert_eq!(updated.name, "Updated Name");
     assert_eq!(updated.description, "Updated description");
-    assert_eq!(updated.owner_agent_name, "updated-agent");
+    assert_eq!(updated.owner_agent_name.as_deref(), Some("updated-agent"));
     assert_eq!(updated.code, "CONTRACT-UPDATE"); // Code should not change
     assert_eq!(updated.id, created.id); // ID should not change
     
@@ -119,12 +106,19 @@ async fn test_update_task_contract<R: TaskRepository>(repo: Arc<R>) {
         name: Some("Partially Updated".to_string()),
         description: None,
         owner_agent_name: None,
+        required_capabilities: None,
+        priority_score: None,
+        confidence_threshold: None,
+        estimated_effort: None,
+        parent_task_id: None,
+        workflow_definition_id: None,
+        workflow_cursor: None,
     };
     
     let partially_updated = repo.update(created.id, partial_updates).await.unwrap();
     assert_eq!(partially_updated.name, "Partially Updated");
     assert_eq!(partially_updated.description, "Updated description"); // Should remain unchanged
-    assert_eq!(partially_updated.owner_agent_name, "updated-agent"); // Should remain unchanged
+    assert_eq!(partially_updated.owner_agent_name.as_deref(), Some("updated-agent")); // Should remain unchanged
     
     // Test empty update (no changes)
     let no_updates = UpdateTask::default();
@@ -136,12 +130,7 @@ async fn test_update_task_contract<R: TaskRepository>(repo: Arc<R>) {
 
 async fn test_state_transitions_contract<R: TaskRepository>(repo: Arc<R>) {
     // Create a task for state transition testing
-    let new_task = NewTask {
-        code: "CONTRACT-STATES".to_string(),
-        name: "Contract States Test".to_string(),
-        description: "Test state transitions contract".to_string(),
-        owner_agent_name: "contract-agent".to_string(),
-    };
+    let new_task = NewTask::new("CONTRACT-STATES".to_string(), "Contract States Test".to_string(), "Test state transitions contract".to_string(), Some("contract-agent".to_string()),  );
     
     let mut task = repo.create(new_task).await.unwrap();
     assert_eq!(task.state, TaskState::Created);
@@ -190,35 +179,25 @@ async fn test_state_transitions_contract<R: TaskRepository>(repo: Arc<R>) {
 
 async fn test_task_assignment_contract<R: TaskRepository>(repo: Arc<R>) {
     // Create a task for assignment testing
-    let new_task = NewTask {
-        code: "CONTRACT-ASSIGN".to_string(),
-        name: "Contract Assign Test".to_string(),
-        description: "Test task assignment contract".to_string(),
-        owner_agent_name: "original-agent".to_string(),
-    };
+    let new_task = NewTask::new("CONTRACT-ASSIGN".to_string(), "Contract Assign Test".to_string(), "Test task assignment contract".to_string(), Some("original-agent".to_string()),  );
     
     let task = repo.create(new_task).await.unwrap();
     
     // Test successful assignment
     let assigned = repo.assign(task.id, "new-agent").await.unwrap();
-    assert_eq!(assigned.owner_agent_name, "new-agent");
+    assert_eq!(assigned.owner_agent_name.as_deref(), Some("new-agent"));
     assert_eq!(assigned.id, task.id); // Other fields should remain unchanged
     assert_eq!(assigned.code, task.code);
     assert_eq!(assigned.name, task.name);
     
     // Verify assignment persisted
     let retrieved = repo.get_by_id(task.id).await.unwrap().unwrap();
-    assert_eq!(retrieved.owner_agent_name, "new-agent");
+    assert_eq!(retrieved.owner_agent_name.as_deref(), Some("new-agent"));
 }
 
 async fn test_task_archiving_contract<R: TaskRepository>(repo: Arc<R>) {
     // Create and complete a task for archiving
-    let new_task = NewTask {
-        code: "CONTRACT-ARCHIVE".to_string(),
-        name: "Contract Archive Test".to_string(),
-        description: "Test task archiving contract".to_string(),
-        owner_agent_name: "contract-agent".to_string(),
-    };
+    let new_task = NewTask::new("CONTRACT-ARCHIVE".to_string(), "Contract Archive Test".to_string(), "Test task archiving contract".to_string(), Some("contract-agent".to_string()),  );
     
     let mut task = repo.create(new_task).await.unwrap();
     
@@ -236,12 +215,7 @@ async fn test_task_archiving_contract<R: TaskRepository>(repo: Arc<R>) {
     assert_eq!(retrieved.state, TaskState::Archived);
     
     // Test archiving non-Done task should fail
-    let new_task2 = NewTask {
-        code: "CONTRACT-ARCHIVE-2".to_string(),
-        name: "Archive Test 2".to_string(),
-        description: "Test invalid archiving".to_string(),
-        owner_agent_name: "contract-agent".to_string(),
-    };
+    let new_task2 = NewTask::new("CONTRACT-ARCHIVE-2".to_string(), "Archive Test 2".to_string(), "Test invalid archiving".to_string(), Some("contract-agent".to_string()),  );
     
     let task2 = repo.create(new_task2).await.unwrap();
     let result = repo.archive(task2.id).await;
@@ -258,24 +232,9 @@ async fn test_task_archiving_contract<R: TaskRepository>(repo: Arc<R>) {
 async fn test_task_listing_contract<R: TaskRepository>(repo: Arc<R>) {
     // Create tasks with different properties for filtering
     let tasks = vec![
-        NewTask {
-            code: "CONTRACT-LIST-1".to_string(),
-            name: "List Test 1".to_string(),
-            description: "First list test task".to_string(),
-            owner_agent_name: "agent-1".to_string(),
-        },
-        NewTask {
-            code: "CONTRACT-LIST-2".to_string(),
-            name: "List Test 2".to_string(),
-            description: "Second list test task".to_string(),
-            owner_agent_name: "agent-1".to_string(),
-        },
-        NewTask {
-            code: "CONTRACT-LIST-3".to_string(),
-            name: "List Test 3".to_string(),
-            description: "Third list test task".to_string(),
-            owner_agent_name: "agent-2".to_string(),
-        },
+        NewTask::new("CONTRACT-LIST-1".to_string(), "List Test 1".to_string(), "First list test task".to_string(), Some("agent-1".to_string())),
+        NewTask::new("CONTRACT-LIST-2".to_string(), "List Test 2".to_string(), "Second list test task".to_string(), Some("agent-1".to_string())),
+        NewTask::new("CONTRACT-LIST-3".to_string(), "List Test 3".to_string(), "Third list test task".to_string(), Some("agent-2".to_string())),
     ];
     
     let mut created_tasks = Vec::new();
@@ -297,7 +256,7 @@ async fn test_task_listing_contract<R: TaskRepository>(repo: Arc<R>) {
     }).await.unwrap();
     
     let agent1_count = agent1_tasks.iter()
-        .filter(|t| t.owner_agent_name == "agent-1")
+        .filter(|t| t.owner_agent_name.as_deref() == Some("agent-1"))
         .count();
     assert!(agent1_count >= 2);
     
@@ -320,7 +279,7 @@ async fn test_task_listing_contract<R: TaskRepository>(repo: Arc<R>) {
     }).await.unwrap();
     
     let combined_count = agent1_created.iter()
-        .filter(|t| t.owner_agent_name == "agent-1" && t.state == TaskState::Created)
+        .filter(|t| t.owner_agent_name.as_deref() == Some("agent-1") && t.state == TaskState::Created)
         .count();
     assert!(combined_count >= 1);
 }
@@ -328,30 +287,13 @@ async fn test_task_listing_contract<R: TaskRepository>(repo: Arc<R>) {
 async fn test_validation_errors_contract<R: TaskRepository>(repo: Arc<R>) {
     // Test empty field validation for create
     let invalid_tasks = vec![
-        NewTask {
-            code: "".to_string(), // Empty code
-            name: "Valid Name".to_string(),
-            description: "Valid description".to_string(),
-            owner_agent_name: "valid-agent".to_string(),
-        },
-        NewTask {
-            code: "VALID-CODE".to_string(),
-            name: "".to_string(), // Empty name
-            description: "Valid description".to_string(),
-            owner_agent_name: "valid-agent".to_string(),
-        },
-        NewTask {
-            code: "VALID-CODE".to_string(),
-            name: "Valid Name".to_string(),
-            description: "".to_string(), // Empty description
-            owner_agent_name: "valid-agent".to_string(),
-        },
-        NewTask {
-            code: "VALID-CODE".to_string(),
-            name: "Valid Name".to_string(),
-            description: "Valid description".to_string(),
-            owner_agent_name: "".to_string(), // Empty owner
-        },
+        NewTask::new("".to_string(), // Empty code
+            "Valid Name".to_string(), "Valid description".to_string(), Some("valid-agent".to_string())),
+        NewTask::new("VALID-CODE".to_string(), "".to_string(), // Empty name
+            "Valid description".to_string(), Some("valid-agent".to_string())),
+        NewTask::new("VALID-CODE".to_string(), "Valid Name".to_string(), "".to_string(), // Empty description
+            Some("valid-agent".to_string())),
+        NewTask::new("VALID-CODE".to_string(), "Valid Name".to_string(), "Valid description".to_string(), Some("".to_string())), // Empty owner
     ];
     
     for invalid_task in invalid_tasks {
@@ -364,12 +306,7 @@ async fn test_validation_errors_contract<R: TaskRepository>(repo: Arc<R>) {
     }
     
     // Test duplicate code error
-    let task1 = NewTask {
-        code: "CONTRACT-DUPLICATE".to_string(),
-        name: "First Task".to_string(),
-        description: "First task with this code".to_string(),
-        owner_agent_name: "agent-1".to_string(),
-    };
+    let task1 = NewTask::new("CONTRACT-DUPLICATE".to_string(), "First Task".to_string(), "First task with this code".to_string(), Some("agent-1".to_string()),  );
     
     repo.create(task1.clone()).await.unwrap();
     
@@ -381,12 +318,7 @@ async fn test_validation_errors_contract<R: TaskRepository>(repo: Arc<R>) {
     }
     
     // Test empty field validation for assignment
-    let valid_task = NewTask {
-        code: "CONTRACT-ASSIGN-VALID".to_string(),
-        name: "Valid Task".to_string(),
-        description: "Valid task for assignment test".to_string(),
-        owner_agent_name: "original-agent".to_string(),
-    };
+    let valid_task = NewTask::new("CONTRACT-ASSIGN-VALID".to_string(), "Valid Task".to_string(), "Valid task for assignment test".to_string(), Some("original-agent".to_string()),  );
     
     let task = repo.create(valid_task).await.unwrap();
     
@@ -436,19 +368,9 @@ async fn test_not_found_errors_contract<R: TaskRepository>(repo: Arc<R>) {
 
 async fn test_stats_contract<R: TaskRepository>(repo: Arc<R>) {
     // Create tasks for stats testing
-    let task1 = repo.create(NewTask {
-        code: "CONTRACT-STATS-1".to_string(),
-        name: "Stats Test 1".to_string(),
-        description: "First stats test task".to_string(),
-        owner_agent_name: "stats-agent-1".to_string(),
-    }).await.unwrap();
+    let task1 = repo.create(NewTask::new("CONTRACT-STATS-1".to_string(), "Stats Test 1".to_string(), "First stats test task".to_string(), Some("stats-agent-1".to_string()))).await.unwrap();
     
-    let task2 = repo.create(NewTask {
-        code: "CONTRACT-STATS-2".to_string(),
-        name: "Stats Test 2".to_string(),
-        description: "Second stats test task".to_string(),
-        owner_agent_name: "stats-agent-2".to_string(),
-    }).await.unwrap();
+    let task2 = repo.create(NewTask::new("CONTRACT-STATS-2".to_string(), "Stats Test 2".to_string(), "Second stats test task".to_string(), Some("stats-agent-2".to_string()))).await.unwrap();
     
     // Move tasks to different states
     repo.set_state(task1.id, TaskState::InProgress).await.unwrap();

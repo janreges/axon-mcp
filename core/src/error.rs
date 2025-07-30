@@ -79,6 +79,14 @@ pub enum TaskError {
     /// Work session not found or already ended
     #[error("Work session {0} not found or already ended")]
     SessionNotFound(i32),
+
+    /// Circuit breaker is open, task quarantined
+    #[error("Circuit breaker open: {0}")]
+    CircuitBreakerOpen(String),
+
+    /// Agent validation failed
+    #[error("Unknown agent: {0}")]
+    UnknownAgent(String),
 }
 
 impl TaskError {
@@ -143,6 +151,8 @@ impl TaskError {
             TaskError::NotOwned(_, _) => 403, // Forbidden
             TaskError::InsufficientCapabilities(_, _) => 422, // Unprocessable Entity
             TaskError::SessionNotFound(_) => 404, // Not Found
+            TaskError::CircuitBreakerOpen(_) => 503, // Service Unavailable
+            TaskError::UnknownAgent(_) => 400, // Bad Request
         }
     }
 }

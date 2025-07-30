@@ -123,8 +123,10 @@ impl TaskRepository for SqliteTaskRepository {
         if task.description.trim().is_empty() {
             return Err(TaskError::empty_field("description"));
         }
-        if task.owner_agent_name.trim().is_empty() {
-            return Err(TaskError::empty_field("owner_agent_name"));
+        if let Some(ref owner) = task.owner_agent_name {
+            if owner.trim().is_empty() {
+                return Err(TaskError::empty_field("owner_agent_name"));
+            }
         }
 
         let now = Utc::now();
@@ -429,6 +431,121 @@ impl TaskRepository for SqliteTaskRepository {
             latest_completed,
         })
     }
+
+    // MCP v2 Advanced Multi-Agent Features
+
+    async fn discover_work(&self, _agent_name: &str, capabilities: &[String], max_tasks: u32) -> Result<Vec<Task>> {
+        use crate::common::build_work_discovery_query;
+        
+        let mut query_builder = build_work_discovery_query(capabilities, Some(max_tasks as i32));
+        let query = query_builder.build();
+        
+        let rows = query.fetch_all(&self.pool).await.map_err(sqlx_error_to_task_error)?;
+        
+        let tasks: Result<Vec<Task>> = rows.iter().map(row_to_task).collect();
+        tasks
+    }
+
+    async fn claim_task(&self, task_id: i32, agent_name: &str) -> Result<Task> {
+        // Start transaction for atomic claim
+        let mut tx = self.pool.begin().await.map_err(sqlx_error_to_task_error)?;
+        
+        // Check if task exists and is available
+        let current_task = sqlx::query_as::<_, (i32, String, String)>("SELECT id, owner_agent_name, state FROM tasks WHERE id = ?")
+            .bind(task_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(sqlx_error_to_task_error)?;
+            
+        let (_, current_owner, _current_state) = match current_task {
+            Some(task) => task,
+            None => return Err(TaskError::not_found_id(task_id)),
+        };
+        
+        // Check if already claimed
+        if !current_owner.is_empty() && current_owner != agent_name {
+            return Err(TaskError::AlreadyClaimed(task_id, current_owner));
+        }
+        
+        // Update task owner
+        sqlx::query("UPDATE tasks SET owner_agent_name = ? WHERE id = ?")
+            .bind(agent_name)
+            .bind(task_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(sqlx_error_to_task_error)?;
+            
+        tx.commit().await.map_err(sqlx_error_to_task_error)?;
+        
+        // Return updated task
+        self.get_by_id(task_id).await?.ok_or_else(|| TaskError::not_found_id(task_id))
+    }
+
+    async fn release_task(&self, task_id: i32, agent_name: &str) -> Result<Task> {
+        // Check if agent owns the task
+        let current_task = sqlx::query_as::<_, (String,)>("SELECT owner_agent_name FROM tasks WHERE id = ?")
+            .bind(task_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(sqlx_error_to_task_error)?;
+            
+        let (current_owner,) = match current_task {
+            Some(task) => task,
+            None => return Err(TaskError::not_found_id(task_id)),
+        };
+        
+        if current_owner != agent_name {
+            return Err(TaskError::NotOwned(agent_name.to_string(), task_id));
+        }
+        
+        // Clear task owner
+        sqlx::query("UPDATE tasks SET owner_agent_name = '' WHERE id = ?")
+            .bind(task_id)
+            .execute(&self.pool)
+            .await
+            .map_err(sqlx_error_to_task_error)?;
+            
+        // Return updated task
+        self.get_by_id(task_id).await?.ok_or_else(|| TaskError::not_found_id(task_id))
+    }
+
+    async fn start_work_session(&self, task_id: i32, _agent_name: &str) -> Result<i32> {
+        // Simple implementation - just return a session ID
+        // In full implementation, this would create a work_sessions record
+        
+        // Verify task exists
+        let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ?)")
+            .bind(task_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(sqlx_error_to_task_error)?;
+            
+        if !exists {
+            return Err(TaskError::not_found_id(task_id));
+        }
+        
+        // For now, return task_id as session_id
+        // TODO: Implement proper work_sessions table
+        Ok(task_id)
+    }
+
+    async fn end_work_session(&self, session_id: i32, _notes: Option<String>, _productivity_score: Option<f64>) -> Result<()> {
+        // Simple implementation - just verify session exists
+        // In full implementation, this would update work_sessions record
+        
+        // For now, just verify task exists (using session_id as task_id)
+        let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ?)")
+            .bind(session_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(sqlx_error_to_task_error)?;
+            
+        if !exists {
+            return Err(TaskError::SessionNotFound(session_id));
+        }
+        
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -460,12 +577,12 @@ mod tests {
     async fn test_create_task() {
         let repo = create_test_repository().await;
         
-        let new_task = NewTask {
-            code: "TEST-001".to_string(),
-            name: "Test Task".to_string(),
-            description: "A test task for unit testing".to_string(),
-            owner_agent_name: "test-agent".to_string(),
-        };
+        let new_task = NewTask::new(
+            "TEST-001".to_string(),
+            "Test Task".to_string(),
+            "A test task for unit testing".to_string(),
+            Some("test-agent".to_string()),
+        );
 
         let created_task = repo.create(new_task).await.unwrap();
         
@@ -480,12 +597,12 @@ mod tests {
     async fn test_duplicate_code_error() {
         let repo = create_test_repository().await;
         
-        let new_task = NewTask {
-            code: "DUPLICATE".to_string(),
-            name: "First Task".to_string(),
-            description: "First task with this code".to_string(),
-            owner_agent_name: "test-agent".to_string(),
-        };
+        let new_task = NewTask::new(
+            "DUPLICATE".to_string(),
+            "First Task".to_string(),
+            "First task with this code".to_string(),
+            Some("test-agent".to_string()),
+        );
 
         // First creation should succeed
         repo.create(new_task.clone()).await.unwrap();
@@ -503,12 +620,12 @@ mod tests {
     async fn test_get_by_id() {
         let repo = create_test_repository().await;
         
-        let new_task = NewTask {
-            code: "GET-TEST".to_string(),
-            name: "Get Test".to_string(),
-            description: "Test getting tasks by ID".to_string(),
-            owner_agent_name: "test-agent".to_string(),
-        };
+        let new_task = NewTask::new(
+            "GET-TEST".to_string(),
+            "Get Test".to_string(),
+            "Test getting tasks by ID".to_string(),
+            Some("test-agent".to_string()),
+        );
 
         let created = repo.create(new_task).await.unwrap();
         let retrieved = repo.get_by_id(created.id).await.unwrap();
@@ -525,12 +642,12 @@ mod tests {
     async fn test_state_transitions() {
         let repo = create_test_repository().await;
         
-        let new_task = NewTask {
-            code: "STATE-TEST".to_string(),
-            name: "State Test".to_string(),
-            description: "Test state transitions".to_string(),
-            owner_agent_name: "test-agent".to_string(),
-        };
+        let new_task = NewTask::new(
+            "STATE-TEST".to_string(),
+            "State Test".to_string(),
+            "Test state transitions".to_string(),
+            Some("test-agent".to_string()),
+        );
 
         let mut task = repo.create(new_task).await.unwrap();
         assert_eq!(task.state, TaskState::Created);
@@ -562,18 +679,18 @@ mod tests {
         
         // Create multiple tasks
         let tasks = vec![
-            NewTask {
-                code: "AGENT-1-TASK".to_string(),
-                name: "Agent 1 Task".to_string(),
-                description: "Task for agent 1".to_string(),
-                owner_agent_name: "agent-1".to_string(),
-            },
-            NewTask {
-                code: "AGENT-2-TASK".to_string(),
-                name: "Agent 2 Task".to_string(),
-                description: "Task for agent 2".to_string(),
-                owner_agent_name: "agent-2".to_string(),
-            },
+            NewTask::new(
+                "AGENT-1-TASK".to_string(),
+                "Agent 1 Task".to_string(),
+                "Task for agent 1".to_string(),
+                Some("agent-1".to_string()),
+            ),
+            NewTask::new(
+                "AGENT-2-TASK".to_string(),
+                "Agent 2 Task".to_string(),
+                "Task for agent 2".to_string(),
+                Some("agent-2".to_string()),
+            ),
         ];
 
         for task in tasks {
@@ -591,6 +708,6 @@ mod tests {
         };
         let agent1_tasks = repo.list(filter).await.unwrap();
         assert_eq!(agent1_tasks.len(), 1);
-        assert_eq!(agent1_tasks[0].owner_agent_name, "agent-1");
+        assert_eq!(agent1_tasks[0].owner_agent_name.as_deref(), Some("agent-1"));
     }
 }

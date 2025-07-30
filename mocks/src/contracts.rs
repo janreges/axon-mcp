@@ -165,7 +165,7 @@ pub async fn test_list_contract<R: TaskRepository>(repo: &R) {
     let agent1_tasks = repo.list(TaskFilterBuilder::new().with_owner("agent-1").build()).await
         .expect("Filter by owner should succeed");
     assert!(
-        agent1_tasks.iter().all(|t| t.owner_agent_name == "agent-1"),
+        agent1_tasks.iter().all(|t| t.owner_agent_name.as_deref() == Some("agent-1")),
         "All returned tasks should be owned by agent-1"
     );
     
@@ -190,7 +190,7 @@ pub async fn test_assign_contract<R: TaskRepository>(repo: &R) {
     // Test successful assignment
     let assigned_task = repo.assign(task.id, "new-owner").await
         .expect("Assignment should succeed");
-    assert_eq!(assigned_task.owner_agent_name, "new-owner");
+    assert_eq!(assigned_task.owner_agent_name.as_deref(), Some("new-owner"));
     assert_eq!(assigned_task.id, task.id, "ID should remain unchanged");
     
     // Test assignment to empty owner (should fail)

@@ -3,7 +3,8 @@
 //! Implements the ProtocolHandler trait for MCP communication.
 
 use std::sync::Arc;
-use ::task_core::{TaskRepository, ProtocolHandler, Task, NewTask, HealthStatus};
+use ::task_core::{TaskRepository, ProtocolHandler, Task, NewTask, UpdateTask, HealthStatus};
+use ::task_core::{DiscoverWorkParams, ClaimTaskParams, ReleaseTaskParams, StartWorkSessionParams, EndWorkSessionParams, WorkSessionInfo};
 use ::task_core::error::Result;
 use crate::serialization::*;
 use async_trait::async_trait;
@@ -29,12 +30,12 @@ impl<R> McpTaskHandler<R> {
 #[async_trait]
 impl<R: TaskRepository + Send + Sync> ProtocolHandler for McpTaskHandler<R> {
     async fn create_task(&self, params: CreateTaskParams) -> Result<Task> {
-        let new_task = NewTask {
-            code: params.code,
-            name: params.name,
-            description: params.description,
-            owner_agent_name: params.owner_agent_name,
-        };
+        let new_task = NewTask::new(
+            params.code,
+            params.name,
+            params.description,
+            params.owner_agent_name,
+        );
         
         self.repository.create(new_task).await
     }
@@ -83,6 +84,35 @@ impl<R: TaskRepository + Send + Sync> ProtocolHandler for McpTaskHandler<R> {
         
         Ok(health)
     }
+
+    // MCP v2 Advanced Multi-Agent Features
+
+    async fn discover_work(&self, params: DiscoverWorkParams) -> Result<Vec<Task>> {
+        let max_tasks = params.max_tasks.unwrap_or(10); // Default to 10 tasks if not specified
+        self.repository.discover_work(&params.agent_name, &params.capabilities, max_tasks).await
+    }
+
+    async fn claim_task(&self, params: ClaimTaskParams) -> Result<Task> {
+        self.repository.claim_task(params.task_id, &params.agent_name).await
+    }
+
+    async fn release_task(&self, params: ReleaseTaskParams) -> Result<Task> {
+        self.repository.release_task(params.task_id, &params.agent_name).await
+    }
+
+    async fn start_work_session(&self, params: StartWorkSessionParams) -> Result<WorkSessionInfo> {
+        let session_id = self.repository.start_work_session(params.task_id, &params.agent_name).await?;
+        Ok(WorkSessionInfo {
+            session_id,
+            task_id: params.task_id,
+            agent_name: params.agent_name,
+            started_at: chrono::Utc::now(),
+        })
+    }
+
+    async fn end_work_session(&self, params: EndWorkSessionParams) -> Result<()> {
+        self.repository.end_work_session(params.session_id, params.notes, params.productivity_score).await
+    }
 }
 
 #[cfg(test)]
@@ -107,6 +137,11 @@ mod tests {
             async fn archive(&self, id: i32) -> Result<Task>;
             async fn health_check(&self) -> Result<()>;
             async fn get_stats(&self) -> Result<RepositoryStats>;
+            async fn discover_work(&self, agent_name: &str, capabilities: &[String], max_tasks: u32) -> Result<Vec<Task>>;
+            async fn claim_task(&self, task_id: i32, agent_name: &str) -> Result<Task>;
+            async fn release_task(&self, task_id: i32, agent_name: &str) -> Result<Task>;
+            async fn start_work_session(&self, task_id: i32, agent_name: &str) -> Result<i32>;
+            async fn end_work_session(&self, session_id: i32, notes: Option<String>, productivity_score: Option<f64>) -> Result<()>;
         }
     }
     

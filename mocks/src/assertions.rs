@@ -35,7 +35,7 @@ pub fn assert_task_matches(task: &Task, matcher: &TaskMatcher) {
         assert_eq!(task.name, *expected_name, "Task name doesn't match expected");
     }
     if let Some(ref expected_owner) = matcher.owner_agent_name {
-        assert_eq!(task.owner_agent_name, *expected_owner, "Task owner doesn't match expected");
+        assert_eq!(task.owner_agent_name.as_deref(), Some(expected_owner.as_str()), "Task owner doesn't match expected");
     }
     if let Some(expected_state) = matcher.state {
         assert_eq!(task.state, expected_state, "Task state doesn't match expected");
@@ -44,16 +44,16 @@ pub fn assert_task_matches(task: &Task, matcher: &TaskMatcher) {
 
 /// Assert state transition is valid according to business rules
 pub fn assert_state_transition_valid(from: TaskState, to: TaskState) {
-    let dummy_task = Task {
-        id: 1,
-        code: "TEST-001".to_string(),
-        name: "Test".to_string(),
-        description: "Test".to_string(),
-        owner_agent_name: "test".to_string(),
-        state: from,
-        inserted_at: chrono::Utc::now(),
-        done_at: None,
-    };
+    let dummy_task = Task::new(
+        1,
+        "TEST-001".to_string(),
+        "Test".to_string(),
+        "Test".to_string(),
+        Some("test".to_string()),
+        from,
+        chrono::Utc::now(),
+        None,
+    );
     
     assert!(
         dummy_task.can_transition_to(to),
@@ -63,16 +63,16 @@ pub fn assert_state_transition_valid(from: TaskState, to: TaskState) {
 
 /// Assert state transition is invalid according to business rules  
 pub fn assert_state_transition_invalid(from: TaskState, to: TaskState) {
-    let dummy_task = Task {
-        id: 1,
-        code: "TEST-001".to_string(),
-        name: "Test".to_string(),
-        description: "Test".to_string(),
-        owner_agent_name: "test".to_string(),
-        state: from,
-        inserted_at: chrono::Utc::now(),
-        done_at: None,
-    };
+    let dummy_task = Task::new(
+        1,
+        "TEST-001".to_string(),
+        "Test".to_string(),
+        "Test".to_string(),
+        Some("test".to_string()),
+        from,
+        chrono::Utc::now(),
+        None,
+    );
     
     assert!(
         !dummy_task.can_transition_to(to),

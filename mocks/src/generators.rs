@@ -44,16 +44,16 @@ pub fn generate_task_description() -> String {
 /// Generate a random task with realistic data
 pub fn generate_random_task() -> Task {
     let id: u32 = (1..99999).fake();
-    Task {
-        id: id as i32,
-        code: generate_task_code(),
-        name: generate_task_name(),
-        description: generate_task_description(),
-        owner_agent_name: generate_agent_name(),
-        state: generate_random_task_state(),
-        inserted_at: Utc::now(),
-        done_at: None,
-    }
+    Task::new(
+        id as i32,
+        generate_task_code(),
+        generate_task_name(),
+        generate_task_description(),
+        Some(generate_agent_name()),
+        generate_random_task_state(),
+        Utc::now(),
+        None,
+    )
 }
 
 /// Generate a random task state
@@ -100,16 +100,16 @@ impl TaskGenerator {
         let number: u32 = (1..9999).fake();
         let agent = &self.agent_pool[rand::thread_rng().gen_range(0..self.agent_pool.len())];
         
-        Task {
-            id: id as i32,
-            code: format!("{}-{number:03}", self.code_prefix),
-            name: generate_task_name(),
-            description: generate_task_description(),
-            owner_agent_name: agent.clone(),
-            state: generate_random_task_state(),
-            inserted_at: Utc::now(),
-            done_at: None,
-        }
+        Task::new(
+            id as i32,
+            format!("{}-{number:03}", self.code_prefix),
+            generate_task_name(),
+            generate_task_description(),
+            Some(agent.clone()),
+            generate_random_task_state(),
+            Utc::now(),
+            None,
+        )
     }
 }
 
@@ -142,19 +142,22 @@ pub fn task_strategy() -> impl Strategy<Value = Task> {
         "[A-Za-z0-9 .,!?]{10,200}",
         "[a-z-]{5,20}",
         task_state_strategy(),
-    ).prop_map(|(id, code, name, description, owner, state)| Task {
-        id,
-        code,
-        name,
-        description,
-        owner_agent_name: owner,
-        state,
-        inserted_at: Utc::now(),
-        done_at: if state == TaskState::Done || state == TaskState::Archived {
+    ).prop_map(|(id, code, name, description, owner, state)| {
+        let done_at = if state == TaskState::Done || state == TaskState::Archived {
             Some(Utc::now())
         } else {
             None
-        },
+        };
+        Task::new(
+            id,
+            code,
+            name,
+            description,
+            Some(owner),
+            state,
+            Utc::now(),
+            done_at,
+        )
     })
 }
 

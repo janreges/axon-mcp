@@ -17,7 +17,7 @@ use tokio::sync::mpsc;
 use tracing::info;
 
 use crate::{auth::McpAuth, error::McpError, handler::McpTaskHandler, serialization::*};
-use ::task_core::{TaskRepository, ProtocolHandler};
+use ::task_core::{TaskRepository, ProtocolHandler, DiscoverWorkParams, ClaimTaskParams, ReleaseTaskParams, StartWorkSessionParams, EndWorkSessionParams};
 
 /// MCP Protocol Version as required by 2025-06-18 specification
 const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
@@ -142,6 +142,35 @@ impl<R: TaskRepository + Send + Sync + 'static> McpServer<R> {
             "health_check" => {
                 let health = self.handler.health_check().await.map_err(McpError::from)?;
                 Ok(serde_json::to_value(health).map_err(|e| McpError::Serialization(e.to_string()))?)
+            }
+            // MCP v2 Advanced Multi-Agent Functions
+            "discover_work" => {
+                let params: DiscoverWorkParams = deserialize_mcp_params(params)?;
+                let tasks = self.handler.discover_work(params).await.map_err(McpError::from)?;
+                let task_values: Result<Vec<_>, _> = tasks.iter()
+                    .map(serialize_task_for_mcp)
+                    .collect();
+                Ok(Value::Array(task_values?))
+            }
+            "claim_task" => {
+                let params: ClaimTaskParams = deserialize_mcp_params(params)?;
+                let task = self.handler.claim_task(params).await.map_err(McpError::from)?;
+                serialize_task_for_mcp(&task)
+            }
+            "release_task" => {
+                let params: ReleaseTaskParams = deserialize_mcp_params(params)?;
+                let task = self.handler.release_task(params).await.map_err(McpError::from)?;
+                serialize_task_for_mcp(&task)
+            }
+            "start_work_session" => {
+                let params: StartWorkSessionParams = deserialize_mcp_params(params)?;
+                let session_info = self.handler.start_work_session(params).await.map_err(McpError::from)?;
+                Ok(serde_json::to_value(session_info).map_err(|e| McpError::Serialization(e.to_string()))?)
+            }
+            "end_work_session" => {
+                let params: EndWorkSessionParams = deserialize_mcp_params(params)?;
+                self.handler.end_work_session(params).await.map_err(McpError::from)?;
+                Ok(Value::Null) // Success with no return value
             }
             _ => Err(McpError::Protocol(format!("Unknown method: {method}"))),
         }
@@ -273,6 +302,76 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync>(
                     Ok(value) => create_success_response(id, value),
                     Err(e) => McpError::Serialization(e.to_string()).to_json_rpc_error(id),
                 },
+                Err(e) => McpError::from(e).to_json_rpc_error(id),
+            }
+        }
+        // MCP v2 Advanced Multi-Agent Functions
+        "discover_work" => {
+            let params: DiscoverWorkParams = match deserialize_mcp_params(params) {
+                Ok(p) => p,
+                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+            };
+            match handler.discover_work(params).await {
+                Ok(tasks) => {
+                    let task_values: Result<Vec<_>, _> = tasks.iter()
+                        .map(serialize_task_for_mcp)
+                        .collect();
+                    match task_values {
+                        Ok(values) => create_success_response(id, Value::Array(values)),
+                        Err(e) => McpError::from(e).to_json_rpc_error(id),
+                    }
+                }
+                Err(e) => McpError::from(e).to_json_rpc_error(id),
+            }
+        }
+        "claim_task" => {
+            let params: ClaimTaskParams = match deserialize_mcp_params(params) {
+                Ok(p) => p,
+                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+            };
+            match handler.claim_task(params).await {
+                Ok(task) => match serialize_task_for_mcp(&task) {
+                    Ok(value) => create_success_response(id, value),
+                    Err(e) => McpError::from(e).to_json_rpc_error(id),
+                },
+                Err(e) => McpError::from(e).to_json_rpc_error(id),
+            }
+        }
+        "release_task" => {
+            let params: ReleaseTaskParams = match deserialize_mcp_params(params) {
+                Ok(p) => p,
+                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+            };
+            match handler.release_task(params).await {
+                Ok(task) => match serialize_task_for_mcp(&task) {
+                    Ok(value) => create_success_response(id, value),
+                    Err(e) => McpError::from(e).to_json_rpc_error(id),
+                },
+                Err(e) => McpError::from(e).to_json_rpc_error(id),
+            }
+        }
+        "start_work_session" => {
+            let params: StartWorkSessionParams = match deserialize_mcp_params(params) {
+                Ok(p) => p,
+                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+            };
+            match handler.start_work_session(params).await {
+                Ok(session_info) => {
+                    match serde_json::to_value(session_info) {
+                        Ok(value) => create_success_response(id, value),
+                        Err(e) => McpError::Serialization(e.to_string()).to_json_rpc_error(id),
+                    }
+                }
+                Err(e) => McpError::from(e).to_json_rpc_error(id),
+            }
+        }
+        "end_work_session" => {
+            let params: EndWorkSessionParams = match deserialize_mcp_params(params) {
+                Ok(p) => p,
+                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+            };
+            match handler.end_work_session(params).await {
+                Ok(()) => create_success_response(id, Value::Null),
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
             }
         }
@@ -441,6 +540,11 @@ mod tests {
             async fn archive(&self, id: i32) -> Result<Task>;
             async fn health_check(&self) -> Result<()>;
             async fn get_stats(&self) -> Result<RepositoryStats>;
+            async fn discover_work(&self, agent_name: &str, capabilities: &[String], max_tasks: u32) -> Result<Vec<Task>>;
+            async fn claim_task(&self, task_id: i32, agent_name: &str) -> Result<Task>;
+            async fn release_task(&self, task_id: i32, agent_name: &str) -> Result<Task>;
+            async fn start_work_session(&self, task_id: i32, agent_name: &str) -> Result<i32>;
+            async fn end_work_session(&self, session_id: i32, notes: Option<String>, productivity_score: Option<f64>) -> Result<()>;
         }
     }
     

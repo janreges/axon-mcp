@@ -52,6 +52,14 @@ impl TaskRepository for MockRepository {
             state: TaskState::Created,
             inserted_at: Utc::now(),
             done_at: None,
+            workflow_definition_id: None,
+            workflow_cursor: None,
+            priority_score: 5.0,
+            parent_task_id: None,
+            failure_count: 0,
+            required_capabilities: vec![],
+            estimated_effort: None,
+            confidence_threshold: 0.8,
         };
         
         tasks.push(new_task.clone());
@@ -70,7 +78,7 @@ impl TaskRepository for MockRepository {
             task.description = description;
         }
         if let Some(owner) = updates.owner_agent_name {
-            task.owner_agent_name = owner;
+            task.owner_agent_name = Some(owner);
         }
         
         Ok(task.clone())
@@ -108,7 +116,7 @@ impl TaskRepository for MockRepository {
         let mut filtered: Vec<_> = tasks.iter()
             .filter(|task| {
                 if let Some(ref owner) = filter.owner {
-                    if task.owner_agent_name != *owner {
+                    if task.owner_agent_name.as_deref() != Some(owner) {
                         return false;
                     }
                 }
@@ -154,7 +162,7 @@ impl TaskRepository for MockRepository {
         let task = tasks.iter_mut().find(|t| t.id == id)
             .ok_or_else(|| TaskError::not_found_id(id))?;
         
-        task.owner_agent_name = new_owner.to_string();
+        task.owner_agent_name = Some(new_owner.to_string());
         Ok(task.clone())
     }
     
@@ -182,13 +190,48 @@ impl TaskRepository for MockRepository {
         
         for task in tasks.iter() {
             *stats.tasks_by_state.entry(task.state).or_insert(0) += 1;
-            *stats.tasks_by_owner.entry(task.owner_agent_name.clone()).or_insert(0) += 1;
+            if let Some(ref owner) = task.owner_agent_name {
+                *stats.tasks_by_owner.entry(owner.clone()).or_insert(0) += 1;
+            }
         }
         
         stats.latest_created = tasks.iter().map(|t| t.inserted_at).max();
         stats.latest_completed = tasks.iter().filter_map(|t| t.done_at).max();
         
         Ok(stats)
+    }
+    
+    async fn discover_work(&self, _agent_name: &str, _capabilities: &[String], _max_tasks: u32) -> Result<Vec<Task>> {
+        Ok(vec![])
+    }
+    
+    async fn claim_task(&self, task_id: i32, agent_name: &str) -> Result<Task> {
+        let mut tasks = self.tasks.lock().await;
+        let task = tasks.iter_mut().find(|t| t.id == task_id)
+            .ok_or_else(|| TaskError::not_found_id(task_id))?;
+        
+        task.owner_agent_name = Some(agent_name.to_string());
+        task.state = TaskState::InProgress;
+        
+        Ok(task.clone())
+    }
+    
+    async fn release_task(&self, task_id: i32, _agent_name: &str) -> Result<Task> {
+        let mut tasks = self.tasks.lock().await;
+        let task = tasks.iter_mut().find(|t| t.id == task_id)
+            .ok_or_else(|| TaskError::not_found_id(task_id))?;
+        
+        task.state = TaskState::Created;
+        
+        Ok(task.clone())
+    }
+    
+    async fn start_work_session(&self, task_id: i32, _agent_name: &str) -> Result<i32> {
+        Ok(task_id * 100) // Mock session ID
+    }
+    
+    async fn end_work_session(&self, _session_id: i32, _notes: Option<String>, _productivity_score: Option<f64>) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -201,7 +244,13 @@ async fn test_create_task_integration() {
         code: "TEST-001".to_string(),
         name: "Test Task".to_string(),
         description: "A test task".to_string(),
-        owner_agent_name: "test-agent".to_string(),
+        owner_agent_name: Some("test-agent".to_string()),
+        confidence_threshold: 0.8,
+        estimated_effort: None,
+        parent_task_id: None,
+        required_capabilities: vec![],
+        priority_score: 5.0,
+        workflow_definition_id: None,
     };
     
     let result = handler.create_task(params).await;
@@ -223,7 +272,13 @@ async fn test_task_lifecycle_integration() {
         code: "LIFECYCLE-001".to_string(),
         name: "Lifecycle Test".to_string(),
         description: "Testing task lifecycle".to_string(),
-        owner_agent_name: "test-agent".to_string(),
+        owner_agent_name: Some("test-agent".to_string()),
+        confidence_threshold: 0.8,
+        estimated_effort: None,
+        parent_task_id: None,
+        required_capabilities: vec![],
+        priority_score: 5.0,
+        workflow_definition_id: None,
     };
     
     let task = handler.create_task(create_params).await.unwrap();
@@ -236,6 +291,13 @@ async fn test_task_lifecycle_integration() {
             name: Some("Updated Task".to_string()),
             description: None,
             owner_agent_name: None,
+            workflow_definition_id: None,
+            workflow_cursor: None,
+            priority_score: Some(5.0),
+            parent_task_id: None,
+            required_capabilities: Some(vec![]),
+            estimated_effort: None,
+            confidence_threshold: Some(0.8),
         },
     };
     
@@ -277,14 +339,26 @@ async fn test_error_handling_integration() {
         code: "DUP-001".to_string(),
         name: "First Task".to_string(),
         description: "First task".to_string(),
-        owner_agent_name: "agent1".to_string(),
+        owner_agent_name: Some("agent1".to_string()),
+        confidence_threshold: 0.8,
+        estimated_effort: None,
+        parent_task_id: None,
+        required_capabilities: vec![],
+        priority_score: 5.0,
+        workflow_definition_id: None,
     };
     
     let params2 = CreateTaskParams {
         code: "DUP-001".to_string(), // Same code
         name: "Second Task".to_string(),
         description: "Second task".to_string(),
-        owner_agent_name: "agent2".to_string(),
+        owner_agent_name: Some("agent2".to_string()),
+        confidence_threshold: 0.8,
+        estimated_effort: None,
+        parent_task_id: None,
+        required_capabilities: vec![],
+        priority_score: 5.0,
+        workflow_definition_id: None,
     };
     
     handler.create_task(params1).await.unwrap();
@@ -302,7 +376,13 @@ async fn test_error_handling_integration() {
         code: "INVALID-001".to_string(),
         name: "Invalid Transition Test".to_string(),
         description: "Testing invalid transitions".to_string(),
-        owner_agent_name: "test-agent".to_string(),
+        owner_agent_name: Some("test-agent".to_string()),
+        confidence_threshold: 0.8,
+        estimated_effort: None,
+        parent_task_id: None,
+        required_capabilities: vec![],
+        priority_score: 5.0,
+        workflow_definition_id: None,
     };
     
     let task = handler.create_task(create_params).await.unwrap();
@@ -329,7 +409,13 @@ async fn test_list_tasks_with_filters() {
             code: format!("FILTER-{:03}", i),
             name: format!("Filter Test {}", i),
             description: "Filter test".to_string(),
-            owner_agent_name: if i % 2 == 0 { "agent-even".to_string() } else { "agent-odd".to_string() },
+            owner_agent_name: if i % 2 == 0 { Some("agent-even".to_string()) } else { Some("agent-odd".to_string()) },
+            confidence_threshold: 0.8,
+            estimated_effort: None,
+            parent_task_id: None,
+            required_capabilities: vec![],
+            priority_score: 5.0,
+            workflow_definition_id: None,
         };
         
         let task = handler.create_task(params).await.unwrap();
@@ -381,7 +467,13 @@ async fn test_serialization_integration() {
         code: "SERIAL-001".to_string(),
         name: "Serialization Test".to_string(),
         description: "Testing task serialization".to_string(),
-        owner_agent_name: "serial-agent".to_string(),
+        owner_agent_name: Some("serial-agent".to_string()),
+        confidence_threshold: 0.8,
+        estimated_effort: None,
+        parent_task_id: None,
+        required_capabilities: vec![],
+        priority_score: 5.0,
+        workflow_definition_id: None,
     };
     
     let task = handler.create_task(params).await.unwrap();
@@ -417,7 +509,13 @@ async fn test_assign_task_integration() {
         code: "ASSIGN-001".to_string(),
         name: "Assignment Test".to_string(),
         description: "Testing task assignment".to_string(),
-        owner_agent_name: "original-agent".to_string(),
+        owner_agent_name: Some("original-agent".to_string()),
+        confidence_threshold: 0.8,
+        estimated_effort: None,
+        parent_task_id: None,
+        required_capabilities: vec![],
+        priority_score: 5.0,
+        workflow_definition_id: None,
     };
     
     let task = handler.create_task(create_params).await.unwrap();
@@ -428,5 +526,5 @@ async fn test_assign_task_integration() {
     };
     
     let assigned_task = handler.assign_task(assign_params).await.unwrap();
-    assert_eq!(assigned_task.owner_agent_name, "new-agent");
+    assert_eq!(assigned_task.owner_agent_name.as_deref(), Some("new-agent"));
 }

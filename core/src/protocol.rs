@@ -285,11 +285,11 @@ mod tests {
 
     #[test]
     fn test_update_task_params_methods() {
-        let update_data = UpdateTask {
-            name: Some("Updated Task".to_string()),
-            description: Some("Updated description".to_string()),
-            owner_agent_name: Some("new-owner".to_string()),
-        };
+        let update_data = UpdateTask::with_basic_fields(
+            Some("Updated Task".to_string()),
+            Some("Updated description".to_string()),
+            Some("new-owner".to_string()),
+        );
 
         let params = UpdateTaskParams {
             id: 42,

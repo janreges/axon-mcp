@@ -82,11 +82,19 @@ fn test_task_serialization_format() {
         code: "TEST-042".to_string(),
         name: "Test Task".to_string(),
         description: "A test task for serialization".to_string(),
-        owner_agent_name: "test-agent".to_string(),
+        owner_agent_name: Some("test-agent".to_string()),
         state: TaskState::InProgress,
         inserted_at: Utc::now(),
         done_at: None,
-    };
+            workflow_definition_id: None,
+            workflow_cursor: None,
+            priority_score: 5.0,
+            parent_task_id: None,
+            failure_count: 0,
+            required_capabilities: vec![],
+            estimated_effort: None,
+            confidence_threshold: 0.8,
+        };
     
     let serialized = serialize_task_for_mcp(&task).unwrap();
     
@@ -132,7 +140,7 @@ fn test_parameter_deserialization() {
     assert_eq!(create_params.code, "PARAM-001");
     assert_eq!(create_params.name, "Parameter Test");
     assert_eq!(create_params.description, "Testing parameter deserialization");
-    assert_eq!(create_params.owner_agent_name, "param-tester");
+    assert_eq!(create_params.owner_agent_name.as_deref(), Some("param-tester"));
 }
 
 #[test]

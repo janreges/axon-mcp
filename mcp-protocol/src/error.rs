@@ -72,6 +72,12 @@ impl From<TaskError> for McpError {
             TaskError::Protocol(msg) => McpError::Protocol(msg),
             TaskError::Configuration(msg) => McpError::Protocol(format!("Configuration error: {msg}")),
             TaskError::Internal(msg) => McpError::Protocol(format!("Internal error: {msg}")),
+            TaskError::AlreadyClaimed(task_id, owner) => McpError::Validation(format!("Task {task_id} is already claimed by {owner}")),
+            TaskError::NotOwned(agent, task_id) => McpError::Validation(format!("Agent {agent} does not own task {task_id}")),
+            TaskError::InsufficientCapabilities(agent, required) => McpError::Validation(format!("Agent {agent} lacks required capabilities: {required:?}")),
+            TaskError::SessionNotFound(session_id) => McpError::NotFound(format!("Work session {session_id} not found")),
+            TaskError::CircuitBreakerOpen(agent) => McpError::Protocol(format!("Circuit breaker open for agent {agent}")),
+            TaskError::UnknownAgent(agent) => McpError::NotFound(format!("Unknown agent: {agent}")),
         }
     }
 }

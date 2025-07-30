@@ -98,7 +98,7 @@ async fn test_builders_task_builder() {
     assert_eq!(task.code, "BUILD-001");
     assert_eq!(task.name, "Built Task");
     assert_eq!(task.state, TaskState::InProgress);
-    assert_eq!(task.owner_agent_name, "builder-agent");
+    assert_eq!(task.owner_agent_name.as_deref(), Some("builder-agent"));
 }
 
 #[tokio::test]
@@ -139,7 +139,7 @@ async fn test_generators_realistic_data() {
     assert!(task.code.contains('-'));
     assert!(!task.name.is_empty());
     assert!(!task.description.is_empty());
-    assert!(!task.owner_agent_name.is_empty());
+    assert!(task.owner_agent_name.is_some());
 }
 
 #[tokio::test]

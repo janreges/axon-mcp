@@ -38,6 +38,11 @@
 //!     #     async fn archive(&self, _id: i32) -> Result<Task> { unimplemented!() }
 //!     #     async fn health_check(&self) -> Result<()> { unimplemented!() }
 //!     #     async fn get_stats(&self) -> Result<RepositoryStats> { unimplemented!() }
+//!     #     async fn discover_work(&self, _agent_name: &str, _capabilities: &[String], _max_tasks: u32) -> Result<Vec<Task>> { unimplemented!() }
+//!     #     async fn claim_task(&self, _task_id: i32, _agent_name: &str) -> Result<Task> { unimplemented!() }
+//!     #     async fn release_task(&self, _task_id: i32, _agent_name: &str) -> Result<Task> { unimplemented!() }
+//!     #     async fn start_work_session(&self, _task_id: i32, _agent_name: &str) -> Result<i32> { unimplemented!() }
+//!     #     async fn end_work_session(&self, _session_id: i32, _notes: Option<String>, _productivity_score: Option<f64>) -> Result<()> { unimplemented!() }
 //!     # }
 //!     let repository = Arc::new(MockRepo);
 //!     let server = McpServer::new(repository);

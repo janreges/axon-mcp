@@ -1,6 +1,15 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+/// Task code specification for task creation
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum TaskCode {
+    /// Auto-generate from prefix (e.g., "SEC" -> "SEC-001", "SEC-002")
+    AutoGenerate(String),
+    /// Use explicit predefined code (e.g., "SEC04")
+    Explicit(String),
+}
+
 /// Core task representation in the MCP Task Management System.
 /// 
 /// A task represents a unit of work that can be tracked through its lifecycle,
@@ -18,7 +27,7 @@ use serde::{Deserialize, Serialize};
 ///     code: "FEAT-001".to_string(),
 ///     name: "Implement user authentication".to_string(),
 ///     description: "Add JWT-based auth with role-based access control".to_string(),
-///     owner_agent_name: "backend-developer".to_string(),
+///     owner_agent_name: Some("backend-developer".to_string()),
 ///     state: TaskState::Created,
 ///     inserted_at: Utc::now(),
 ///     done_at: None,
@@ -45,8 +54,8 @@ pub struct Task {
     pub name: String,
     /// Detailed task requirements
     pub description: String,
-    /// Assigned agent identifier
-    pub owner_agent_name: String,
+    /// Assigned agent identifier (None for unassigned tasks)
+    pub owner_agent_name: Option<String>,
     /// Current lifecycle state
     pub state: TaskState,
     /// Creation timestamp
@@ -94,16 +103,16 @@ pub struct Task {
 /// use task_core::models::{Task, TaskState};
 /// use chrono::Utc;
 /// 
-/// let task = Task {
-///     id: 1,
-///     code: "TEST-01".to_string(),
-///     name: "Test Task".to_string(),
-///     description: "A test task".to_string(),
-///     owner_agent_name: "test-agent".to_string(),
-///     state: TaskState::Created,
-///     inserted_at: Utc::now(),
-///     done_at: None,
-/// };
+/// let task = Task::new(
+///     1,
+///     "TEST-01".to_string(),
+///     "Test Task".to_string(),
+///     "A test task".to_string(),
+///     Some("test-agent".to_string()),
+///     TaskState::Created,
+///     Utc::now(),
+///     None,
+/// );
 /// 
 /// // Check valid transitions
 /// if task.can_transition_to(TaskState::InProgress) {
@@ -124,6 +133,14 @@ pub enum TaskState {
     Done,
     /// Task has been archived
     Archived,
+    /// Task needs to be broken down into subtasks
+    PendingDecomposition,
+    /// Waiting for agent handoff
+    PendingHandoff,
+    /// Too many failures, needs human review
+    Quarantined,
+    /// Blocked on other tasks completing
+    WaitingForDependency,
 }
 
 /// Data transfer object for creating new tasks
@@ -135,8 +152,8 @@ pub struct NewTask {
     pub name: String,
     /// Detailed task requirements
     pub description: String,
-    /// Assigned agent identifier
-    pub owner_agent_name: String,
+    /// Assigned agent identifier (None for unassigned tasks)
+    pub owner_agent_name: Option<String>,
     
     // MCP v2 Extensions
     /// Workflow definition ID for structured task execution
@@ -170,7 +187,7 @@ impl NewTask {
         code: String,
         name: String,
         description: String,
-        owner_agent_name: String,
+        owner_agent_name: Option<String>,
     ) -> Self {
         Self {
             code,
@@ -273,22 +290,28 @@ pub struct TaskFilter {
 pub struct KnowledgeObject {
     /// Auto-increment primary key
     pub id: i32,
-    /// Human-readable identifier
-    pub key: String,
-    /// Knowledge content (JSON or structured data)
-    pub value: serde_json::Value,
-    /// Content type (e.g., "text/plain", "application/json", "code/rust")
-    pub content_type: String,
-    /// Tags for categorization and search
-    pub tags: Vec<String>,
-    /// Creating agent identifier
-    pub created_by_agent: String,
+    /// Task code instead of ID
+    pub task_code: String,
+    /// Author agent name (kebab-case)
+    pub author_agent_name: String,
+    /// Knowledge type
+    pub knowledge_type: KnowledgeType,
     /// Creation timestamp
     pub created_at: DateTime<Utc>,
-    /// Last update timestamp
-    pub updated_at: DateTime<Utc>,
-    /// Knowledge version for change tracking
-    pub version: i32,
+    /// Knowledge title
+    pub title: String,
+    /// Markdown formatted content
+    pub body: String,
+    /// Tags for filtering and search
+    pub tags: Vec<String>,
+    /// Visibility level
+    pub visibility: Visibility,
+    /// Parent knowledge ID for threading
+    pub parent_knowledge_id: Option<i32>,
+    /// Agent's confidence in this information
+    pub confidence_score: Option<f64>,
+    /// Links to files, code, etc.
+    pub artifacts: serde_json::Value,
 }
 
 /// Message between agents during task execution
@@ -296,71 +319,140 @@ pub struct KnowledgeObject {
 pub struct TaskMessage {
     /// Auto-increment primary key
     pub id: i32,
-    /// Associated task ID
-    pub task_id: i32,
-    /// Sending agent identifier
-    pub from_agent: String,
-    /// Receiving agent identifier (None for broadcast)
-    pub to_agent: Option<String>,
+    /// Task code instead of ID
+    pub task_code: String,
+    /// Author agent name (kebab-case)
+    pub author_agent_name: String,
+    /// Message type
+    pub message_type: MessageType,
+    /// Creation timestamp
+    pub created_at: DateTime<Utc>,
     /// Message content
     pub content: String,
-    /// Message type (info, warning, error, request, response)
-    pub message_type: MessageType,
-    /// Message timestamp
-    pub timestamp: DateTime<Utc>,
-    /// Whether message has been read
-    pub read: bool,
+    /// Reply to message ID for threading
+    pub reply_to_message_id: Option<i32>,
 }
 
 /// Message types for agent communication
 #[derive(Debug, Clone, Copy, Hash, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum MessageType {
-    /// Informational message
-    Info,
-    /// Warning message
-    Warning,
-    /// Error message
-    Error,
-    /// Request for action or information
-    Request,
-    /// Response to a request
-    Response,
+    /// General comment
+    Comment,
+    /// Question that needs answering
+    Question,
+    /// Status or progress update
+    Update,
+    /// Issue preventing progress
+    Blocker,
+    /// Solution or workaround
+    Solution,
+    /// Code/work review comment
+    Review,
+    /// Handoff related message
+    Handoff,
+}
+
+/// Knowledge object types for categorizing information
+#[derive(Debug, Clone, Copy, Hash, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum KnowledgeType {
+    /// General observation or comment
+    Note,
+    /// Important decision with rationale
+    Decision,
+    /// Question that needs answering
+    Question,
+    /// Response to a question
+    Answer,
+    /// Formal handoff package
+    Handoff,
+    /// Output from a workflow step
+    StepOutput,
+    /// Issue preventing progress
+    Blocker,
+    /// Solution to a blocker
+    Resolution,
+    /// Reference to external resource
+    Artifact,
+}
+
+/// Visibility levels for knowledge objects
+#[derive(Debug, Clone, Copy, Hash, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Visibility {
+    /// Visible to all agents
+    Public,
+    /// Visible to agents with shared capabilities
+    Team,
+    /// Only visible to author and task owner
+    Private,
 }
 
 /// Agent profile and capabilities
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AgentProfile {
-    /// Agent identifier (primary key)
+    /// Auto-increment primary key
+    pub id: i32,
+    /// Agent identifier (kebab-case format)
     pub name: String,
-    /// Human-readable display name
-    pub display_name: String,
-    /// Agent description
+    /// Agent description (up to 4000 chars)
     pub description: String,
     /// Agent capabilities
     pub capabilities: Vec<String>,
-    /// Agent specializations
-    pub specializations: Vec<String>,
+    /// Maximum number of concurrent tasks
+    pub max_concurrent_tasks: i32,
+    /// Number of active tasks
+    pub current_load: i32,
     /// Current agent status
     pub status: AgentStatus,
+    /// Working hours, preferences, etc.
+    pub preferences: serde_json::Value,
     /// Last heartbeat timestamp
     pub last_heartbeat: DateTime<Utc>,
+    /// Based on task completion quality
+    pub reputation_score: f64,
+    /// Deep expertise areas
+    pub specializations: Vec<String>,
     /// Agent registration timestamp
     pub registered_at: DateTime<Utc>,
-    /// Current load score (0.0 = idle, 1.0 = fully loaded)
-    pub load_score: f64,
+    /// Who registered this agent
+    pub registered_by: String,
 }
 
 /// Agent status enumeration
 #[derive(Debug, Clone, Copy, Hash, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum AgentStatus {
-    /// Agent is online and available
-    Online,
-    /// Agent is busy but can accept low-priority tasks
-    Busy,
-    /// Agent is offline or unavailable
+    /// Available for work
+    Idle,
+    /// Currently working
+    Active,
+    /// Stuck on current task
+    Blocked,
+    /// Missed heartbeats
+    Unresponsive,
+    /// Deliberately offline
     Offline,
-    /// Agent has encountered an error
-    Error,
+}
+
+/// Workflow step definition
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WorkflowStep {
+    /// Unique step identifier within workflow
+    pub id: String,
+    /// Step name
+    pub name: String,
+    /// Required capability for this step
+    pub required_capability: String,
+    /// Estimated duration in minutes
+    pub estimated_duration: Option<i32>,
+    /// Conditions for step completion
+    pub exit_conditions: Vec<String>,
+    /// Quality gate validation rules
+    pub validation_rules: Vec<String>,
+    /// Template for handoff message
+    pub handoff_template: Option<String>,
 }
 
 /// Workflow definition for structured task execution
@@ -372,16 +464,16 @@ pub struct WorkflowDefinition {
     pub name: String,
     /// Workflow description
     pub description: String,
-    /// Workflow steps (JSON array)
-    pub steps: serde_json::Value,
-    /// Required capabilities for workflow execution
-    pub required_capabilities: Vec<String>,
-    /// Workflow version
-    pub version: String,
+    /// Structured workflow steps
+    pub steps: Vec<WorkflowStep>,
+    /// Step transition rules as JSON
+    pub transitions: serde_json::Value,
+    /// Agent or human who created it
+    pub created_by: String,
+    /// Can be reused for similar tasks
+    pub is_template: bool,
     /// Creation timestamp
     pub created_at: DateTime<Utc>,
-    /// Whether workflow is active
-    pub active: bool,
 }
 
 /// System event for audit and monitoring
@@ -416,6 +508,19 @@ pub enum EventSeverity {
     Critical,
 }
 
+/// Work interruption tracking for time management
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WorkInterruption {
+    /// Interruption start time
+    pub started_at: DateTime<Utc>,
+    /// Interruption end time
+    pub ended_at: DateTime<Utc>,
+    /// Reason for interruption
+    pub reason: String,
+    /// Type of interruption
+    pub interruption_type: String,
+}
+
 /// Work session tracking for time management
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WorkSession {
@@ -433,6 +538,37 @@ pub struct WorkSession {
     pub notes: Option<String>,
     /// Productivity score (0.0-1.0)
     pub productivity_score: Option<f64>,
+    /// Work interruptions during session
+    pub interruptions: Vec<WorkInterruption>,
+}
+
+/// Handoff package for structured task transitions
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct HandoffPackage {
+    /// Auto-increment primary key
+    pub id: i32,
+    /// Task code being handed off
+    pub task_code: String,
+    /// Agent initiating handoff
+    pub from_agent_name: String,
+    /// Target capability for handoff
+    pub to_capability: String,
+    /// Handoff summary
+    pub summary: String,
+    /// Agent's confidence in handoff
+    pub confidence_score: f64,
+    /// Artifacts and references
+    pub artifacts: serde_json::Value,
+    /// Known limitations
+    pub known_limitations: Vec<String>,
+    /// Suggested next steps
+    pub next_steps_suggestion: String,
+    /// Handoff status
+    pub status: String,
+    /// Creation timestamp
+    pub created_at: DateTime<Utc>,
+    /// Completion timestamp
+    pub completed_at: Option<DateTime<Utc>>,
 }
 
 impl Task {
@@ -442,7 +578,7 @@ impl Task {
         code: String,
         name: String,
         description: String,
-        owner_agent_name: String,
+        owner_agent_name: Option<String>,
         state: TaskState,
         inserted_at: DateTime<Utc>,
         done_at: Option<DateTime<Utc>>,
@@ -477,9 +613,11 @@ impl Task {
             
             // Valid transitions from Created
             (Created, InProgress) => true,
+            (Created, PendingDecomposition) => true,
+            (Created, WaitingForDependency) => true,
             
             // Valid transitions from InProgress
-            (InProgress, Blocked | Review | Done) => true,
+            (InProgress, Blocked | Review | Done | PendingHandoff) => true,
             
             // Valid transitions from Blocked
             (Blocked, InProgress) => true,
@@ -489,6 +627,13 @@ impl Task {
             
             // Valid transitions from Done
             (Done, Archived) => true,
+            
+            // New MCP v2 transitions
+            (PendingDecomposition, Created) => true, // After decomposition
+            (PendingHandoff, InProgress) => true, // When handoff accepted
+            (_, Quarantined) => true, // Any state can be quarantined
+            (Quarantined, Created) => true, // Reset after human review
+            (WaitingForDependency, Created) => true, // When dependencies met
             
             // No valid transitions from Archived
             (Archived, _) => false,
@@ -508,6 +653,10 @@ impl std::fmt::Display for TaskState {
             TaskState::Review => write!(f, "Review"),
             TaskState::Done => write!(f, "Done"),
             TaskState::Archived => write!(f, "Archived"),
+            TaskState::PendingDecomposition => write!(f, "PendingDecomposition"),
+            TaskState::PendingHandoff => write!(f, "PendingHandoff"),
+            TaskState::Quarantined => write!(f, "Quarantined"),
+            TaskState::WaitingForDependency => write!(f, "WaitingForDependency"),
         }
     }
 }
@@ -523,7 +672,7 @@ mod tests {
             code: "TEST-01".to_string(),
             name: "Test Task".to_string(),
             description: "Test description".to_string(),
-            owner_agent_name: "test-agent".to_string(),
+            owner_agent_name: Some("test-agent".to_string()),
             state: TaskState::Created,
             inserted_at: Utc::now(),
             done_at: None,
@@ -593,7 +742,7 @@ mod tests {
             code: "TEST-01".to_string(),
             name: "Test Task".to_string(),
             description: "Test description".to_string(),
-            owner_agent_name: "test-agent".to_string(),
+            owner_agent_name: Some("test-agent".to_string()),
             state: TaskState::InProgress,
             inserted_at: Utc::now(),
             done_at: None,

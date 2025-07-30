@@ -146,16 +146,16 @@ impl TaskRepository for MockTaskRepository {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let now = Utc::now();
         
-        let new_task = Task {
+        let new_task = Task::new(
             id,
-            code: task.code,
-            name: task.name,
-            description: task.description,
-            owner_agent_name: task.owner_agent_name,
-            state: TaskState::Created,
-            inserted_at: now,
-            done_at: None,
-        };
+            task.code,
+            task.name,
+            task.description,
+            task.owner_agent_name,
+            TaskState::Created,
+            now,
+            None,
+        );
         
         // Store in HashMap
         self.tasks.lock().insert(id, new_task.clone());
@@ -180,7 +180,7 @@ impl TaskRepository for MockTaskRepository {
             task.description = description;
         }
         if let Some(owner) = updates.owner_agent_name {
-            task.owner_agent_name = owner;
+            task.owner_agent_name = Some(owner);
         }
         
         Ok(task.clone())
@@ -241,7 +241,7 @@ impl TaskRepository for MockTaskRepository {
             .filter(|task| {
                 // Filter by owner
                 if let Some(ref owner) = filter.owner {
-                    if task.owner_agent_name != *owner {
+                    if task.owner_agent_name.as_deref() != Some(owner) {
                         return false;
                     }
                 }
@@ -303,7 +303,7 @@ impl TaskRepository for MockTaskRepository {
         let mut tasks = self.tasks.lock();
         let task = tasks.get_mut(&id).ok_or_else(|| TaskError::NotFound(id.to_string()))?;
         
-        task.owner_agent_name = new_owner.to_string();
+        task.owner_agent_name = Some(new_owner.to_string());
         
         Ok(task.clone())
     }
@@ -356,7 +356,9 @@ impl TaskRepository for MockTaskRepository {
         
         // Count tasks by owner
         for task in tasks.values() {
-            *stats.tasks_by_owner.entry(task.owner_agent_name.clone()).or_insert(0) += 1;
+            if let Some(ref owner) = task.owner_agent_name {
+                *stats.tasks_by_owner.entry(owner.clone()).or_insert(0) += 1;
+            }
         }
         
         // Find latest timestamps
@@ -369,5 +371,106 @@ impl TaskRepository for MockTaskRepository {
             .max();
         
         Ok(stats)
+    }
+
+    // MCP v2 Advanced Multi-Agent Features
+
+    async fn discover_work(&self, agent_name: &str, capabilities: &[String], max_tasks: u32) -> Result<Vec<Task>> {
+        self.record_call_with_params("discover_work", &format!("agent={}, max_tasks={}", agent_name, max_tasks));
+        
+        // Check for error injection
+        self.check_error_injection()?;
+        
+        let tasks = self.tasks.lock();
+        let mut available_tasks: Vec<Task> = tasks.values()
+            .filter(|task| {
+                // Task is available for work (Created or InProgress without owner)
+                matches!(task.state, TaskState::Created) || 
+                (matches!(task.state, TaskState::InProgress) && task.owner_agent_name.is_none())
+            })
+            .filter(|task| {
+                // Simple capability matching - if task has no required capabilities or agent has all required
+                task.required_capabilities.is_empty() || 
+                task.required_capabilities.iter().all(|cap| capabilities.contains(cap))
+            })
+            .cloned()
+            .collect();
+        
+        // Sort by priority score (highest first)
+        available_tasks.sort_by(|a, b| b.priority_score.partial_cmp(&a.priority_score).unwrap_or(std::cmp::Ordering::Equal));
+        
+        // Limit results
+        available_tasks.truncate(max_tasks as usize);
+        
+        Ok(available_tasks)
+    }
+
+    async fn claim_task(&self, task_id: i32, agent_name: &str) -> Result<Task> {
+        self.record_call_with_params("claim_task", &format!("task_id={}, agent={}", task_id, agent_name));
+        
+        // Check for error injection
+        self.check_error_injection()?;
+        
+        let mut tasks = self.tasks.lock();
+        let task = tasks.get_mut(&task_id).ok_or_else(|| TaskError::NotFound(task_id.to_string()))?;
+        
+        // Check if already claimed
+        if task.owner_agent_name.is_some() && task.owner_agent_name.as_deref() != Some(agent_name) {
+            return Err(TaskError::AlreadyClaimed(task_id, task.owner_agent_name.clone().unwrap_or_default()));
+        }
+        
+        // Claim the task
+        task.owner_agent_name = Some(agent_name.to_string());
+        
+        Ok(task.clone())
+    }
+
+    async fn release_task(&self, task_id: i32, agent_name: &str) -> Result<Task> {
+        self.record_call_with_params("release_task", &format!("task_id={}, agent={}", task_id, agent_name));
+        
+        // Check for error injection
+        self.check_error_injection()?;
+        
+        let mut tasks = self.tasks.lock();
+        let task = tasks.get_mut(&task_id).ok_or_else(|| TaskError::NotFound(task_id.to_string()))?;
+        
+        // Check if agent owns the task
+        if task.owner_agent_name.as_deref() != Some(agent_name) {
+            return Err(TaskError::NotOwned(agent_name.to_string(), task_id));
+        }
+        
+        // Release the task
+        task.owner_agent_name = None;
+        
+        Ok(task.clone())
+    }
+
+    async fn start_work_session(&self, task_id: i32, agent_name: &str) -> Result<i32> {
+        self.record_call_with_params("start_work_session", &format!("task_id={}, agent={}", task_id, agent_name));
+        
+        // Check for error injection
+        self.check_error_injection()?;
+        
+        let tasks = self.tasks.lock();
+        if !tasks.contains_key(&task_id) {
+            return Err(TaskError::NotFound(task_id.to_string()));
+        }
+        
+        // Return task_id as session_id for simplicity
+        Ok(task_id)
+    }
+
+    async fn end_work_session(&self, session_id: i32, _notes: Option<String>, _productivity_score: Option<f64>) -> Result<()> {
+        self.record_call_with_params("end_work_session", &format!("session_id={}", session_id));
+        
+        // Check for error injection
+        self.check_error_injection()?;
+        
+        let tasks = self.tasks.lock();
+        if !tasks.contains_key(&session_id) {
+            return Err(TaskError::SessionNotFound(session_id));
+        }
+        
+        Ok(())
     }
 }

@@ -23,16 +23,16 @@ impl TaskBuilder {
     /// Create new builder with default values
     pub fn new() -> Self {
         Self {
-            task: Task {
-                id: 1,
-                code: "TEST-001".to_string(),
-                name: "Test Task".to_string(),
-                description: "A test task".to_string(),
-                owner_agent_name: "test-agent".to_string(),
-                state: TaskState::Created,
-                inserted_at: Utc::now(),
-                done_at: None,
-            },
+            task: Task::new(
+                1,
+                "TEST-001".to_string(),
+                "Test Task".to_string(),
+                "A test task".to_string(),
+                Some("test-agent".to_string()),
+                TaskState::Created,
+                Utc::now(),
+                None,
+            ),
         }
     }
 
@@ -72,7 +72,7 @@ impl TaskBuilder {
 
     /// Set task owner
     pub fn with_owner(mut self, owner: impl Into<String>) -> Self {
-        self.task.owner_agent_name = owner.into();
+        self.task.owner_agent_name = Some(owner.into());
         self
     }
 
@@ -109,12 +109,12 @@ impl NewTaskBuilder {
     /// Create new builder with default values
     pub fn new() -> Self {
         Self {
-            new_task: NewTask {
-                code: "NEW-001".to_string(),
-                name: "New Test Task".to_string(),
-                description: "A new test task".to_string(),
-                owner_agent_name: "test-agent".to_string(),
-            },
+            new_task: NewTask::new(
+                "NEW-001".to_string(),
+                "New Test Task".to_string(),
+                "A new test task".to_string(),
+                Some("test-agent".to_string()),
+            ),
         }
     }
 
@@ -138,7 +138,7 @@ impl NewTaskBuilder {
 
     /// Set owner
     pub fn with_owner_agent_name(mut self, owner: impl Into<String>) -> Self {
-        self.new_task.owner_agent_name = owner.into();
+        self.new_task.owner_agent_name = Some(owner.into());
         self
     }
 
