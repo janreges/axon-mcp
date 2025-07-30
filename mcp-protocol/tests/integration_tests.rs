@@ -221,6 +221,7 @@ impl TaskRepository for MockRepository {
         let task = tasks.iter_mut().find(|t| t.id == task_id)
             .ok_or_else(|| TaskError::not_found_id(task_id))?;
         
+        task.owner_agent_name = None;
         task.state = TaskState::Created;
         
         Ok(task.clone())

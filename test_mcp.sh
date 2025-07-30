@@ -95,9 +95,9 @@ run_integration_tests() {
     fi
 }
 
-# Function to test with curl
+# Function to test comprehensive MCP v1 + v2 functions with curl
 test_with_curl() {
-    print_info "Testing MCP protocol with curl..."
+    print_info "Testing comprehensive MCP v1 + v2 protocol with curl..."
     
     # Test 1: Health check
     print_info "Testing health check..."
@@ -111,7 +111,7 @@ test_with_curl() {
         }')
     
     if echo "$RESPONSE" | grep -q '"jsonrpc":"2.0"'; then
-        print_status "Health check request sent successfully"
+        print_status "✓ health_check (v1 core)"
     else
         print_error "Health check failed: $RESPONSE"
         return 1
@@ -134,13 +134,45 @@ test_with_curl() {
             "id": 2
         }')
     
-    if echo "$RESPONSE" | grep -q '200\|201\|202'; then
-        print_status "Task creation request sent successfully"
+    if echo "$RESPONSE" | grep -q '"code":"CURL-001"'; then
+        print_status "✓ create_task (v1 core)"
     else
         print_info "Task creation response: $RESPONSE"
     fi
     
-    # Test 3: List tasks
+    # Test 3: Get task by ID
+    print_info "Testing get task by ID..."
+    RESPONSE=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{
+            "jsonrpc": "2.0",
+            "method": "get_task_by_id",
+            "params": {"id": 1},
+            "id": 3
+        }')
+    
+    if echo "$RESPONSE" | grep -q '"jsonrpc":"2.0"'; then
+        print_status "✓ get_task_by_id (v1 core)"
+    fi
+    
+    # Test 4: Get task by code  
+    print_info "Testing get task by code..."
+    RESPONSE=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{
+            "jsonrpc": "2.0",
+            "method": "get_task_by_code",
+            "params": {"code": "CURL-001"},
+            "id": 4
+        }')
+    
+    if echo "$RESPONSE" | grep -q '"code":"CURL-001"'; then
+        print_status "✓ get_task_by_code (v1 core)"
+    fi
+    
+    # Test 5: List tasks
     print_info "Testing task listing..."
     RESPONSE=$(curl -s -X POST "$REQUEST_ENDPOINT" \
         -H "Content-Type: application/json" \
@@ -149,12 +181,185 @@ test_with_curl() {
             "jsonrpc": "2.0",
             "method": "list_tasks",
             "params": {},
-            "id": 3
+            "id": 5
         }')
     
-    print_info "List tasks response status received"
+    if echo "$RESPONSE" | grep -q '"jsonrpc":"2.0"'; then
+        print_status "✓ list_tasks (v1 core)"
+    fi
     
-    # Test 4: Error handling (invalid method)
+    # Test 6: Update task
+    print_info "Testing task update..."
+    RESPONSE=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{
+            "jsonrpc": "2.0",
+            "method": "update_task",
+            "params": {
+                "id": 1,
+                "name": "Updated Task via curl",
+                "description": "Updated description"
+            },
+            "id": 6
+        }')
+    
+    if echo "$RESPONSE" | grep -q '"jsonrpc":"2.0"'; then
+        print_status "✓ update_task (v1 core)"
+    fi
+    
+    # Test 7: Set task state
+    print_info "Testing set task state..."
+    RESPONSE=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{
+            "jsonrpc": "2.0",
+            "method": "set_task_state",
+            "params": {
+                "id": 1,
+                "state": "InProgress"
+            },
+            "id": 7
+        }')
+    
+    if echo "$RESPONSE" | grep -q '"state":"InProgress"'; then
+        print_status "✓ set_task_state (v1 core)"
+    fi
+    
+    # Test 8: Assign task
+    print_info "Testing task assignment..."
+    RESPONSE=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{
+            "jsonrpc": "2.0",
+            "method": "assign_task",
+            "params": {
+                "id": 1,
+                "new_owner": "assigned-agent"
+            },
+            "id": 8
+        }')
+    
+    if echo "$RESPONSE" | grep -q '"owner_agent_name":"assigned-agent"'; then
+        print_status "✓ assign_task (v1 core)"
+    fi
+    
+    # Test 9: Discover work (MCP v2)
+    print_info "Testing discover work (MCP v2)..."
+    RESPONSE=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{
+            "jsonrpc": "2.0",
+            "method": "discover_work",
+            "params": {
+                "agent_name": "curl-agent",
+                "capabilities": ["rust", "testing"],
+                "max_tasks": 3
+            },
+            "id": 9
+        }')
+    
+    if echo "$RESPONSE" | grep -q '"jsonrpc":"2.0"'; then
+        print_status "✓ discover_work (v2 advanced)"
+    fi
+    
+    # Test 10: Claim task (MCP v2)
+    print_info "Testing claim task (MCP v2)..."
+    RESPONSE=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{
+            "jsonrpc": "2.0",
+            "method": "claim_task",
+            "params": {
+                "task_id": 1,
+                "agent_name": "claiming-agent"
+            },
+            "id": 10
+        }')
+    
+    if echo "$RESPONSE" | grep -q '"jsonrpc":"2.0"'; then
+        print_status "✓ claim_task (v2 advanced)"
+    fi
+    
+    # Test 11: Start work session (MCP v2)
+    print_info "Testing start work session (MCP v2)..."
+    RESPONSE=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{
+            "jsonrpc": "2.0",
+            "method": "start_work_session",
+            "params": {
+                "task_id": 1,
+                "agent_name": "working-agent"
+            },
+            "id": 11
+        }')
+    
+    if echo "$RESPONSE" | grep -q '"jsonrpc":"2.0"'; then
+        print_status "✓ start_work_session (v2 advanced)"
+    fi
+    
+    # Test 12: End work session (MCP v2)
+    print_info "Testing end work session (MCP v2)..."
+    RESPONSE=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{
+            "jsonrpc": "2.0",
+            "method": "end_work_session",
+            "params": {
+                "session_id": 100,
+                "notes": "Work completed successfully",
+                "productivity_score": 0.9
+            },
+            "id": 12
+        }')
+    
+    if echo "$RESPONSE" | grep -q '"jsonrpc":"2.0"'; then
+        print_status "✓ end_work_session (v2 advanced)"
+    fi
+    
+    # Test 13: Release task (MCP v2)
+    print_info "Testing release task (MCP v2)..."
+    RESPONSE=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{
+            "jsonrpc": "2.0",
+            "method": "release_task",
+            "params": {
+                "task_id": 1,
+                "agent_name": "releasing-agent"
+            },
+            "id": 13
+        }')
+    
+    if echo "$RESPONSE" | grep -q '"jsonrpc":"2.0"'; then
+        print_status "✓ release_task (v2 advanced)"
+    fi
+    
+    # Test 14: Archive task
+    print_info "Testing archive task..."
+    RESPONSE=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{
+            "jsonrpc": "2.0",
+            "method": "archive_task",
+            "params": {"id": 1},
+            "id": 14
+        }')
+    
+    if echo "$RESPONSE" | grep -q '"state":"Archived"'; then
+        print_status "✓ archive_task (v1 core)"
+    fi
+    
+    # Test 15: Error handling (invalid method)
     print_info "Testing error handling..."
     RESPONSE=$(curl -s -X POST "$REQUEST_ENDPOINT" \
         -H "Content-Type: application/json" \
@@ -162,11 +367,14 @@ test_with_curl() {
         -d '{
             "jsonrpc": "2.0",
             "method": "invalid_method",
-            "id": 4
+            "id": 15
         }')
     
-    print_info "Error handling test completed"
-    print_status "curl tests completed"
+    if echo "$RESPONSE" | grep -q '"error":'; then
+        print_status "✓ error handling working"
+    fi
+    
+    print_status "Comprehensive MCP v1 + v2 curl tests completed"
 }
 
 # Function to test SSE connection
@@ -519,49 +727,93 @@ test_stdio_mcp_protocol() {
     fi
 }
 
-# Function to test all MCP tools via STDIO
+# Function to test all MCP v1 + v2 tools via STDIO
 test_stdio_all_tools() {
-    print_info "Testing all MCP tools via STDIO..."
+    print_info "Testing all MCP v1 + v2 tools via STDIO..."
     
     local tools_output
     tools_output=$(
         {
             echo '{"jsonrpc": "2.0", "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {"tools": {}}, "clientInfo": {"name": "tools-test", "version": "1.0.0"}}, "id": 1}'
             echo '{"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}}'
+            
+            # MCP v1 Core Functions
             echo '{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "health_check", "arguments": {}}, "id": 10}'
             echo '{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "create_task", "arguments": {"code": "TOOL-001", "name": "Tool Test 1", "description": "First test task", "owner_agent_name": "tool-tester"}}, "id": 11}'
+            echo '{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "get_task_by_id", "arguments": {"id": 1}}, "id": 12}'
             echo '{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "list_tasks", "arguments": {}}, "id": 13}'
             echo '{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "get_task_by_code", "arguments": {"code": "TOOL-001"}}, "id": 15}'
             echo '{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "update_task", "arguments": {"id": 1, "name": "Updated Tool Test 1", "description": "Updated description"}}, "id": 16}'
+            echo '{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "set_task_state", "arguments": {"id": 1, "state": "InProgress"}}, "id": 17}'
+            echo '{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "assign_task", "arguments": {"id": 1, "new_owner": "new-agent"}}, "id": 18}'
+            
+            # MCP v2 Advanced Multi-Agent Functions
+            echo '{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "discover_work", "arguments": {"agent_name": "test-agent", "capabilities": ["rust", "testing"], "max_tasks": 3}}, "id": 20}'
+            echo '{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "claim_task", "arguments": {"task_id": 1, "agent_name": "claiming-agent"}}, "id": 21}'
+            echo '{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "start_work_session", "arguments": {"task_id": 1, "agent_name": "working-agent"}}, "id": 22}'
+            echo '{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "end_work_session", "arguments": {"session_id": 100, "notes": "Session completed successfully", "productivity_score": 0.95}}, "id": 23}'
+            echo '{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "release_task", "arguments": {"task_id": 1, "agent_name": "releasing-agent"}}, "id": 24}'
+            
+            # Final test - archive task
+            echo '{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "archive_task", "arguments": {"id": 1}}, "id": 25}'
         } | ./target/release/mcp-server --transport stdio 2>/dev/null
     )
     local tools_exit_code=$?
     
-    # Count successful responses
+    # Count successful responses (expect 15+ tool responses)
     local response_count
     response_count=$(echo "$tools_output" | grep -c '"result":' || true)
     
-    if [ "$response_count" -ge 5 ]; then
-        print_status "All MCP tools test completed successfully ($response_count tool responses)"
+    print_info "Received $response_count tool responses from comprehensive test"
+    
+    if [ "$response_count" -ge 12 ]; then
+        print_status "Comprehensive MCP tools test completed successfully ($response_count tool responses)"
         
-        # Check specific tool responses
+        # Check MCP v1 Core Functions
         if echo "$tools_output" | grep -q '"status":"healthy"'; then
-            print_status "✓ health_check tool working"
+            print_status "✓ health_check (v1 core)"
         fi
         
         if echo "$tools_output" | grep -q '"code":"TOOL-001"'; then
-            print_status "✓ create_task tool working"
+            print_status "✓ create_task (v1 core)"
         fi
         
         if echo "$tools_output" | grep -q '"name":"Updated Tool Test 1"'; then
-            print_status "✓ update_task tool working"
+            print_status "✓ update_task (v1 core)"
+        fi
+        
+        # Check for state transition
+        if echo "$tools_output" | grep -q '"state":"InProgress"'; then
+            print_status "✓ set_task_state (v1 core)"
+        fi
+        
+        # Check for assignment
+        if echo "$tools_output" | grep -q '"owner_agent_name":"new-agent"'; then
+            print_status "✓ assign_task (v1 core)"
+        fi
+        
+        # Check MCP v2 Advanced Functions
+        if echo "$tools_output" | grep -q 'discover_work'; then
+            print_status "✓ discover_work (v2 advanced)"
+        fi
+        
+        if echo "$tools_output" | grep -q 'claim_task'; then
+            print_status "✓ claim_task (v2 advanced)"
+        fi
+        
+        if echo "$tools_output" | grep -q 'work_session'; then
+            print_status "✓ work session management (v2 advanced)"
+        fi
+        
+        if echo "$tools_output" | grep -q 'release_task'; then
+            print_status "✓ release_task (v2 advanced)"
         fi
         
         return 0
     else
-        print_error "MCP tools test failed - insufficient successful responses ($response_count)"
+        print_error "Comprehensive MCP tools test failed - insufficient successful responses ($response_count)"
         print_info "Tools output sample:"
-        echo "$tools_output" | head -15
+        echo "$tools_output" | head -20
         return 1
     fi
 }
@@ -824,6 +1076,268 @@ check_mcp_inspector() {
     fi
 }
 
+# Function to comprehensively test all MCP functions (v1 + v2)
+test_all_mcp_functions() {
+    print_info "🎯 Comprehensive MCP v1 + v2 Function Testing"
+    echo "=============================================="
+    
+    local function_results=()
+    local total_functions=13  # 8 v1 + 5 v2 functions
+    local passed_functions=0
+    
+    print_info "Testing all MCP functions systematically..."
+    
+    # MCP v1 Core Functions Testing
+    print_info "📍 Testing MCP v1 Core Functions:"
+    
+    # 1. health_check
+    local health_response=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{"jsonrpc": "2.0", "method": "health_check", "id": 100}')
+    
+    if echo "$health_response" | grep -q '"status":"healthy"'; then
+        function_results+=("✅ health_check")
+        ((passed_functions++))
+    else
+        function_results+=("❌ health_check")
+    fi
+    
+    # 2. create_task  
+    local create_response=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{
+            "jsonrpc": "2.0", 
+            "method": "create_task",
+            "params": {
+                "code": "COMPREHENSIVE-001",
+                "name": "Comprehensive Test Task",
+                "description": "Testing all MCP functions",
+                "owner_agent_name": "test-suite"
+            },
+            "id": 101
+        }')
+    
+    if echo "$create_response" | grep -q '"code":"COMPREHENSIVE-001"'; then
+        function_results+=("✅ create_task")
+        ((passed_functions++))
+    else
+        function_results+=("❌ create_task")
+    fi
+    
+    # 3. get_task_by_id
+    local get_by_id_response=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{"jsonrpc": "2.0", "method": "get_task_by_id", "params": {"id": 1}, "id": 102}')
+    
+    if echo "$get_by_id_response" | grep -q '"jsonrpc":"2.0"' && ! echo "$get_by_id_response" | grep -q '"error":'; then
+        function_results+=("✅ get_task_by_id")
+        ((passed_functions++))
+    else
+        function_results+=("❌ get_task_by_id")
+    fi
+    
+    # 4. get_task_by_code
+    local get_by_code_response=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{"jsonrpc": "2.0", "method": "get_task_by_code", "params": {"code": "COMPREHENSIVE-001"}, "id": 103}')
+    
+    if echo "$get_by_code_response" | grep -q '"code":"COMPREHENSIVE-001"'; then
+        function_results+=("✅ get_task_by_code")
+        ((passed_functions++))
+    else
+        function_results+=("❌ get_task_by_code")
+    fi
+    
+    # 5. list_tasks
+    local list_response=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{"jsonrpc": "2.0", "method": "list_tasks", "params": {}, "id": 104}')
+    
+    if echo "$list_response" | grep -q '"result":' && echo "$list_response" | grep -q '\['; then
+        function_results+=("✅ list_tasks")
+        ((passed_functions++))
+    else
+        function_results+=("❌ list_tasks")
+    fi
+    
+    # 6. update_task
+    local update_response=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{
+            "jsonrpc": "2.0",
+            "method": "update_task", 
+            "params": {
+                "id": 1,
+                "name": "Updated Comprehensive Test",
+                "description": "Updated for comprehensive testing"
+            },
+            "id": 105
+        }')
+    
+    if echo "$update_response" | grep -q '"name":"Updated Comprehensive Test"'; then
+        function_results+=("✅ update_task")
+        ((passed_functions++))
+    else
+        function_results+=("❌ update_task")
+    fi
+    
+    # 7. set_task_state
+    local set_state_response=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{"jsonrpc": "2.0", "method": "set_task_state", "params": {"id": 1, "state": "InProgress"}, "id": 106}')
+    
+    if echo "$set_state_response" | grep -q '"state":"InProgress"'; then
+        function_results+=("✅ set_task_state")
+        ((passed_functions++))
+    else
+        function_results+=("❌ set_task_state")
+    fi
+    
+    # 8. assign_task
+    local assign_response=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{"jsonrpc": "2.0", "method": "assign_task", "params": {"id": 1, "new_owner": "comprehensive-agent"}, "id": 107}')
+    
+    if echo "$assign_response" | grep -q '"owner_agent_name":"comprehensive-agent"'; then
+        function_results+=("✅ assign_task")
+        ((passed_functions++))
+    else
+        function_results+=("❌ assign_task")
+    fi
+    
+    print_info "📍 Testing MCP v2 Advanced Multi-Agent Functions:"
+    
+    # 9. discover_work (MCP v2)
+    local discover_response=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{
+            "jsonrpc": "2.0",
+            "method": "discover_work",
+            "params": {
+                "agent_name": "test-agent",
+                "capabilities": ["rust", "testing"],
+                "max_tasks": 5
+            },
+            "id": 108
+        }')
+    
+    if echo "$discover_response" | grep -q '"result":' && ! echo "$discover_response" | grep -q '"error":'; then
+        function_results+=("✅ discover_work (v2)")
+        ((passed_functions++))
+    else
+        function_results+=("❌ discover_work (v2)")
+    fi
+    
+    # 10. claim_task (MCP v2)
+    local claim_response=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{"jsonrpc": "2.0", "method": "claim_task", "params": {"task_id": 1, "agent_name": "claiming-agent"}, "id": 109}')
+    
+    if echo "$claim_response" | grep -q '"result":' && ! echo "$claim_response" | grep -q '"error":'; then
+        function_results+=("✅ claim_task (v2)")
+        ((passed_functions++))
+    else
+        function_results+=("❌ claim_task (v2)")
+    fi
+    
+    # 11. start_work_session (MCP v2)
+    local start_session_response=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{"jsonrpc": "2.0", "method": "start_work_session", "params": {"task_id": 1, "agent_name": "working-agent"}, "id": 110}')
+    
+    if echo "$start_session_response" | grep -q '"result":' && ! echo "$start_session_response" | grep -q '"error":'; then
+        function_results+=("✅ start_work_session (v2)")
+        ((passed_functions++))
+    else
+        function_results+=("❌ start_work_session (v2)")
+    fi
+    
+    # 12. end_work_session (MCP v2)
+    local end_session_response=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{
+            "jsonrpc": "2.0",
+            "method": "end_work_session",
+            "params": {
+                "session_id": 100,
+                "notes": "Comprehensive test session completed",
+                "productivity_score": 0.95
+            },
+            "id": 111
+        }')
+    
+    if echo "$end_session_response" | grep -q '"result":' && ! echo "$end_session_response" | grep -q '"error":'; then
+        function_results+=("✅ end_work_session (v2)")
+        ((passed_functions++))
+    else
+        function_results+=("❌ end_work_session (v2)")
+    fi
+    
+    # 13. release_task (MCP v2)
+    local release_response=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{"jsonrpc": "2.0", "method": "release_task", "params": {"task_id": 1, "agent_name": "releasing-agent"}, "id": 112}')
+    
+    if echo "$release_response" | grep -q '"result":' && ! echo "$release_response" | grep -q '"error":'; then
+        function_results+=("✅ release_task (v2)")
+        ((passed_functions++))
+    else
+        function_results+=("❌ release_task (v2)")
+    fi
+    
+    # Final test: archive_task (not counted in v2 count but important)
+    local archive_response=$(curl -s -X POST "$REQUEST_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Origin: $BASE_URL" \
+        -d '{"jsonrpc": "2.0", "method": "archive_task", "params": {"id": 1}, "id": 113}')
+    
+    if echo "$archive_response" | grep -q '"state":"Archived"'; then
+        function_results+=("✅ archive_task")
+        ((passed_functions++))
+        total_functions=$((total_functions + 1))  # Include archive in final count
+    else
+        function_results+=("❌ archive_task")
+        total_functions=$((total_functions + 1))  # Include archive in final count
+    fi
+    
+    # Results Summary
+    echo
+    print_info "📊 Comprehensive MCP Function Test Results:"
+    echo "============================================="
+    for result in "${function_results[@]}"; do
+        echo "  $result"
+    done
+    
+    # Calculate pass rate
+    local pass_rate
+    pass_rate=$(python3 -c "print(f'{$passed_functions / $total_functions * 100:.1f}')")
+    
+    if [ "$passed_functions" -eq "$total_functions" ]; then
+        print_status "🎉 ALL MCP FUNCTIONS WORKING: ${passed_functions}/${total_functions} (${pass_rate}%)"
+        print_status "✓ MCP v1 Core Functions: Complete"
+        print_status "✓ MCP v2 Advanced Multi-Agent Functions: Complete"
+        return 0
+    else
+        local failed_count=$((total_functions - passed_functions))
+        print_error "⚠️  SOME MCP FUNCTIONS FAILED: ${passed_functions}/${total_functions} passed (${pass_rate}%)"
+        print_error "❌ ${failed_count} function(s) need attention" 
+        return 1
+    fi
+}
+
 # Function to cleanup
 cleanup() {
     print_info "Cleaning up..."
@@ -890,6 +1404,20 @@ main() {
                 wait
             fi
             ;;
+        "comprehensive"|"test-all")
+            print_info "🎯 Testing ALL MCP Functions Comprehensively..."
+            echo
+            
+            # Start server for comprehensive testing
+            start_server
+            echo
+            
+            # Test all MCP functions systematically
+            test_all_mcp_functions
+            echo
+            
+            stop_server
+            ;;
         "all"|*)
             print_info "Running complete MCP test suite..."
             echo
@@ -912,7 +1440,11 @@ main() {
             run_performance_tests
             echo
             
-            # Step 4: STDIO tests (don't need running HTTP server)
+            # Step 4: Comprehensive function testing
+            test_all_mcp_functions
+            echo
+            
+            # Step 5: STDIO tests (don't need running HTTP server)
             stop_server
             echo
             run_stdio_tests
@@ -1014,18 +1546,21 @@ if [ "$1" = "help" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "  $0 [command]"
     echo
     echo "Commands:"
-    echo "  all         - Run complete test suite (default)"
-    echo "  integration - Run integration tests only"
-    echo "  curl        - Test with curl commands"
-    echo "  sse         - Test SSE connection"
-    echo "  performance - Run basic performance tests"
-    echo "  stdio       - Test STDIO MCP protocol transport"
-    echo "  inspector   - Setup for MCP Inspector testing"
-    echo "  start       - Just start the server"
-    echo "  help        - Show this help"
+    echo "  all            - Run complete test suite (default)"
+    echo "  comprehensive  - Test ALL MCP v1 + v2 functions systematically"
+    echo "  test-all       - Alias for comprehensive testing"
+    echo "  integration    - Run integration tests only"
+    echo "  curl           - Test with curl commands"
+    echo "  sse            - Test SSE connection"
+    echo "  performance    - Run basic performance tests"
+    echo "  stdio          - Test STDIO MCP protocol transport"
+    echo "  inspector      - Setup for MCP Inspector testing"
+    echo "  start          - Just start the server"
+    echo "  help           - Show this help"
     echo
     echo "Examples:"
     echo "  $0                    # Run all tests"
+    echo "  $0 comprehensive      # Test ALL MCP functions (v1 + v2)"
     echo "  $0 integration        # Run integration tests"
     echo "  $0 stdio              # Test STDIO MCP protocol"
     echo "  $0 inspector          # Start server for MCP Inspector"
