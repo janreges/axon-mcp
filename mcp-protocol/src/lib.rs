@@ -46,12 +46,14 @@
 //! }
 //! ```
 
+pub mod auth;
 pub mod error;
 pub mod handler;
 pub mod serialization;
 pub mod server;
 
 // Re-export key types for easier usage
+pub use auth::{McpAuth, TokenValidation, McpScope};
 pub use error::*;
 pub use handler::McpTaskHandler;
 pub use serialization::*;

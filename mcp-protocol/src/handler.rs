@@ -9,6 +9,7 @@ use crate::serialization::*;
 use async_trait::async_trait;
 
 /// MCP Task Handler that bridges MCP protocol with TaskRepository
+#[derive(Clone)]
 pub struct McpTaskHandler<R> {
     repository: Arc<R>,
 }
