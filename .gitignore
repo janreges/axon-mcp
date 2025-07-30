@@ -24,6 +24,7 @@ Cargo.lock
 **/test-output/
 **/bench-results/
 **/debug/
+.claude/
 
 # Release artifacts (except the release directory itself)
 release/*.tar.gz
