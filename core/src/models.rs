@@ -22,12 +22,20 @@ use serde::{Deserialize, Serialize};
 ///     state: TaskState::Created,
 ///     inserted_at: Utc::now(),
 ///     done_at: None,
+///     workflow_definition_id: None,
+///     workflow_cursor: None,
+///     priority_score: 5.0,
+///     parent_task_id: None,
+///     failure_count: 0,
+///     required_capabilities: vec!["auth".to_string(), "jwt".to_string()],
+///     estimated_effort: Some(120), // 2 hours
+///     confidence_threshold: 0.8,
 /// };
 /// 
 /// // Check if task can transition to InProgress
 /// assert!(task.can_transition_to(TaskState::InProgress));
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Task {
     /// Auto-increment primary key
     pub id: i32,
@@ -45,6 +53,24 @@ pub struct Task {
     pub inserted_at: DateTime<Utc>,
     /// Completion timestamp
     pub done_at: Option<DateTime<Utc>>,
+    
+    // MCP v2 Extensions
+    /// Workflow definition ID for structured task execution
+    pub workflow_definition_id: Option<i32>,
+    /// Current position in workflow execution
+    pub workflow_cursor: Option<String>,
+    /// Task priority score (0.0 = lowest, 10.0 = highest)
+    pub priority_score: f64,
+    /// Parent task for hierarchical task structures
+    pub parent_task_id: Option<i32>,
+    /// Number of times this task has failed
+    pub failure_count: i32,
+    /// Required agent capabilities for task execution
+    pub required_capabilities: Vec<String>,
+    /// Estimated effort in minutes
+    pub estimated_effort: Option<i32>,
+    /// Confidence threshold for task completion (0.0-1.0)
+    pub confidence_threshold: f64,
 }
 
 /// Task lifecycle states defining the progression of work.
@@ -111,6 +137,54 @@ pub struct NewTask {
     pub description: String,
     /// Assigned agent identifier
     pub owner_agent_name: String,
+    
+    // MCP v2 Extensions
+    /// Workflow definition ID for structured task execution
+    pub workflow_definition_id: Option<i32>,
+    /// Task priority score (0.0 = lowest, 10.0 = highest)
+    #[serde(default = "default_priority_score")]
+    pub priority_score: f64,
+    /// Parent task for hierarchical task structures
+    pub parent_task_id: Option<i32>,
+    /// Required agent capabilities for task execution
+    #[serde(default)]
+    pub required_capabilities: Vec<String>,
+    /// Estimated effort in minutes
+    pub estimated_effort: Option<i32>,
+    /// Confidence threshold for task completion (0.0-1.0)
+    #[serde(default = "default_confidence_threshold")]
+    pub confidence_threshold: f64,
+}
+
+fn default_priority_score() -> f64 {
+    5.0 // Medium priority
+}
+
+fn default_confidence_threshold() -> f64 {
+    0.8 // 80% confidence threshold
+}
+
+impl NewTask {
+    /// Create a new NewTask with default MCP v2 values (for backward compatibility)
+    pub fn new(
+        code: String,
+        name: String,
+        description: String,
+        owner_agent_name: String,
+    ) -> Self {
+        Self {
+            code,
+            name,
+            description,
+            owner_agent_name,
+            workflow_definition_id: None,
+            priority_score: 5.0,
+            parent_task_id: None,
+            required_capabilities: vec![],
+            estimated_effort: None,
+            confidence_threshold: 0.8,
+        }
+    }
 }
 
 /// Data transfer object for updating existing tasks
@@ -122,6 +196,43 @@ pub struct UpdateTask {
     pub description: Option<String>,
     /// Optional new owner agent
     pub owner_agent_name: Option<String>,
+    
+    // MCP v2 Extensions
+    /// Optional workflow definition ID
+    pub workflow_definition_id: Option<Option<i32>>,
+    /// Optional workflow cursor position
+    pub workflow_cursor: Option<Option<String>>,
+    /// Optional task priority score
+    pub priority_score: Option<f64>,
+    /// Optional parent task ID
+    pub parent_task_id: Option<Option<i32>>,
+    /// Optional required capabilities
+    pub required_capabilities: Option<Vec<String>>,
+    /// Optional estimated effort
+    pub estimated_effort: Option<Option<i32>>,
+    /// Optional confidence threshold
+    pub confidence_threshold: Option<f64>,
+}
+
+impl UpdateTask {
+    /// Create a new UpdateTask with basic fields (for backward compatibility)
+    pub fn new() -> Self {
+        Self::default()
+    }
+    
+    /// Create UpdateTask with name, description, and owner (common pattern)
+    pub fn with_basic_fields(
+        name: Option<String>,
+        description: Option<String>,
+        owner_agent_name: Option<String>,
+    ) -> Self {
+        Self {
+            name,
+            description,
+            owner_agent_name,
+            ..Default::default()
+        }
+    }
 }
 
 /// Filter criteria for querying tasks.
@@ -155,7 +266,207 @@ pub struct TaskFilter {
     pub offset: Option<u32>,
 }
 
+// MCP v2 New Entity Types
+
+/// Knowledge object for storing and sharing information between agents
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct KnowledgeObject {
+    /// Auto-increment primary key
+    pub id: i32,
+    /// Human-readable identifier
+    pub key: String,
+    /// Knowledge content (JSON or structured data)
+    pub value: serde_json::Value,
+    /// Content type (e.g., "text/plain", "application/json", "code/rust")
+    pub content_type: String,
+    /// Tags for categorization and search
+    pub tags: Vec<String>,
+    /// Creating agent identifier
+    pub created_by_agent: String,
+    /// Creation timestamp
+    pub created_at: DateTime<Utc>,
+    /// Last update timestamp
+    pub updated_at: DateTime<Utc>,
+    /// Knowledge version for change tracking
+    pub version: i32,
+}
+
+/// Message between agents during task execution
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TaskMessage {
+    /// Auto-increment primary key
+    pub id: i32,
+    /// Associated task ID
+    pub task_id: i32,
+    /// Sending agent identifier
+    pub from_agent: String,
+    /// Receiving agent identifier (None for broadcast)
+    pub to_agent: Option<String>,
+    /// Message content
+    pub content: String,
+    /// Message type (info, warning, error, request, response)
+    pub message_type: MessageType,
+    /// Message timestamp
+    pub timestamp: DateTime<Utc>,
+    /// Whether message has been read
+    pub read: bool,
+}
+
+/// Message types for agent communication
+#[derive(Debug, Clone, Copy, Hash, Serialize, Deserialize, PartialEq, Eq)]
+pub enum MessageType {
+    /// Informational message
+    Info,
+    /// Warning message
+    Warning,
+    /// Error message
+    Error,
+    /// Request for action or information
+    Request,
+    /// Response to a request
+    Response,
+}
+
+/// Agent profile and capabilities
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AgentProfile {
+    /// Agent identifier (primary key)
+    pub name: String,
+    /// Human-readable display name
+    pub display_name: String,
+    /// Agent description
+    pub description: String,
+    /// Agent capabilities
+    pub capabilities: Vec<String>,
+    /// Agent specializations
+    pub specializations: Vec<String>,
+    /// Current agent status
+    pub status: AgentStatus,
+    /// Last heartbeat timestamp
+    pub last_heartbeat: DateTime<Utc>,
+    /// Agent registration timestamp
+    pub registered_at: DateTime<Utc>,
+    /// Current load score (0.0 = idle, 1.0 = fully loaded)
+    pub load_score: f64,
+}
+
+/// Agent status enumeration
+#[derive(Debug, Clone, Copy, Hash, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AgentStatus {
+    /// Agent is online and available
+    Online,
+    /// Agent is busy but can accept low-priority tasks
+    Busy,
+    /// Agent is offline or unavailable
+    Offline,
+    /// Agent has encountered an error
+    Error,
+}
+
+/// Workflow definition for structured task execution
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WorkflowDefinition {
+    /// Auto-increment primary key
+    pub id: i32,
+    /// Workflow name
+    pub name: String,
+    /// Workflow description
+    pub description: String,
+    /// Workflow steps (JSON array)
+    pub steps: serde_json::Value,
+    /// Required capabilities for workflow execution
+    pub required_capabilities: Vec<String>,
+    /// Workflow version
+    pub version: String,
+    /// Creation timestamp
+    pub created_at: DateTime<Utc>,
+    /// Whether workflow is active
+    pub active: bool,
+}
+
+/// System event for audit and monitoring
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SystemEvent {
+    /// Auto-increment primary key
+    pub id: i32,
+    /// Event type (task_created, task_completed, agent_heartbeat, etc.)
+    pub event_type: String,
+    /// Related entity ID (task_id, agent_name, etc.)
+    pub entity_id: Option<String>,
+    /// Event data (JSON)
+    pub data: serde_json::Value,
+    /// Agent that triggered the event
+    pub triggered_by: Option<String>,
+    /// Event timestamp
+    pub timestamp: DateTime<Utc>,
+    /// Event severity level
+    pub severity: EventSeverity,
+}
+
+/// Event severity levels
+#[derive(Debug, Clone, Copy, Hash, Serialize, Deserialize, PartialEq, Eq)]
+pub enum EventSeverity {
+    /// Informational event
+    Info,
+    /// Warning event
+    Warning,
+    /// Error event
+    Error,
+    /// Critical system event
+    Critical,
+}
+
+/// Work session tracking for time management
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WorkSession {
+    /// Auto-increment primary key
+    pub id: i32,
+    /// Associated task ID
+    pub task_id: i32,
+    /// Agent working on the task
+    pub agent_name: String,
+    /// Session start time
+    pub started_at: DateTime<Utc>,
+    /// Session end time (None if still active)
+    pub ended_at: Option<DateTime<Utc>>,
+    /// Work session notes
+    pub notes: Option<String>,
+    /// Productivity score (0.0-1.0)
+    pub productivity_score: Option<f64>,
+}
+
 impl Task {
+    /// Create a new Task with default MCP v2 values (for backward compatibility)
+    pub fn new(
+        id: i32,
+        code: String,
+        name: String,
+        description: String,
+        owner_agent_name: String,
+        state: TaskState,
+        inserted_at: DateTime<Utc>,
+        done_at: Option<DateTime<Utc>>,
+    ) -> Self {
+        Self {
+            id,
+            code,
+            name,
+            description,
+            owner_agent_name,
+            state,
+            inserted_at,
+            done_at,
+            workflow_definition_id: None,
+            workflow_cursor: None,
+            priority_score: 5.0,
+            parent_task_id: None,
+            failure_count: 0,
+            required_capabilities: vec![],
+            estimated_effort: None,
+            confidence_threshold: 0.8,
+        }
+    }
+
     /// Check if the task can transition to the given state
     pub fn can_transition_to(&self, new_state: TaskState) -> bool {
         use TaskState::*;
@@ -216,6 +527,14 @@ mod tests {
             state: TaskState::Created,
             inserted_at: Utc::now(),
             done_at: None,
+            workflow_definition_id: None,
+            workflow_cursor: None,
+            priority_score: 5.0,
+            parent_task_id: None,
+            failure_count: 0,
+            required_capabilities: vec![],
+            estimated_effort: None,
+            confidence_threshold: 0.8,
         };
 
         // Created -> InProgress
@@ -278,6 +597,14 @@ mod tests {
             state: TaskState::InProgress,
             inserted_at: Utc::now(),
             done_at: None,
+            workflow_definition_id: None,
+            workflow_cursor: None,
+            priority_score: 5.0,
+            parent_task_id: None,
+            failure_count: 0,
+            required_capabilities: vec![],
+            estimated_effort: None,
+            confidence_threshold: 0.8,
         };
 
         // Cannot transition to the same state
