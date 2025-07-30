@@ -61,6 +61,24 @@ pub enum TaskError {
     /// Internal system error
     #[error("Internal error: {0}")]
     Internal(String),
+
+    // MCP v2 Multi-Agent Errors
+
+    /// Task is already claimed by another agent
+    #[error("Task {0} is already claimed by {1}")]
+    AlreadyClaimed(i32, String),
+
+    /// Agent does not own the specified task
+    #[error("Agent {0} does not own task {1}")]
+    NotOwned(String, i32),
+
+    /// Agent lacks required capabilities for task
+    #[error("Agent {0} lacks required capabilities: {1:?}")]
+    InsufficientCapabilities(String, Vec<String>),
+
+    /// Work session not found or already ended
+    #[error("Work session {0} not found or already ended")]
+    SessionNotFound(i32),
 }
 
 impl TaskError {
@@ -120,6 +138,11 @@ impl TaskError {
             TaskError::Protocol(_) => 500,
             TaskError::Configuration(_) => 500,
             TaskError::Internal(_) => 500,
+            // MCP v2 Multi-Agent Errors
+            TaskError::AlreadyClaimed(_, _) => 409, // Conflict
+            TaskError::NotOwned(_, _) => 403, // Forbidden
+            TaskError::InsufficientCapabilities(_, _) => 422, // Unprocessable Entity
+            TaskError::SessionNotFound(_) => 404, // Not Found
         }
     }
 }

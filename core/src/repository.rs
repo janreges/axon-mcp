@@ -118,6 +118,71 @@ pub trait TaskRepository: Send + Sync {
     /// * `Ok(RepositoryStats)` - Current repository statistics
     /// * `Err(TaskError::Database)` - If unable to gather statistics
     async fn get_stats(&self) -> Result<RepositoryStats>;
+
+    // MCP v2 Advanced Multi-Agent Features
+
+    /// Discover available work for an agent based on capabilities
+    /// 
+    /// # Arguments
+    /// * `agent_name` - The agent looking for work
+    /// * `capabilities` - Agent's capabilities for task matching  
+    /// * `max_tasks` - Maximum number of tasks to return
+    /// 
+    /// # Returns
+    /// * `Ok(Vec<Task>)` - Available tasks matching agent capabilities
+    /// * `Err(TaskError::Database)` - If the database operation fails
+    async fn discover_work(&self, agent_name: &str, capabilities: &[String], max_tasks: u32) -> Result<Vec<Task>>;
+
+    /// Claim a task for execution by an agent
+    /// 
+    /// # Arguments
+    /// * `task_id` - The task to claim
+    /// * `agent_name` - The agent claiming the task
+    /// 
+    /// # Returns
+    /// * `Ok(Task)` - The claimed task
+    /// * `Err(TaskError::NotFound)` - If the task doesn't exist
+    /// * `Err(TaskError::AlreadyClaimed)` - If the task is already claimed
+    /// * `Err(TaskError::Database)` - If the database operation fails
+    async fn claim_task(&self, task_id: i32, agent_name: &str) -> Result<Task>;
+
+    /// Release a previously claimed task
+    /// 
+    /// # Arguments
+    /// * `task_id` - The task to release
+    /// * `agent_name` - The agent releasing the task
+    /// 
+    /// # Returns
+    /// * `Ok(Task)` - The released task
+    /// * `Err(TaskError::NotFound)` - If the task doesn't exist
+    /// * `Err(TaskError::NotOwned)` - If the agent doesn't own the task
+    /// * `Err(TaskError::Database)` - If the database operation fails
+    async fn release_task(&self, task_id: i32, agent_name: &str) -> Result<Task>;
+
+    /// Start a work session for time tracking
+    /// 
+    /// # Arguments
+    /// * `task_id` - The task being worked on
+    /// * `agent_name` - The agent starting work
+    /// 
+    /// # Returns
+    /// * `Ok(i32)` - The work session ID
+    /// * `Err(TaskError::NotFound)` - If the task doesn't exist
+    /// * `Err(TaskError::Database)` - If the database operation fails
+    async fn start_work_session(&self, task_id: i32, agent_name: &str) -> Result<i32>;
+
+    /// End a work session and record productivity
+    /// 
+    /// # Arguments
+    /// * `session_id` - The work session to end
+    /// * `notes` - Optional notes about the work done
+    /// * `productivity_score` - Productivity score (0.0-1.0)
+    /// 
+    /// # Returns
+    /// * `Ok(())` - Session ended successfully
+    /// * `Err(TaskError::NotFound)` - If the session doesn't exist
+    /// * `Err(TaskError::Database)` - If the database operation fails
+    async fn end_work_session(&self, session_id: i32, notes: Option<String>, productivity_score: Option<f64>) -> Result<()>;
 }
 
 /// Repository statistics for monitoring and analytics

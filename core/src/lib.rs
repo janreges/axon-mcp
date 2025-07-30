@@ -40,7 +40,12 @@ pub mod protocol;
 pub mod validation;
 
 // Re-export commonly used types at the crate root for convenience
-pub use models::{Task, TaskState, TaskFilter, NewTask, UpdateTask};
+pub use models::{
+    Task, TaskState, TaskFilter, NewTask, UpdateTask,
+    // MCP v2 New Entity Types
+    KnowledgeObject, TaskMessage, MessageType, AgentProfile, AgentStatus,
+    WorkflowDefinition, SystemEvent, EventSeverity, WorkSession,
+};
 pub use error::{TaskError, Result};
 pub use repository::{TaskRepository, RepositoryStats};
 pub use protocol::{
@@ -48,6 +53,9 @@ pub use protocol::{
     CreateTaskParams, UpdateTaskParams, SetStateParams,
     GetTaskByIdParams, GetTaskByCodeParams, ListTasksParams,
     AssignTaskParams, ArchiveTaskParams,
+    // MCP v2 Advanced Multi-Agent Types
+    DiscoverWorkParams, ClaimTaskParams, ReleaseTaskParams,
+    StartWorkSessionParams, EndWorkSessionParams, WorkSessionInfo,
 };
 pub use validation::TaskValidator;
 

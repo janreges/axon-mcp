@@ -37,6 +37,23 @@ pub trait ProtocolHandler: Send + Sync {
 
     /// Handle health check request via MCP
     async fn health_check(&self) -> Result<HealthStatus>;
+
+    // MCP v2 Advanced Multi-Agent Operations
+
+    /// Discover available work for an agent
+    async fn discover_work(&self, params: DiscoverWorkParams) -> Result<Vec<Task>>;
+
+    /// Claim a task for execution
+    async fn claim_task(&self, params: ClaimTaskParams) -> Result<Task>;
+
+    /// Release a previously claimed task
+    async fn release_task(&self, params: ReleaseTaskParams) -> Result<Task>;
+
+    /// Start a work session for time tracking
+    async fn start_work_session(&self, params: StartWorkSessionParams) -> Result<WorkSessionInfo>;
+
+    /// End a work session
+    async fn end_work_session(&self, params: EndWorkSessionParams) -> Result<()>;
 }
 
 /// MCP parameters for creating a new task
@@ -189,6 +206,54 @@ impl ListTasksParams {
             offset: None, // Currently not exposed in MCP protocol, but could be added later
         })
     }
+}
+
+// MCP v2 Parameter Types
+
+/// MCP parameters for discovering available work
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscoverWorkParams {
+    pub agent_name: String,
+    pub capabilities: Vec<String>,
+    pub max_tasks: Option<u32>,
+}
+
+/// MCP parameters for claiming a task
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClaimTaskParams {
+    pub task_id: i32,
+    pub agent_name: String,
+}
+
+/// MCP parameters for releasing a task
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReleaseTaskParams {
+    pub task_id: i32,
+    pub agent_name: String,
+}
+
+/// MCP parameters for starting a work session
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StartWorkSessionParams {
+    pub task_id: i32,
+    pub agent_name: String,
+}
+
+/// MCP parameters for ending a work session
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EndWorkSessionParams {
+    pub session_id: i32,
+    pub notes: Option<String>,
+    pub productivity_score: Option<f64>,
+}
+
+/// Work session information response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkSessionInfo {
+    pub session_id: i32,
+    pub task_id: i32,
+    pub agent_name: String,
+    pub started_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[cfg(test)]
