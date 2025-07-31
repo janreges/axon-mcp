@@ -60,6 +60,91 @@ export DATABASE_URL="sqlite:///path/to/axon.db"
 
 ---
 
+## 🌟 **NEW: Workspace Setup Automation**
+
+**Transform PRD → Complete AI Workspace in seconds!**
+
+### 🎯 The Problem
+Setting up multi-agent AI workspaces is complex and time-consuming:
+- Manual agent role design takes hours
+- Coordination patterns require deep expertise  
+- Tool-specific setup varies dramatically
+- Project requirements analysis is repetitive
+
+### ⚡ The Axon Solution
+**One command creates your entire AI workspace:**
+
+```bash
+# Future CLI (in development)
+axon setup --prd ./docs/PRD.md --tool claude-code --agents 5
+```
+
+**Or through AI agent prompt:**
+```
+"Nastav mi celý workspace pomocí Axon MCP. Mám PRD.md v ./docs/ 
+a chci použít 5 AI agentů pro realizaci projektu v Claude Code."
+```
+
+### 🔥 What Gets Generated
+- **📋 Intelligent Agent Roles** - Based on your PRD requirements
+- **🤝 Coordination Workflows** - Optimized handoff sequences  
+- **📁 Complete File Structure** - CLAUDE.md, .claude/agents/, commands
+- **🎯 Project Manifest** - Full metadata in .axon/manifest.json
+- **📖 Setup Instructions** - Step-by-step guidance for immediate productivity
+
+### 📄 Example: E-commerce Platform PRD
+```markdown
+# E-commerce Platform
+
+## User Stories
+- As a customer, I want to browse products and checkout securely
+- As a vendor, I want to manage inventory and track sales
+
+## Technical Requirements  
+- React frontend with responsive design
+- REST API with authentication
+- PostgreSQL database with Redis caching
+- Payment integration with Stripe
+```
+
+**↓ Axon automatically generates ↓**
+
+**5 Specialized Agents:**
+- 🎯 **project-manager** - Coordinates overall execution
+- 💻 **frontend-developer** - React UI development  
+- ⚙️ **backend-developer** - API and database logic
+- 💳 **payments-specialist** - Stripe integration
+- 🧪 **qa-engineer** - Testing and quality assurance
+
+**Complete CLAUDE.md with coordination instructions, agent definitions in `.claude/agents/`, and optimized workflow sequences.**
+
+### 🚀 See It In Action
+```json
+// MCP Function Call
+{"method": "get_agentic_workflow_description", "params": {
+  "prd_content": "# E-commerce Platform\n\n## Overview...",
+  "requested_agent_count": 5
+}}
+
+// Instant Response
+{
+  "workflow_description": "5-agent e-commerce development workflow",
+  "recommended_agent_count": 5,
+  "suggested_agents": [
+    {
+      "name": "project-manager",
+      "description": "Coordinates development and manages deliverables",
+      "required_capabilities": ["project-management", "coordination"]
+    }
+    // ... 4 more optimized agents
+  ]
+}
+```
+
+**📚 [Complete Workspace Setup Documentation →](docs/WORKSPACE-SETUP.md)**
+
+---
+
 ## 🤖 Core Use Cases
 
 ### 1. 🏗️ **Hierarchical Agent Teams**
@@ -155,7 +240,7 @@ Always include context and clear handoffs in your messages.
 
 ## 📋 Complete MCP Function Reference
 
-Axon implements **15 comprehensive MCP functions** organized in three categories:
+Axon implements **21 comprehensive MCP functions** organized in four categories:
 
 <details>
 <summary><strong>📝 Core Task Management (8 Functions)</strong></summary>
@@ -190,6 +275,18 @@ Axon implements **15 comprehensive MCP functions** organized in three categories
   - **Threading**: Reply chains with `reply_to_message_id`
 - **`get_task_messages`** - Retrieve messages with advanced filtering
   - Filter by sender, recipient, message type, threading
+
+</details>
+
+<details>
+<summary><strong>🚀 Workspace Setup Automation (6 Functions)</strong></summary>
+
+- **`get_setup_instructions`** - Get step-by-step workspace setup instructions
+- **`get_agentic_workflow_description`** - Analyze PRD and recommend agent workflow
+- **`register_agent`** - Register AI agent with capabilities and prompt
+- **`get_instructions_for_main_ai_file`** - Get template for main coordination file
+- **`create_main_ai_file`** - Generate main AI coordination file (CLAUDE.md, etc.)
+- **`get_workspace_manifest`** - Get complete workspace metadata and configuration
 
 </details>
 

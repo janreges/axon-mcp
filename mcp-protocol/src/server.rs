@@ -185,6 +185,37 @@ impl<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRepository + Send 
                 let messages = self.handler.get_task_messages(params).await.map_err(McpError::from)?;
                 Ok(serde_json::to_value(messages).map_err(|e| McpError::Serialization(e.to_string()))?)
             }
+            // Workspace Setup Functions
+            "get_setup_instructions" => {
+                let params: ::task_core::GetSetupInstructionsParams = deserialize_mcp_params(params)?;
+                let instructions = self.handler.get_setup_instructions(params).await.map_err(McpError::from)?;
+                Ok(serde_json::to_value(instructions).map_err(|e| McpError::Serialization(e.to_string()))?)
+            }
+            "get_agentic_workflow_description" => {
+                let params: ::task_core::GetAgenticWorkflowDescriptionParams = deserialize_mcp_params(params)?;
+                let workflow = self.handler.get_agentic_workflow_description(params).await.map_err(McpError::from)?;
+                Ok(serde_json::to_value(workflow).map_err(|e| McpError::Serialization(e.to_string()))?)
+            }
+            "register_agent" => {
+                let params: ::task_core::RegisterAgentParams = deserialize_mcp_params(params)?;
+                let agent = self.handler.register_agent(params).await.map_err(McpError::from)?;
+                Ok(serde_json::to_value(agent).map_err(|e| McpError::Serialization(e.to_string()))?)
+            }
+            "get_instructions_for_main_ai_file" => {
+                let params: ::task_core::GetInstructionsForMainAiFileParams = deserialize_mcp_params(params)?;
+                let instructions = self.handler.get_instructions_for_main_ai_file(params).await.map_err(McpError::from)?;
+                Ok(serde_json::to_value(instructions).map_err(|e| McpError::Serialization(e.to_string()))?)
+            }
+            "create_main_ai_file" => {
+                let params: ::task_core::CreateMainAiFileParams = deserialize_mcp_params(params)?;
+                let file_data = self.handler.create_main_ai_file(params).await.map_err(McpError::from)?;
+                Ok(serde_json::to_value(file_data).map_err(|e| McpError::Serialization(e.to_string()))?)
+            }
+            "get_workspace_manifest" => {
+                let params: ::task_core::GetWorkspaceManifestParams = deserialize_mcp_params(params)?;
+                let manifest = self.handler.get_workspace_manifest(params).await.map_err(McpError::from)?;
+                Ok(serde_json::to_value(manifest).map_err(|e| McpError::Serialization(e.to_string()))?)
+            }
             _ => Err(McpError::Protocol(format!("Unknown method: {method}"))),
         }
     }
@@ -415,6 +446,85 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
             }
         }
+        // Workspace Setup Functions
+        "get_setup_instructions" => {
+            let params: ::task_core::GetSetupInstructionsParams = match deserialize_mcp_params(params) {
+                Ok(p) => p,
+                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+            };
+            match handler.get_setup_instructions(params).await {
+                Ok(instructions) => match serde_json::to_value(instructions) {
+                    Ok(value) => create_success_response(id, value),
+                    Err(e) => McpError::Serialization(e.to_string()).to_json_rpc_error(id),
+                },
+                Err(e) => McpError::from(e).to_json_rpc_error(id),
+            }
+        }
+        "get_agentic_workflow_description" => {
+            let params: ::task_core::GetAgenticWorkflowDescriptionParams = match deserialize_mcp_params(params) {
+                Ok(p) => p,
+                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+            };
+            match handler.get_agentic_workflow_description(params).await {
+                Ok(workflow) => match serde_json::to_value(workflow) {
+                    Ok(value) => create_success_response(id, value),
+                    Err(e) => McpError::Serialization(e.to_string()).to_json_rpc_error(id),
+                },
+                Err(e) => McpError::from(e).to_json_rpc_error(id),
+            }
+        }
+        "register_agent" => {
+            let params: ::task_core::RegisterAgentParams = match deserialize_mcp_params(params) {
+                Ok(p) => p,
+                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+            };
+            match handler.register_agent(params).await {
+                Ok(agent) => match serde_json::to_value(agent) {
+                    Ok(value) => create_success_response(id, value),
+                    Err(e) => McpError::Serialization(e.to_string()).to_json_rpc_error(id),
+                },
+                Err(e) => McpError::from(e).to_json_rpc_error(id),
+            }
+        }
+        "get_instructions_for_main_ai_file" => {
+            let params: ::task_core::GetInstructionsForMainAiFileParams = match deserialize_mcp_params(params) {
+                Ok(p) => p,
+                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+            };
+            match handler.get_instructions_for_main_ai_file(params).await {
+                Ok(instructions) => match serde_json::to_value(instructions) {
+                    Ok(value) => create_success_response(id, value),
+                    Err(e) => McpError::Serialization(e.to_string()).to_json_rpc_error(id),
+                },
+                Err(e) => McpError::from(e).to_json_rpc_error(id),
+            }
+        }
+        "create_main_ai_file" => {
+            let params: ::task_core::CreateMainAiFileParams = match deserialize_mcp_params(params) {
+                Ok(p) => p,
+                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+            };
+            match handler.create_main_ai_file(params).await {
+                Ok(file_data) => match serde_json::to_value(file_data) {
+                    Ok(value) => create_success_response(id, value),
+                    Err(e) => McpError::Serialization(e.to_string()).to_json_rpc_error(id),
+                },
+                Err(e) => McpError::from(e).to_json_rpc_error(id),
+            }
+        }
+        "get_workspace_manifest" => {
+            let params: ::task_core::GetWorkspaceManifestParams = match deserialize_mcp_params(params) {
+                Ok(p) => p,
+                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+            };
+            match handler.get_workspace_manifest(params).await {
+                Ok(manifest) => match serde_json::to_value(manifest) {
+                    Ok(value) => create_success_response(id, value),
+                    Err(e) => McpError::Serialization(e.to_string()).to_json_rpc_error(id),
+                },
+                Err(e) => McpError::from(e).to_json_rpc_error(id),
+            }
+        }
         _ => {
             McpError::Protocol(format!("Unknown method: {method}")).to_json_rpc_error(id)
         }
@@ -442,7 +552,10 @@ async fn sse_handler<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRe
                     "assign_task", "archive_task", "health_check",
                     "discover_work", "claim_task", "release_task", 
                     "start_work_session", "end_work_session",
-                    "create_task_message", "get_task_messages"
+                    "create_task_message", "get_task_messages",
+                    "get_setup_instructions", "get_agentic_workflow_description",
+                    "register_agent", "get_instructions_for_main_ai_file",
+                    "create_main_ai_file", "get_workspace_manifest"
                 ]
             }
         }).to_string());

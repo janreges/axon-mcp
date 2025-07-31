@@ -6,6 +6,12 @@ use std::sync::Arc;
 use ::task_core::{TaskRepository, TaskMessageRepository, ProtocolHandler, Task, NewTask, HealthStatus, TaskMessage};
 use ::task_core::{DiscoverWorkParams, ClaimTaskParams, ReleaseTaskParams, StartWorkSessionParams, EndWorkSessionParams, WorkSessionInfo};
 use ::task_core::{CreateTaskMessageParams, GetTaskMessagesParams};
+use ::task_core::{
+    GetSetupInstructionsParams, GetAgenticWorkflowDescriptionParams, RegisterAgentParams,
+    GetInstructionsForMainAiFileParams, CreateMainAiFileParams, GetWorkspaceManifestParams,
+    WorkspaceSetupService, SetupInstructions, AgenticWorkflowDescription, 
+    AgentRegistration, MainAiFileInstructions, MainAiFileData, WorkspaceManifest, PrdDocument,
+};
 use ::task_core::error::Result;
 use crate::serialization::*;
 use async_trait::async_trait;
@@ -15,12 +21,17 @@ use async_trait::async_trait;
 pub struct McpTaskHandler<R, M> {
     repository: Arc<R>,
     message_repository: Arc<M>,
+    workspace_setup_service: WorkspaceSetupService,
 }
 
 impl<R, M> McpTaskHandler<R, M> {
     /// Create new MCP task handler
     pub fn new(repository: Arc<R>, message_repository: Arc<M>) -> Self {
-        Self { repository, message_repository }
+        Self { 
+            repository, 
+            message_repository,
+            workspace_setup_service: WorkspaceSetupService::new(),
+        }
     }
     
     /// Get a clone of the repository Arc for creating new handlers
@@ -143,6 +154,150 @@ impl<R: TaskRepository + Send + Sync, M: TaskMessageRepository + Send + Sync> Pr
             params.reply_to_message_id,
             params.limit,
         ).await
+    }
+
+    // Workspace Setup Implementation
+    
+    async fn get_setup_instructions(&self, params: GetSetupInstructionsParams) -> Result<SetupInstructions> {
+        use ::task_core::WorkspaceSetupError;
+        
+        self.workspace_setup_service
+            .get_setup_instructions(params.ai_tool_type)
+            .await
+            .map_err(|e| match e {
+                WorkspaceSetupError::UnsupportedAiTool(tool) => {
+                    ::task_core::TaskError::Validation(format!("Unsupported AI tool type: {}", tool))
+                }
+                WorkspaceSetupError::InvalidConfiguration(msg) => {
+                    ::task_core::TaskError::Validation(format!("Invalid configuration: {}", msg))
+                }
+                _ => ::task_core::TaskError::Protocol(format!("Workspace setup error: {}", e)),
+            })
+    }
+    
+    async fn get_agentic_workflow_description(&self, params: GetAgenticWorkflowDescriptionParams) -> Result<AgenticWorkflowDescription> {
+        use ::task_core::WorkspaceSetupError;
+        
+        // Parse PRD content
+        let prd = PrdDocument::from_content(&params.prd_content)
+            .map_err(|e| match e {
+                WorkspaceSetupError::PrdParsingFailed(msg) => {
+                    ::task_core::TaskError::Validation(format!("PRD parsing failed: {}", msg))
+                }
+                WorkspaceSetupError::PrdValidationFailed { errors } => {
+                    ::task_core::TaskError::Validation(format!("PRD validation failed: {:?}", errors))
+                }
+                _ => ::task_core::TaskError::Protocol(format!("PRD processing error: {}", e)),
+            })?;
+        
+        // Check if PRD is valid
+        if !prd.is_valid() {
+            return Err(::task_core::TaskError::Validation(
+                format!("Invalid PRD: {:?}", prd.get_validation_errors())
+            ));
+        }
+        
+        self.workspace_setup_service
+            .get_agentic_workflow_description(&prd)
+            .await
+            .map_err(|e| ::task_core::TaskError::Protocol(format!("Workflow analysis error: {}", e)))
+    }
+    
+    async fn register_agent(&self, params: RegisterAgentParams) -> Result<AgentRegistration> {
+        // Basic validation
+        if params.name.trim().is_empty() {
+            return Err(::task_core::TaskError::Validation("Agent name cannot be empty".to_string()));
+        }
+        
+        if params.description.len() > 300 {
+            return Err(::task_core::TaskError::Validation("Agent description cannot exceed 300 characters".to_string()));
+        }
+        
+        if params.prompt.trim().is_empty() {
+            return Err(::task_core::TaskError::Validation("Agent prompt cannot be empty".to_string()));
+        }
+        
+        // Validate name format (kebab-case)
+        if !params.name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
+            return Err(::task_core::TaskError::Validation(
+                "Agent name must be in kebab-case format (lowercase letters, numbers, and hyphens only)".to_string()
+            ));
+        }
+        
+        // Create agent registration
+        Ok(AgentRegistration {
+            name: params.name,
+            description: params.description,
+            prompt: params.prompt,
+            capabilities: params.capabilities,
+            ai_tool_type: params.ai_tool_type,
+            dependencies: params.dependencies.unwrap_or_default(),
+        })
+    }
+    
+    async fn get_instructions_for_main_ai_file(&self, params: GetInstructionsForMainAiFileParams) -> Result<MainAiFileInstructions> {
+        self.workspace_setup_service
+            .get_instructions_for_main_ai_file(params.ai_tool_type)
+            .await
+            .map_err(|e| ::task_core::TaskError::Protocol(format!("Main AI file instructions error: {}", e)))
+    }
+    
+    async fn create_main_ai_file(&self, params: CreateMainAiFileParams) -> Result<MainAiFileData> {
+        use ::task_core::workspace_setup::{MainAiFileData, FileSection};
+        
+        // Determine file name based on AI tool type
+        let file_name = match params.ai_tool_type {
+            ::task_core::workspace_setup::AiToolType::ClaudeCode => "CLAUDE.md".to_string(),
+            ::task_core::workspace_setup::AiToolType::AutoGen => "AUTOGEN.md".to_string(),
+            ::task_core::workspace_setup::AiToolType::CrewAi => "CREWAI.md".to_string(),
+        };
+        
+        // Create basic sections from content
+        let sections = vec![
+            FileSection {
+                title: "Project Overview".to_string(),
+                content: params.content.clone(),
+                order: 1,
+            },
+        ];
+        
+        Ok(MainAiFileData {
+            ai_tool_type: params.ai_tool_type,
+            file_name,
+            content: params.content,
+            sections,
+        })
+    }
+    
+    async fn get_workspace_manifest(&self, params: GetWorkspaceManifestParams) -> Result<WorkspaceManifest> {
+        use ::task_core::workspace_setup::{WorkspaceManifest, ProjectMetadata};
+        use chrono::Utc;
+        
+        // Create a basic manifest (in a real implementation, this would be loaded from storage)
+        Ok(WorkspaceManifest {
+            schema_version: "1.0".to_string(),
+            ai_tool_type: params.ai_tool_type,
+            project: ProjectMetadata {
+                name: "Generated Project".to_string(),
+                description: "Project generated by Axon MCP".to_string(),
+                complexity_score: 5,
+                primary_domain: "general".to_string(),
+                technologies: vec![],
+            },
+            agents: vec![],
+            workflow: ::task_core::workspace_setup::AgenticWorkflowDescription {
+                workflow_description: "Basic workflow".to_string(),
+                recommended_agent_count: 3,
+                suggested_agents: vec![],
+                task_decomposition_strategy: "Hierarchical".to_string(),
+                coordination_patterns: vec![],
+                workflow_steps: vec![],
+            },
+            setup_instructions: vec![],
+            generated_files: vec![],
+            created_at: Utc::now(),
+            axon_version: env!("CARGO_PKG_VERSION").to_string(),
+        })
     }
 }
 

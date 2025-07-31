@@ -62,6 +62,26 @@ pub trait ProtocolHandler: Send + Sync {
     
     /// Get task messages with optional filtering
     async fn get_task_messages(&self, params: GetTaskMessagesParams) -> Result<Vec<TaskMessage>>;
+
+    // Workspace Setup & Automation Functions
+    
+    /// Get setup instructions for AI workspace automation
+    async fn get_setup_instructions(&self, params: GetSetupInstructionsParams) -> Result<crate::workspace_setup::SetupInstructions>;
+    
+    /// Get agentic workflow description based on PRD analysis
+    async fn get_agentic_workflow_description(&self, params: GetAgenticWorkflowDescriptionParams) -> Result<crate::workspace_setup::AgenticWorkflowDescription>;
+    
+    /// Register an AI agent for the workspace
+    async fn register_agent(&self, params: RegisterAgentParams) -> Result<crate::workspace_setup::AgentRegistration>;
+    
+    /// Get instructions for creating main AI file (CLAUDE.md, etc.)
+    async fn get_instructions_for_main_ai_file(&self, params: GetInstructionsForMainAiFileParams) -> Result<crate::workspace_setup::MainAiFileInstructions>;
+    
+    /// Create the main AI coordination file
+    async fn create_main_ai_file(&self, params: CreateMainAiFileParams) -> Result<crate::workspace_setup::MainAiFileData>;
+    
+    /// Get complete workspace manifest
+    async fn get_workspace_manifest(&self, params: GetWorkspaceManifestParams) -> Result<crate::workspace_setup::WorkspaceManifest>;
 }
 
 /// MCP parameters for creating a new task
@@ -286,6 +306,54 @@ pub struct GetTaskMessagesParams {
     pub message_type: Option<String>,
     pub reply_to_message_id: Option<i32>,
     pub limit: Option<u32>,
+}
+
+// Workspace Setup Parameter Types
+
+/// MCP parameters for getting setup instructions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetSetupInstructionsParams {
+    pub ai_tool_type: crate::workspace_setup::AiToolType,
+}
+
+/// MCP parameters for getting agentic workflow description
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetAgenticWorkflowDescriptionParams {
+    pub prd_content: String,
+    pub requested_agent_count: Option<u32>,
+}
+
+/// MCP parameters for registering an agent
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegisterAgentParams {
+    pub name: String,
+    pub description: String,
+    pub prompt: String,
+    pub capabilities: Vec<String>,
+    pub ai_tool_type: crate::workspace_setup::AiToolType,
+    pub dependencies: Option<Vec<String>>,
+}
+
+/// MCP parameters for getting main AI file instructions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetInstructionsForMainAiFileParams {
+    pub ai_tool_type: crate::workspace_setup::AiToolType,
+}
+
+/// MCP parameters for creating main AI file
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateMainAiFileParams {
+    pub content: String,
+    pub ai_tool_type: crate::workspace_setup::AiToolType,
+    pub project_name: Option<String>,
+    pub overwrite_existing: Option<bool>,
+}
+
+/// MCP parameters for getting workspace manifest
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetWorkspaceManifestParams {
+    pub ai_tool_type: crate::workspace_setup::AiToolType,
+    pub include_generated_files: Option<bool>,
 }
 
 #[cfg(test)]

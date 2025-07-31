@@ -40,6 +40,7 @@ pub mod protocol;
 pub mod validation;
 pub mod circuit_breaker;
 pub mod mcp_v2_extensions;
+pub mod workspace_setup;
 
 // Re-export commonly used types at the crate root for convenience
 pub use models::{
@@ -60,12 +61,20 @@ pub use protocol::{
     StartWorkSessionParams, EndWorkSessionParams, WorkSessionInfo,
     // Task Messaging Types
     CreateTaskMessageParams, GetTaskMessagesParams,
+    // Workspace Setup Types
+    GetSetupInstructionsParams, GetAgenticWorkflowDescriptionParams, RegisterAgentParams,
+    GetInstructionsForMainAiFileParams, CreateMainAiFileParams, GetWorkspaceManifestParams,
 };
 pub use validation::TaskValidator;
 pub use circuit_breaker::{CircuitBreaker, FailureType, CircuitState, CircuitBreakerAction};
 pub use mcp_v2_extensions::{
     DiscoverWorkResponse, PrerequisiteAction, WorkDiscoveryConfig, ClaimResult,
     CapabilityMatcher, PriorityCalculator, SimpleWorkSession, AgentWorkload, SimpleKnowledgeEntry,
+};
+pub use workspace_setup::{
+    WorkspaceSetupService, WorkspaceSetupConfig, WorkspaceSetupError, WorkspaceSetupResult,
+    AiToolType, PrdDocument, SetupInstructions, AgenticWorkflowDescription, 
+    AgentRegistration, MainAiFileData, WorkspaceManifest, MainAiFileInstructions,
 };
 
 /// Current version of the core crate
