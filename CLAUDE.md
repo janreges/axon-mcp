@@ -19,7 +19,9 @@ You are working on a professional Rust MCP development project. Start immediatel
 
 ## Project Overview
 
-Develop a production-ready Model Context Protocol (MCP) server in Rust for comprehensive task management. This server provides essential task tracking, assignment, and lifecycle management capabilities through a clean, multi-crate architecture that enables parallel development by specialized teams.
+Develop a production-ready Model Context Protocol (MCP) server in Rust for comprehensive task management and inter-agent communication. This server provides essential task tracking, assignment, lifecycle management, and sophisticated messaging capabilities through a clean, multi-crate architecture that enables parallel development by specialized teams.
+
+The system now includes advanced multi-agent coordination features including task discovery, atomic claiming, work session tracking, and a powerful inter-agent messaging system with targeted communication and advanced filtering.
 
 ## 🚨 CRITICAL DEVELOPMENT RULES 🚨
 
@@ -66,7 +68,9 @@ enum TaskState {
 }
 ```
 
-### Required MCP Functions
+### Required MCP Functions (15 Total)
+
+#### Core Task Management (8 Functions)
 - **create_task**: Add new task with validation
 - **update_task**: Modify task details and metadata
 - **set_task_state**: Change task lifecycle state
@@ -75,6 +79,48 @@ enum TaskState {
 - **list_tasks**: Query tasks with filtering (owner, state, date range)
 - **assign_task**: Transfer task ownership between agents
 - **archive_task**: Move task to archived state with audit trail
+
+#### Advanced Multi-Agent Coordination (5 Functions)
+- **discover_work**: Find available tasks based on agent capabilities
+- **claim_task**: Atomically claim tasks for execution
+- **release_task**: Release claimed tasks back to the pool
+- **start_work_session**: Begin time tracking for task work
+- **end_work_session**: Complete work session with productivity metrics
+
+#### Inter-Agent Messaging (2 Functions)
+- **create_task_message**: Send targeted messages between agents within tasks
+- **get_task_messages**: Retrieve messages with advanced filtering by sender, recipient, type
+
+### Advanced Inter-Agent Messaging System
+
+The messaging system supports sophisticated agent-to-agent communication within task contexts:
+
+```rust
+struct TaskMessage {
+    id: i32,                           // Auto-increment primary key
+    task_code: String,                 // Task code instead of ID
+    author_agent_name: String,         // Agent sending the message
+    target_agent_name: Option<String>, // Agent the message is intended for (NEW!)
+    message_type: String,              // Flexible message type (handoff, question, etc.)
+    content: String,                   // Message content
+    reply_to_message_id: Option<i32>,  // For threading conversations
+    created_at: DateTime<Utc>,         // Message timestamp
+}
+```
+
+#### Message Targeting Features
+- **Targeted Messages**: Send messages to specific agents using `target_agent_name`
+- **General Messages**: Broadcast messages by omitting target (null value)
+- **Advanced Filtering**: Filter by sender, recipient, message type, threading
+- **Message Threading**: Support for conversation chains with reply_to_message_id
+
+#### Supported Message Types (Flexible String-Based)
+- `handoff` - Work handoffs between agents with deliverables
+- `comment` - General observations and project updates
+- `question` - Questions requiring responses from specific agents
+- `solution` - Answers and solutions to previous questions
+- `blocker` - Issues preventing progress that need attention
+- Custom types as needed by your project
 
 ### Technology Stack
 - **Framework**: Rust with MCP SDK (https://github.com/modelcontextprotocol/rust-sdk)
@@ -540,14 +586,86 @@ Example .gitignore entries:
 
 ---
 
+## Production Use Cases
+
+### Real-World Agent Coordination Examples
+
+#### Multi-Agent Development Workflow
+```rust
+// Frontend agent creates handoff for backend
+create_task_message(CreateTaskMessageParams {
+    task_code: "PAYMENT-FEATURE-001".to_string(),
+    author_agent_name: "frontend-developer".to_string(), 
+    target_agent_name: Some("backend-developer".to_string()),
+    message_type: "handoff".to_string(),
+    content: "Payment component ready. State: {amount, currency, method}. Need API endpoint.".to_string(),
+    reply_to_message_id: None,
+})
+
+// Backend developer reads only targeted messages
+get_task_messages(GetTaskMessagesParams {
+    task_code: "PAYMENT-FEATURE-001".to_string(),
+    target_agent_name: Some("backend-developer".to_string()),
+    author_agent_name: None,
+    message_type: None,
+    reply_to_message_id: None,
+    limit: None,
+})
+
+// Backend completes work and hands off to QA
+create_task_message(CreateTaskMessageParams {
+    task_code: "PAYMENT-FEATURE-001".to_string(),
+    author_agent_name: "backend-developer".to_string(),
+    target_agent_name: Some("qa-tester".to_string()),
+    message_type: "handoff".to_string(), 
+    content: "API endpoint /api/v1/payments ready. Test with staging data.".to_string(),
+    reply_to_message_id: None,
+})
+```
+
+#### Task Discovery and Claiming
+```rust
+// Agent discovers work based on capabilities
+discover_work(DiscoverWorkParams {
+    agent_name: "python-specialist".to_string(),
+    capabilities: vec!["python".to_string(), "ml".to_string(), "api".to_string()],
+    max_tasks: 5,
+})
+
+// Agent claims specific work
+claim_task(ClaimTaskParams {
+    task_id: 42,
+    agent_name: "python-specialist".to_string(),
+})
+```
+
+#### Message Filtering Patterns
+```rust
+// Get all handoffs directed at me
+get_task_messages(GetTaskMessagesParams {
+    task_code: "TASK-001".to_string(),
+    target_agent_name: Some("my-agent-name".to_string()),
+    message_type: Some("handoff".to_string()),
+    ..Default::default()
+})
+
+// Get conversation thread
+get_task_messages(GetTaskMessagesParams {
+    task_code: "TASK-001".to_string(), 
+    reply_to_message_id: Some(message_id),
+    ..Default::default()
+})
+```
+
 **SUCCESS CRITERIA**: 
 - Phase 1: Core crate complete with all traits and domain models
 - Phase 2: Database, mcp-protocol, mocks crates working; mcp-server integrated
 - Phase 3: Complete documentation with examples and guides
 - Phase 4: Production-ready system with all quality gates passed
-- Final: Clean repository with no development artifacts
+- Final: Clean repository with no development artifacts, full MCP v2 compliance
 
 **DEPENDENCY VALIDATION**:
 - No crate should have compilation errors due to missing dependencies
 - All trait implementations must satisfy contract tests
 - Integration must be seamless with proper error handling
+- Message targeting and filtering must work flawlessly

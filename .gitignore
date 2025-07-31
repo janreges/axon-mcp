@@ -26,6 +26,8 @@ Cargo.lock
 **/debug/
 .claude/
 
+**/:memory*
+
 # Release artifacts (except the release directory itself)
 release/*.tar.gz
 release/*.zip
