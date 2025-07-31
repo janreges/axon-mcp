@@ -8,7 +8,7 @@ use sqlx::{SqlitePool, Sqlite, migrate::MigrateDatabase, Row};
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use crate::common::{
-    state_to_string, string_to_state, row_to_task, sqlx_error_to_task_error, build_filter_conditions
+    state_to_string, string_to_state, row_to_task, sqlx_error_to_task_error
 };
 
 /// SQLite implementation of the TaskRepository trait
@@ -282,30 +282,26 @@ impl TaskRepository for SqliteTaskRepository {
     }
 
     async fn list(&self, filter: TaskFilter) -> Result<Vec<Task>> {
-        let (where_clause, params) = build_filter_conditions(&filter);
+        // Use the modern build_filter_query function with proper QueryBuilder
+        use crate::common::build_filter_query;
+        use sqlx::Execute;
         
-        // Build query with pagination support
-        let mut query = format!(
-            "SELECT id, code, name, description, owner_agent_name, state, inserted_at, done_at FROM tasks {where_clause} ORDER BY inserted_at DESC"
-        );
+        // DEBUG: Log the filter being applied
+        tracing::info!("🔍 LIST FILTER DEBUG: filter = {:?}", filter);
         
-        // Add LIMIT and OFFSET for pagination
-        if let Some(limit) = filter.limit {
-            query.push_str(&format!(" LIMIT {}", limit));
-            if let Some(offset) = filter.offset {
-                query.push_str(&format!(" OFFSET {}", offset));
-            }
-        }
+        let mut query_builder = build_filter_query(&filter);
+        let query = query_builder.build();
         
-        let mut query_builder = sqlx::query(&query);
-        for param in &params {
-            query_builder = query_builder.bind(param);
-        }
+        // DEBUG: Log the exact SQL being generated
+        tracing::info!("🔍 GENERATED SQL: {}", query.sql());
         
-        let rows = query_builder
+        let rows = query
             .fetch_all(&self.pool)
             .await
             .map_err(sqlx_error_to_task_error)?;
+
+        // DEBUG: Log the result count
+        tracing::info!("🔍 QUERY RESULT COUNT: {} rows", rows.len());
 
         let mut tasks = Vec::new();
         for row in rows {
@@ -498,8 +494,8 @@ impl TaskRepository for SqliteTaskRepository {
             return Err(TaskError::NotOwned(agent_name.to_string(), task_id));
         }
         
-        // Clear task owner
-        sqlx::query("UPDATE tasks SET owner_agent_name = '' WHERE id = ?")
+        // Clear task owner (set to NULL)
+        sqlx::query("UPDATE tasks SET owner_agent_name = NULL WHERE id = ?")
             .bind(task_id)
             .execute(&self.pool)
             .await

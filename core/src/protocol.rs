@@ -120,7 +120,7 @@ pub struct GetTaskByCodeParams {
 /// MCP parameters for listing tasks
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ListTasksParams {
-    pub owner_agent_name: Option<String>,
+    pub owner: Option<String>,
     pub state: Option<TaskState>,
     pub created_after: Option<String>,
     pub created_before: Option<String>,
@@ -196,7 +196,7 @@ impl ListTasksParams {
         };
 
         Ok(TaskFilter {
-            owner: self.owner_agent_name.clone(),
+            owner: self.owner.clone(),
             state: self.state,
             date_from: created_after,
             date_to: created_before,
@@ -263,7 +263,7 @@ mod tests {
     #[test]
     fn test_list_params_to_filter_conversion() {
         let params = ListTasksParams {
-            owner_agent_name: Some("test-agent".to_string()),
+            owner: Some("test-agent".to_string()),
             state: Some(TaskState::InProgress),
             created_after: Some("2023-12-01T00:00:00Z".to_string()),
             created_before: Some("2023-12-31T23:59:59Z".to_string()),

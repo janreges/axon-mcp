@@ -80,6 +80,7 @@ impl<R: TaskRepository + Send + Sync + 'static> McpServer<R> {
     }
     
     /// Route MCP method to appropriate handler - shared logic for both SSE and RPC
+    #[allow(dead_code)]
     async fn route_method(&self, method: &str, params: Value, id: Option<Value>) -> Value {
         let result = self.execute_method(method, params).await;
         
@@ -90,6 +91,7 @@ impl<R: TaskRepository + Send + Sync + 'static> McpServer<R> {
     }
     
     /// Execute MCP method - core method routing logic
+    #[allow(dead_code)]
     async fn execute_method(&self, method: &str, params: Value) -> Result<Value, McpError> {
         match method {
             "create_task" => {

@@ -118,7 +118,7 @@ pub fn sqlx_error_to_task_error(err: sqlx::Error) -> TaskError {
 #[allow(dead_code)] // Used in sqlite.rs but may not be detected by compiler
 pub fn build_filter_query(filter: &TaskFilter) -> sqlx::QueryBuilder<sqlx::Sqlite> {
     let mut query_builder: sqlx::QueryBuilder<sqlx::Sqlite> = 
-        sqlx::QueryBuilder::new("SELECT id, code, name, description, owner_agent_name, state, inserted_at, done_at FROM tasks");
+        sqlx::QueryBuilder::new("SELECT id, code, name, description, owner_agent_name, state, inserted_at, done_at, workflow_definition_id, workflow_cursor, priority_score, parent_task_id, failure_count, required_capabilities, estimated_effort, confidence_threshold FROM tasks");
     
     let mut has_conditions = false;
     
@@ -214,41 +214,6 @@ pub fn build_work_discovery_query(agent_capabilities: &[String], limit: Option<i
     query_builder
 }
 
-/// Build agent validation query
-pub fn build_agent_validation_query() -> &'static str {
-    "SELECT EXISTS(SELECT 1 FROM agents WHERE name = ? AND status != 'Offline')"
-}
-
-/// Build knowledge search query using FTS5
-pub fn build_knowledge_search_query(query_terms: &str, limit: Option<i32>) -> sqlx::QueryBuilder<sqlx::Sqlite> {
-    let mut query_builder: sqlx::QueryBuilder<sqlx::Sqlite> = sqlx::QueryBuilder::new(
-        r#"SELECT ko.id, ko.key, ko.value, ko.content_type, ko.tags, 
-                  ko.created_by_agent, ko.created_at, ko.updated_at, ko.version
-           FROM knowledge_objects ko
-           JOIN knowledge_search ks ON ko.id = ks.rowid
-           WHERE knowledge_search MATCH "#
-    );
-    
-    query_builder.push_bind(query_terms);
-    query_builder.push(" ORDER BY rank");
-    
-    if let Some(limit) = limit {
-        query_builder.push(" LIMIT ");
-        query_builder.push_bind(limit);
-    }
-    
-    query_builder
-}
-
-/// Convert capabilities vector to JSON string for database storage
-pub fn capabilities_to_json(capabilities: &[String]) -> String {
-    serde_json::to_string(capabilities).unwrap_or_else(|_| "[]".to_string())
-}
-
-/// Parse capabilities from JSON string
-pub fn capabilities_from_json(json_str: &str) -> Vec<String> {
-    serde_json::from_str(json_str).unwrap_or_default()
-}
 
 /// Legacy function kept for backward compatibility with tests
 /// Build dynamic WHERE clause for task filtering (returns string and params)
