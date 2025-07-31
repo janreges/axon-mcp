@@ -1,357 +1,318 @@
-# MCP Task Management Server
+# 🧠 Axon
+## The MCP Hub for Task & Message Coordination Between AI Agents
 
-A production-ready Model Context Protocol (MCP) server written in Rust for comprehensive task management and workflow coordination in AI agent systems.
+[![Build Status](https://img.shields.io/github/actions/workflow/status/janreges/axon-mcp/rust.yml?branch=main&style=for-the-badge)](https://github.com/janreges/axon-mcp/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+[![Crates.io](https://img.shields.io/crates/v/axon-mcp?style=for-the-badge&logo=rust)]()
 
-## Overview
+Axon is a production-grade Model Context Protocol (MCP) server written in Rust. It acts as the single hub where your AI agents **create, claim, and track tasks while exchanging structured handoffs, questions, and blockers** in real-time. With dual transports (HTTP/SSE + JSON-RPC/STDIO), <100ms latency, and 15 first-class MCP functions, Axon lets you orchestrate small agent squads or large autonomous swarms—all backed by an ACID-compliant SQLite core.
 
-The MCP Task Management Server provides essential task tracking, assignment, and lifecycle management capabilities through a standardized MCP interface. Built with a clean, multi-crate architecture, it enables robust coordination for both small agent teams and large-scale autonomous deployments.
+Think of Axon as the neural relay between specialized agents—just add well-crafted prompts and watch them collaborate like a team.
 
-## Key Features
+---
 
-### Core Task Management
-- **Complete Task Lifecycle Management**: Create, update, assign, and track tasks through defined states
-- **Advanced Multi-Agent Coordination**: Task discovery, claiming, and release with capability matching
-- **Flexible State Machine**: Validated transitions with specialized states for complex workflows
+## ✨ Why Axon?
 
-### Inter-Agent Communication
-- **Targeted Messaging System**: Send messages to specific agents within task contexts
-- **Advanced Message Filtering**: Filter by sender, recipient, message type, and threading
-- **Message Threading**: Reply chains and conversation tracking
-- **Flexible Message Types**: Support for handoffs, questions, comments, blockers, and custom types
+| **Challenge** | **Axon's Solution** |
+|-------------|-------------------|
+| "My agents talk past each other" | 🎯 **Targeted messaging** within task contexts |
+| "I lose context between agent handoffs" | 💾 **Persistent task state** with full audit trail |
+| "Scaling from 1→N agents is chaotic" | 🔄 **Task discovery & claiming** with capability matching |
+| "Hard to debug multi-agent workflows" | 📊 **Built-in timeline** with trace IDs and message threading |
+| "Complex setup and dependencies" | ⚡ **Zero-config SQLite** backend, single binary deployment |
 
-### Technical Excellence
-- **Dual Transport Support**: HTTP/SSE and STDIO modes for flexible MCP integration
-- **MCP Protocol Compliance**: Full Server-Sent Events (SSE) and JSON-RPC STDIO implementations  
-- **High Performance**: <100ms response times, 1000+ ops/second throughput
-- **Production Ready**: ACID compliance, graceful error handling, comprehensive logging
-- **SQLite Backend**: Automatic database setup with `~/db.sqlite` default path
+---
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
+- Rust 1.75+ 
+- SQLite 3.x (usually pre-installed)
 
-- Rust 1.75+ with 2024 edition support
-- SQLite 3.x (automatically handled)
-
-### Installation
+### Installation & Run
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd task-manager
-
-# Build the server
+# Clone and build
+git clone https://github.com/janreges/axon-mcp.git
+cd axon-mcp
 cargo build --release
 
-# Run the server (HTTP mode - default)
+# Run HTTP/SSE mode (default)
 ./target/release/mcp-server
+# Database auto-created at ~/db.sqlite
 
-# Run in STDIO mode for MCP client integration
+# Or run STDIO mode for direct MCP integration
 ./target/release/mcp-server --transport stdio
 ```
 
-The server will start on the default MCP SSE endpoint (HTTP mode) or JSON-RPC stdin/stdout (STDIO mode) and automatically create a SQLite database at `~/db.sqlite` if no `DATABASE_URL` is specified.
-
-### Transport Modes
-
-The server supports two transport modes:
-
-- **HTTP Mode** (default): Web server with REST API and Server-Sent Events for MCP
-- **STDIO Mode**: JSON-RPC 2.0 over stdin/stdout for direct MCP client integration
-
-See [STDIO_USAGE.md](STDIO_USAGE.md) for detailed STDIO mode documentation and examples.
-
 ### Configuration
 
-Set the database path via environment variable:
-
 ```bash
-export DATABASE_URL="sqlite:///path/to/your/database.sqlite"
+# Custom database path
+export DATABASE_URL="sqlite:///path/to/axon.db"
 ./target/release/mcp-server
 
-# Or for STDIO mode
-./target/release/mcp-server --transport stdio --database-url sqlite:///custom/path/tasks.db
+# Or via command line
+./target/release/mcp-server --database-url sqlite:///custom/path/tasks.db
 ```
 
-## MCP Function Reference
+**🎉 That's it!** Axon is now running and ready to coordinate your AI agents.
 
-The server implements 15 comprehensive MCP functions for task management and inter-agent communication:
+---
 
-### Task Management (Core 8 Functions)
-- **`create_task`**: Create new tasks with validation
-- **`update_task`**: Modify task metadata  
-- **`assign_task`**: Transfer ownership between agents
-- **`get_task_by_id`**: Retrieve by numeric ID
-- **`get_task_by_code`**: Retrieve by human-readable code
-- **`list_tasks`**: Query with filters (owner, state, date range)
-- **`set_task_state`**: Change task state with validation
-- **`archive_task`**: Move completed tasks to archive
+## 🤖 Core Use Cases
 
-### Advanced Multi-Agent Coordination (5 Functions)
-- **`discover_work`**: Find available tasks based on agent capabilities
-- **`claim_task`**: Atomically claim tasks for execution
-- **`release_task`**: Release claimed tasks back to the pool
-- **`start_work_session`**: Begin time tracking for task work
-- **`end_work_session`**: Complete work session with productivity metrics
+### 1. 🏗️ **Hierarchical Agent Teams**
+*A Manager agent orchestrates specialized Worker agents*
 
-### Inter-Agent Messaging (2 Functions)
-- **`create_task_message`**: Send targeted messages between agents within tasks
-- **`get_task_messages`**: Retrieve messages with advanced filtering options
+**Scenario**: "Analyze competitor's product launch and write a summary report"
 
-#### Message Targeting and Filtering
+1. **Manager Agent**: Creates main task + sub-tasks for research, analysis, writing
+2. **Research Agent**: Claims research task, gathers data, sends `handoff` message with findings
+3. **Analysis Agent**: Receives handoff, analyzes data, updates task to `Done`
+4. **Writer Agent**: Gets notification, drafts report based on all previous work
 
-The messaging system supports sophisticated agent-to-agent communication:
-
-**Message Creation with Targeting:**
 ```json
-{
-  "method": "create_task_message",
-  "params": {
+// Manager creates task
+{"method": "create_task", "params": {"code": "COMPETITOR-001", "name": "Product Launch Analysis"}}
+
+// Research agent sends findings
+{"method": "create_task_message", "params": {
+  "task_code": "COMPETITOR-001",
+  "author_agent_name": "research-agent", 
+  "target_agent_name": "analysis-agent",
+  "message_type": "handoff",
+  "content": "Found 5 key features: {...}"
+}}
+```
+
+### 2. 🔄 **Sequential Processing Pipeline**
+*Agents process work in stages like a CI/CD pipeline*
+
+**Scenario**: Code generation → Review → Testing → Deployment
+
+`code-generator` → `code-reviewer` → `testing-agent` → `deployment-agent`
+
+Each agent:
+1. Claims next available task with `claim_task`
+2. Processes the work 
+3. Sends results via `create_task_message`
+4. Updates task state for next agent in pipeline
+
+### 3. 🧠 **Parallel Brainstorming**
+*Multiple agents work on the same problem simultaneously*
+
+**Scenario**: "Research 3 different approaches to solve X"
+
+- Manager spawns 3 identical research tasks
+- Research agents claim tasks simultaneously  
+- Each contributes findings via messages
+- Synthesis agent combines all results
+
+---
+
+## 🔌 Agent Prompt Engineering (Critical!)
+
+**Axon provides the coordination infrastructure, but your agents need proper instructions to use it effectively.**
+
+### Example System Prompt for a Research Agent:
+
+```text
+You are 'research-agent', specialized in gathering and analyzing information.
+
+AXON INTEGRATION:
+You can coordinate with other agents through these MCP functions:
+
+- list_tasks({"owner": "research-agent", "state": "Created"}) - Find your assigned tasks
+- get_task_by_id({"id": N}) - Get task details  
+- set_task_state({"id": N, "state": "InProgress"}) - Start working
+- create_task_message({
     "task_code": "TASK-001", 
-    "author_agent_name": "frontend-developer",
-    "target_agent_name": "backend-developer",  // ← NEW: Target specific agent
+    "author_agent_name": "research-agent",
+    "target_agent_name": "analysis-agent", 
     "message_type": "handoff",
-    "content": "Component ready, need API endpoint"
-  }
-}
+    "content": "Your findings here..."
+  }) - Share results with other agents
+- set_task_state({"id": N, "state": "Done"}) - Mark complete
+
+WORKFLOW:
+1. Check for new tasks assigned to you
+2. Set task to "InProgress" 
+3. Do your research work
+4. Send findings to the next agent via message
+5. Mark task as "Done"
+
+Always include context and clear handoffs in your messages.
 ```
 
-**Advanced Message Filtering:**
-```json
-{
-  "method": "get_task_messages", 
-  "params": {
-    "task_code": "TASK-001",
-    "author_agent_name": "frontend-developer",    // Filter by sender
-    "target_agent_name": "backend-developer",     // ← NEW: Filter by intended recipient
-    "message_type": "handoff",                    // Filter by message type
-    "limit": 10
-  }
-}
+**💡 Pro Tips:**
+- Define clear **message types** (`handoff`, `question`, `blocker`, `comment`)
+- Use **targeted messages** to avoid noise
+- Include **task codes** for traceability  
+- Handle **error states** gracefully
+
+---
+
+## 📋 Complete MCP Function Reference
+
+Axon implements **15 comprehensive MCP functions** organized in three categories:
+
+<details>
+<summary><strong>📝 Core Task Management (8 Functions)</strong></summary>
+
+- **`create_task`** - Create new tasks with validation
+- **`update_task`** - Modify task metadata and descriptions  
+- **`assign_task`** - Transfer ownership between agents
+- **`get_task_by_id`** - Retrieve task by numeric ID
+- **`get_task_by_code`** - Retrieve task by human-readable code (e.g., `TASK-123`)
+- **`list_tasks`** - Query tasks with filters (owner, state, date range)
+- **`set_task_state`** - Change task lifecycle state with validation
+- **`archive_task`** - Move completed tasks to archive
+
+</details>
+
+<details>
+<summary><strong>🤝 Multi-Agent Coordination (5 Functions)</strong></summary>
+
+- **`discover_work`** - Find available tasks based on agent capabilities
+- **`claim_task`** - Atomically claim unassigned tasks for execution
+- **`release_task`** - Release claimed tasks back to the pool
+- **`start_work_session`** - Begin time tracking for task work
+- **`end_work_session`** - Complete work session with productivity metrics
+
+</details>
+
+<details>
+<summary><strong>💬 Inter-Agent Messaging (2 Functions)</strong></summary>
+
+- **`create_task_message`** - Send targeted messages within task contexts
+  - **Types**: `handoff`, `question`, `comment`, `solution`, `blocker`, custom
+  - **Threading**: Reply chains with `reply_to_message_id`
+- **`get_task_messages`** - Retrieve messages with advanced filtering
+  - Filter by sender, recipient, message type, threading
+
+</details>
+
+📖 **Full API documentation with JSON examples**: [`docs/API.md`](docs/API.md)
+
+---
+
+## 🏗️ Architecture
+
+**Multi-crate Rust workspace** designed for performance and maintainability:
+
+```
+axon-mcp/
+├── core/           # 🧩 Domain models and business logic  
+├── database/       # 🗄️ SQLite repository implementation
+├── mcp-protocol/   # 🌐 MCP server with HTTP/SSE transport
+├── mcp-server/     # 🚀 Main binary and configuration
+└── mocks/          # 🧪 Test utilities and fixtures
 ```
 
-**Supported Message Types:**
-- `handoff` - Work handoffs between agents
-- `comment` - General observations and updates
-- `question` - Questions requiring responses
-- `solution` - Answers and solutions
-- `blocker` - Issues preventing progress
-- Custom types as needed by your project
+**Transport Modes:**
+- **HTTP/SSE**: Web dashboard + Server-Sent Events for MCP
+- **STDIO**: JSON-RPC over stdin/stdout for direct integration
 
-For complete API documentation with examples, see [API.md](API.md).
-
-## Use Cases and Examples
-
-### Multi-Agent Workflow Coordination
-
-**Scenario**: Frontend, Backend, and QA agents collaborating on a payment feature
-
-1. **Frontend Developer** creates handoff for backend:
-```json
-{
-  "method": "create_task_message",
-  "params": {
-    "task_code": "PAY-001",
-    "author_agent_name": "frontend-developer", 
-    "target_agent_name": "backend-developer",
-    "message_type": "handoff",
-    "content": "Payment component complete. State structure: {amount, currency, method}. Need matching API endpoint."
-  }
-}
-```
-
-2. **Backend Developer** reads only their targeted messages:
-```json
-{
-  "method": "get_task_messages",
-  "params": {
-    "task_code": "PAY-001",
-    "target_agent_name": "backend-developer"
-  }
-}
-// Returns: Frontend handoff with component details
-```
-
-3. **Backend Developer** completes work and hands off to QA:
-```json
-{
-  "method": "create_task_message", 
-  "params": {
-    "task_code": "PAY-001",
-    "author_agent_name": "backend-developer",
-    "target_agent_name": "qa-tester", 
-    "message_type": "handoff",
-    "content": "API endpoint /api/v1/payments ready. Test with staging data."
-  }
-}
-```
-
-4. **QA Tester** asks clarifying question:
-```json
-{
-  "method": "create_task_message",
-  "params": {
-    "task_code": "PAY-001",
-    "author_agent_name": "qa-tester",
-    "target_agent_name": "backend-developer",
-    "message_type": "question", 
-    "content": "What are the valid amount ranges for testing?"
-  }
-}
-```
-
-### Task Discovery and Claiming
-
-**Scenario**: Agents finding and claiming work based on capabilities
-
-```json
-// Agent discovers available work
-{
-  "method": "discover_work",
-  "params": {
-    "agent_name": "python-developer",
-    "capabilities": ["python", "api", "testing"],
-    "max_tasks": 5
-  }
-}
-
-// Agent claims a specific task
-{
-  "method": "claim_task",
-  "params": {
-    "task_id": 42,
-    "agent_name": "python-developer"
-  }
-}
-```
-
-### Message Filtering Patterns
-
-```json
-// Get all handoffs from frontend to backend
-{
-  "method": "get_task_messages",
-  "params": {
-    "task_code": "TASK-001",
-    "author_agent_name": "frontend-developer",
-    "target_agent_name": "backend-developer", 
-    "message_type": "handoff"
-  }
-}
-
-// Get all questions directed at me
-{
-  "method": "get_task_messages", 
-  "params": {
-    "task_code": "TASK-001",
-    "target_agent_name": "my-agent-name",
-    "message_type": "question"
-  }
-}
-
-// Get recent general updates (no specific target)
-{
-  "method": "get_task_messages",
-  "params": {
-    "task_code": "TASK-001", 
-    "message_type": "comment",
-    "limit": 10
-  }
-}
-```
-
-## Task States
-
-Tasks progress through a defined lifecycle:
-
+**Task State Machine:**
 ```
 Created → InProgress → Review → Done → Archived
     ↓         ↓          ↓       ↓
   Blocked ←---+----------+-------+
 ```
 
-- **Created**: Initial state for new tasks
-- **InProgress**: Actively being worked on  
-- **Blocked**: Temporarily blocked by dependencies
-- **Review**: Awaiting review or approval
-- **Done**: Successfully completed
-- **Archived**: Moved to long-term storage
+---
 
-## Architecture
+## 📊 Performance & Scale
 
-The server uses a multi-crate Rust workspace architecture for parallel development:
+- **Response Time**: <100ms for single operations
+- **Throughput**: 1000+ operations per second  
+- **Concurrent Agents**: 100+ simultaneous connections
+- **Database Capacity**: 1M+ tasks and messages without degradation
+- **Message Filtering**: Optimized indexes for fast targeted retrieval
 
-```
-task-manager/
-├── core/          # Domain models and business logic
-├── database/           # SQLite repository implementation  
-├── mcp-protocol/       # MCP server with SSE transport
-├── mcp-server/         # Main binary and configuration
-└── mocks/              # Test utilities and fixtures
-```
+---
 
-Each crate can be developed and tested independently, with clear interface contracts defined in the core crate.
+## 🎯 Real-World Applications
 
-## Development
+**🔬 Complex Analysis Projects**
+- Research → Analysis → Report generation workflows
+- Multi-perspective evaluation (technical, business, legal teams)
+
+**💻 Software Development**  
+- Code generation → Review → Testing → Deployment pipelines
+- Architecture planning with specialized expert agents
+
+**📈 Business Intelligence**
+- Data collection → Processing → Visualization → Insights
+- Parallel analysis by domain experts
+
+**🧪 Research & Development**
+- Hypothesis generation → Testing → Validation workflows
+- Literature review + experimental design coordination
+
+---
+
+## 🛠️ Development
 
 ### Building from Source
 
 ```bash
 # Build all crates
-cargo build
+cargo build --workspace
 
-# Run tests
-cargo test
+# Run comprehensive tests  
+cargo test --workspace
 
-# Run with development logging
-RUST_LOG=debug cargo run
+# Development with logging
+RUST_LOG=debug cargo run --bin mcp-server
 ```
 
-### Running Tests
+### Testing
 
 ```bash
-# Unit tests
+# Unit tests per crate
 cargo test --lib
 
-# Integration tests  
-cargo test --test integration
+# Integration tests
+cargo test --test integration  
 
-# With coverage
+# Coverage report
 cargo tarpaulin --out html
 ```
 
-### Documentation
+---
 
-Generate and view documentation:
+## 🤝 Contributing
 
-```bash
-# Build documentation
-cargo doc --open
+We welcome contributions! Please see [`CONTRIBUTING.md`](CONTRIBUTING.md) for:
+- Development guidelines
+- Testing procedures  
+- Submission requirements
 
-# Check documentation
-cargo doc --no-deps --document-private-items
-```
+**Quick Steps:**
+1. Fork and create feature branch
+2. `cargo fmt && cargo clippy` (we auto-lint)
+3. Add tests for new functionality
+4. Open PR with clear description
 
-## Performance
+---
 
-- **Response Time**: <100ms for single task operations
-- **Throughput**: >1000 operations per second  
-- **Concurrent Clients**: 100+ simultaneous MCP connections
-- **Database Capacity**: 1M+ tasks and messages without performance degradation
-- **Message Filtering**: Optimized database indexes for fast targeted message retrieval
-- **Multi-Agent Scaling**: Supports hundreds of concurrent agents with targeted communication
+## 📄 License
 
-## Contributing
+MIT © 2025 Jan Reges & Contributors
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines, testing procedures, and submission requirements.
+See the [`LICENSE`](LICENSE) file for details.
 
-## License
+---
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 🔗 Links
 
-## Support
+- **Repository**: https://github.com/janreges/axon-mcp
+- **Documentation**: [`docs/`](docs/) 
+- **Issues & Discussion**: [GitHub Issues](https://github.com/janreges/axon-mcp/issues)
+- **Model Context Protocol**: [MCP Specification](https://github.com/modelcontextprotocol/mcp-spec)
 
-For issues, questions, or contributions:
-- Create an issue on GitHub
-- Check existing documentation in [docs/](docs/)
-- Review the [troubleshooting guide](docs/troubleshooting.md)
+---
+
+*🧠 Axon: Where AI agents connect, coordinate, and collaborate.*
