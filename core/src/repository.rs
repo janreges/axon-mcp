@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use crate::{
     error::Result,
-    models::{Task, TaskFilter, TaskState, NewTask, UpdateTask},
+    models::{Task, TaskFilter, TaskState, NewTask, UpdateTask, TaskMessage},
 };
 
 /// Repository trait for task persistence and retrieval operations
@@ -198,6 +198,72 @@ pub struct RepositoryStats {
     pub latest_created: Option<chrono::DateTime<chrono::Utc>>,
     /// Most recently completed task timestamp  
     pub latest_completed: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// Repository trait for task message persistence and retrieval
+/// 
+/// This trait defines the interface for all task messaging operations.
+/// Messages support inter-agent communication within tasks.
+#[async_trait]
+pub trait TaskMessageRepository: Send + Sync {
+    /// Create a new task message
+    /// 
+    /// # Arguments
+    /// * `task_code` - The task code this message belongs to
+    /// * `author_agent_name` - The agent authoring the message
+    /// * `target_agent_name` - Optional agent the message is intended for
+    /// * `message_type` - The type of message (Comment, Question, Handoff, etc.)
+    /// * `content` - The message content
+    /// * `reply_to_message_id` - Optional message ID this is replying to
+    /// 
+    /// # Returns
+    /// * `Ok(TaskMessage)` - The created message with assigned ID and timestamp
+    /// * `Err(TaskError::NotFound)` - If the task doesn't exist
+    /// * `Err(TaskError::Validation)` - If the message data is invalid
+    /// * `Err(TaskError::Database)` - If the database operation fails
+    async fn create_message(
+        &self,
+        task_code: &str,
+        author_agent_name: &str,
+        target_agent_name: Option<&str>,
+        message_type: &str,
+        content: &str,
+        reply_to_message_id: Option<i32>,
+    ) -> Result<TaskMessage>;
+
+    /// Get task messages with optional filtering
+    /// 
+    /// # Arguments
+    /// * `task_code` - The task code to get messages for (required)
+    /// * `author_agent_name` - Optional filter by author agent
+    /// * `target_agent_name` - Optional filter by target agent
+    /// * `message_type` - Optional filter by message type (e.g. MessageType::Handoff)
+    /// * `reply_to_message_id` - Optional filter by parent message
+    /// * `limit` - Optional limit on number of messages returned
+    /// 
+    /// # Returns
+    /// * `Ok(Vec<TaskMessage>)` - Messages matching the filters, ordered by creation time
+    /// * `Err(TaskError::NotFound)` - If the task doesn't exist
+    /// * `Err(TaskError::Database)` - If the database operation fails
+    async fn get_messages(
+        &self,
+        task_code: &str,
+        author_agent_name: Option<&str>,
+        target_agent_name: Option<&str>,
+        message_type: Option<&str>,
+        reply_to_message_id: Option<i32>,
+        limit: Option<u32>,
+    ) -> Result<Vec<TaskMessage>>;
+
+    /// Get a specific message by ID
+    /// 
+    /// # Arguments
+    /// * `message_id` - The message ID to retrieve
+    /// 
+    /// # Returns
+    /// * `Ok(Option<TaskMessage>)` - The message if found
+    /// * `Err(TaskError::Database)` - If the database operation fails
+    async fn get_message_by_id(&self, message_id: i32) -> Result<Option<TaskMessage>>;
 }
 
 

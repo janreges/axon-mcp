@@ -45,11 +45,11 @@ pub mod mcp_v2_extensions;
 pub use models::{
     Task, TaskState, TaskFilter, NewTask, UpdateTask,
     // MCP v2 New Entity Types
-    KnowledgeObject, TaskMessage, MessageType, AgentProfile, AgentStatus,
+    KnowledgeObject, TaskMessage, AgentProfile, AgentStatus,
     WorkflowDefinition, SystemEvent, EventSeverity, WorkSession,
 };
 pub use error::{TaskError, Result};
-pub use repository::{TaskRepository, RepositoryStats};
+pub use repository::{TaskRepository, TaskMessageRepository, RepositoryStats};
 pub use protocol::{
     ProtocolHandler, HealthStatus,
     CreateTaskParams, UpdateTaskParams, SetStateParams,
@@ -58,6 +58,8 @@ pub use protocol::{
     // MCP v2 Advanced Multi-Agent Types
     DiscoverWorkParams, ClaimTaskParams, ReleaseTaskParams,
     StartWorkSessionParams, EndWorkSessionParams, WorkSessionInfo,
+    // Task Messaging Types
+    CreateTaskMessageParams, GetTaskMessagesParams,
 };
 pub use validation::TaskValidator;
 pub use circuit_breaker::{CircuitBreaker, FailureType, CircuitState, CircuitBreakerAction};

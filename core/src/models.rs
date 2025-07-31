@@ -323,8 +323,10 @@ pub struct TaskMessage {
     pub task_code: String,
     /// Author agent name (kebab-case)
     pub author_agent_name: String,
-    /// Message type
-    pub message_type: MessageType,
+    /// Target agent name (optional - who the message is for)
+    pub target_agent_name: Option<String>,
+    /// Message type (project-specific string like "handoff", "comment", "question", etc.)
+    pub message_type: String,
     /// Creation timestamp
     pub created_at: DateTime<Utc>,
     /// Message content
@@ -333,25 +335,17 @@ pub struct TaskMessage {
     pub reply_to_message_id: Option<i32>,
 }
 
-/// Message types for agent communication
-#[derive(Debug, Clone, Copy, Hash, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum MessageType {
-    /// General comment
-    Comment,
-    /// Question that needs answering
-    Question,
-    /// Status or progress update
-    Update,
-    /// Issue preventing progress
-    Blocker,
-    /// Solution or workaround
-    Solution,
-    /// Code/work review comment
-    Review,
-    /// Handoff related message
-    Handoff,
-}
+// Note: MessageType is now a String for project flexibility
+// Projects can define their own message types like:
+// - "handoff" - předávací protokoly mezi agenty
+// - "comment" - obecné komentáře  
+// - "question" - otázky vyžadující odpověď
+// - "blocker" - blokující problémy
+// - "solution" - řešení a návrhy
+// - "review" - code review komentáře
+// - "specification" - specifikace a požadavky
+// - "test-results" - výsledky testů
+// - etc. - libovolné podle potřeb projektu
 
 /// Knowledge object types for categorizing information
 #[derive(Debug, Clone, Copy, Hash, Serialize, Deserialize, PartialEq, Eq)]
