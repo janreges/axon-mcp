@@ -1,14 +1,14 @@
 use task_core::{
     error::{Result, TaskError},
-    models::{Task, TaskState, TaskFilter, NewTask, UpdateTask},
-    repository::{TaskRepository, RepositoryStats},
+    models::{Task, TaskState, TaskFilter, NewTask, UpdateTask, TaskMessage},
+    repository::{TaskRepository, TaskMessageRepository, RepositoryStats},
 };
 use async_trait::async_trait;
 use sqlx::{SqlitePool, Sqlite, migrate::MigrateDatabase, Row};
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use crate::common::{
-    state_to_string, string_to_state, row_to_task, sqlx_error_to_task_error
+    state_to_string, string_to_state, row_to_task, row_to_task_message, sqlx_error_to_task_error
 };
 
 /// SQLite implementation of the TaskRepository trait
@@ -541,6 +541,137 @@ impl TaskRepository for SqliteTaskRepository {
         }
         
         Ok(())
+    }
+}
+
+#[async_trait]
+impl TaskMessageRepository for SqliteTaskRepository {
+    async fn create_message(
+        &self,
+        task_code: &str,
+        author_agent_name: &str,
+        target_agent_name: Option<&str>,
+        message_type: &str,
+        content: &str,
+        reply_to_message_id: Option<i32>,
+    ) -> Result<TaskMessage> {
+        // Validate input data
+        if task_code.trim().is_empty() {
+            return Err(TaskError::empty_field("task_code"));
+        }
+        if author_agent_name.trim().is_empty() {
+            return Err(TaskError::empty_field("author_agent_name"));
+        }
+        if message_type.trim().is_empty() {
+            return Err(TaskError::empty_field("message_type"));
+        }
+        if content.trim().is_empty() {
+            return Err(TaskError::empty_field("content"));
+        }
+
+        // Validate that the task exists
+        let task_exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tasks WHERE code = ?)")
+            .bind(task_code)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(sqlx_error_to_task_error)?;
+            
+        if !task_exists {
+            return Err(TaskError::not_found_code(task_code));
+        }
+
+        let now = Utc::now();
+        
+        let row = sqlx::query(
+            r#"
+            INSERT INTO task_messages (task_code, author_agent_name, target_agent_name, message_type, content, reply_to_message_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            RETURNING id, task_code, author_agent_name, target_agent_name, message_type, content, reply_to_message_id, created_at
+            "#
+        )
+        .bind(task_code)
+        .bind(author_agent_name)
+        .bind(target_agent_name)
+        .bind(message_type)
+        .bind(content)
+        .bind(reply_to_message_id)
+        .bind(now)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(sqlx_error_to_task_error)?;
+
+        row_to_task_message(&row)
+    }
+
+    async fn get_messages(
+        &self,
+        task_code: &str,
+        author_agent_name: Option<&str>,
+        target_agent_name: Option<&str>,
+        message_type: Option<&str>,
+        reply_to_message_id: Option<i32>,
+        limit: Option<u32>,
+    ) -> Result<Vec<TaskMessage>> {
+        // Build dynamic query based on filters
+        let mut query_builder: sqlx::QueryBuilder<sqlx::Sqlite> = 
+            sqlx::QueryBuilder::new("SELECT id, task_code, author_agent_name, target_agent_name, message_type, content, reply_to_message_id, created_at FROM task_messages WHERE task_code = ");
+        
+        query_builder.push_bind(task_code);
+        
+        if let Some(author) = author_agent_name {
+            query_builder.push(" AND author_agent_name = ");
+            query_builder.push_bind(author);
+        }
+        
+        if let Some(target) = target_agent_name {
+            query_builder.push(" AND target_agent_name = ");
+            query_builder.push_bind(target);
+        }
+        
+        if let Some(msg_type) = message_type {
+            query_builder.push(" AND message_type = ");
+            query_builder.push_bind(msg_type);
+        }
+        
+        if let Some(reply_id) = reply_to_message_id {
+            query_builder.push(" AND reply_to_message_id = ");
+            query_builder.push_bind(reply_id);
+        }
+        
+        query_builder.push(" ORDER BY created_at DESC");
+        
+        if let Some(limit) = limit {
+            query_builder.push(" LIMIT ");
+            query_builder.push_bind(limit);
+        }
+
+        let rows = query_builder
+            .build()
+            .fetch_all(&self.pool)
+            .await
+            .map_err(sqlx_error_to_task_error)?;
+
+        let mut messages = Vec::new();
+        for row in rows {
+            messages.push(row_to_task_message(&row)?);
+        }
+
+        Ok(messages)
+    }
+
+    async fn get_message_by_id(&self, message_id: i32) -> Result<Option<TaskMessage>> {
+        let result = sqlx::query(
+            "SELECT id, task_code, author_agent_name, target_agent_name, message_type, content, reply_to_message_id, created_at FROM task_messages WHERE id = ?"
+        )
+        .bind(message_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(sqlx_error_to_task_error)?;
+
+        match result {
+            Some(row) => Ok(Some(row_to_task_message(&row)?)),
+            None => Ok(None),
+        }
     }
 }
 

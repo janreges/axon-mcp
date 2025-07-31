@@ -1,6 +1,6 @@
 use task_core::{
     error::{Result, TaskError},
-    models::{Task, TaskState, TaskFilter},
+    models::{Task, TaskState, TaskFilter, TaskMessage},
 };
 use chrono::{DateTime, Utc};
 use sqlx::{Row, sqlite::SqliteRow};
@@ -73,6 +73,22 @@ pub fn row_to_task(row: &SqliteRow) -> Result<Task> {
         required_capabilities,
         estimated_effort: row.try_get("estimated_effort").ok().flatten(),
         confidence_threshold: row.try_get("confidence_threshold").ok().unwrap_or(0.8),
+    })
+}
+
+/// Convert SQLite row to TaskMessage model
+pub fn row_to_task_message(row: &SqliteRow) -> Result<TaskMessage> {
+    let created_at: DateTime<Utc> = row.get("created_at");
+    
+    Ok(TaskMessage {
+        id: row.get("id"),
+        task_code: row.get("task_code"),
+        author_agent_name: row.get("author_agent_name"),
+        target_agent_name: row.get("target_agent_name"),
+        message_type: row.get("message_type"),
+        created_at,
+        content: row.get("content"),
+        reply_to_message_id: row.get("reply_to_message_id"),
     })
 }
 

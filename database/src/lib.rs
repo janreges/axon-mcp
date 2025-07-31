@@ -42,6 +42,6 @@ pub use sqlite::SqliteTaskRepository;
 // Re-export commonly used types from task-core for convenience
 pub use task_core::{
     error::{Result, TaskError},
-    models::{Task, TaskState, TaskFilter, NewTask, UpdateTask},
-    repository::{TaskRepository, RepositoryStats},
+    models::{Task, TaskState, TaskFilter, NewTask, UpdateTask, TaskMessage},
+    repository::{TaskRepository, TaskMessageRepository, RepositoryStats},
 };
