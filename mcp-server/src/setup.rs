@@ -31,26 +31,30 @@ pub async fn create_repository(config: &Config) -> Result<Arc<SqliteTaskReposito
 }
 
 /// Create and configure the MCP server
-pub fn create_server(repository: Arc<SqliteTaskRepository>) -> Result<McpServer<SqliteTaskRepository>> {
+pub fn create_server(repository: Arc<SqliteTaskRepository>, message_repository: Arc<SqliteTaskRepository>) -> Result<McpServer<SqliteTaskRepository, SqliteTaskRepository>> {
     info!("Creating MCP server");
     
-    let server = McpServer::new(repository);
+    let server = McpServer::new(repository, message_repository);
     
     info!("MCP server created successfully");
     Ok(server)
 }
 
 /// Initialize the complete application
-pub async fn initialize_app(config: &Config) -> Result<McpServer<SqliteTaskRepository>> {
+pub async fn initialize_app(config: &Config) -> Result<McpServer<SqliteTaskRepository, SqliteTaskRepository>> {
     info!("Initializing application");
     
     // Create repository
     let repository = create_repository(config)
         .await
         .context("Failed to create repository")?;
+        
+    // For now, use the same repository for both tasks and messages
+    // In the future, these could be separate repositories
+    let message_repository = repository.clone();
     
     // Create server
-    let server = create_server(repository)
+    let server = create_server(repository, message_repository)
         .context("Failed to create server")?;
     
     info!("Application initialized successfully");
@@ -195,7 +199,8 @@ mod tests {
         };
 
         let repo = create_repository(&config).await.unwrap();
-        let server = create_server(repo);
+        let message_repo = repo.clone();
+        let server = create_server(repo, message_repo);
         assert!(server.is_ok());
     }
 }

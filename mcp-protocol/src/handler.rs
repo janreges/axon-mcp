@@ -3,32 +3,39 @@
 //! Implements the ProtocolHandler trait for MCP communication.
 
 use std::sync::Arc;
-use ::task_core::{TaskRepository, ProtocolHandler, Task, NewTask, HealthStatus};
+use ::task_core::{TaskRepository, TaskMessageRepository, ProtocolHandler, Task, NewTask, HealthStatus, TaskMessage};
 use ::task_core::{DiscoverWorkParams, ClaimTaskParams, ReleaseTaskParams, StartWorkSessionParams, EndWorkSessionParams, WorkSessionInfo};
+use ::task_core::{CreateTaskMessageParams, GetTaskMessagesParams};
 use ::task_core::error::Result;
 use crate::serialization::*;
 use async_trait::async_trait;
 
-/// MCP Task Handler that bridges MCP protocol with TaskRepository
+/// MCP Task Handler that bridges MCP protocol with TaskRepository and TaskMessageRepository
 #[derive(Clone)]
-pub struct McpTaskHandler<R> {
+pub struct McpTaskHandler<R, M> {
     repository: Arc<R>,
+    message_repository: Arc<M>,
 }
 
-impl<R> McpTaskHandler<R> {
+impl<R, M> McpTaskHandler<R, M> {
     /// Create new MCP task handler
-    pub fn new(repository: Arc<R>) -> Self {
-        Self { repository }
+    pub fn new(repository: Arc<R>, message_repository: Arc<M>) -> Self {
+        Self { repository, message_repository }
     }
     
     /// Get a clone of the repository Arc for creating new handlers
     pub fn repository(&self) -> Arc<R> {
         self.repository.clone()
     }
+    
+    /// Get a clone of the message repository Arc
+    pub fn message_repository(&self) -> Arc<M> {
+        self.message_repository.clone()
+    }
 }
 
 #[async_trait]
-impl<R: TaskRepository + Send + Sync> ProtocolHandler for McpTaskHandler<R> {
+impl<R: TaskRepository + Send + Sync, M: TaskMessageRepository + Send + Sync> ProtocolHandler for McpTaskHandler<R, M> {
     async fn create_task(&self, params: CreateTaskParams) -> Result<Task> {
         let new_task = NewTask::new(
             params.code,
@@ -113,6 +120,30 @@ impl<R: TaskRepository + Send + Sync> ProtocolHandler for McpTaskHandler<R> {
     async fn end_work_session(&self, params: EndWorkSessionParams) -> Result<()> {
         self.repository.end_work_session(params.session_id, params.notes, params.productivity_score).await
     }
+
+    // Task Messaging Implementation
+    
+    async fn create_task_message(&self, params: CreateTaskMessageParams) -> Result<TaskMessage> {
+        self.message_repository.create_message(
+            &params.task_code,
+            &params.author_agent_name,
+            params.target_agent_name.as_deref(),
+            &params.message_type,
+            &params.content,
+            params.reply_to_message_id,
+        ).await
+    }
+    
+    async fn get_task_messages(&self, params: GetTaskMessagesParams) -> Result<Vec<TaskMessage>> {
+        self.message_repository.get_messages(
+            &params.task_code,
+            params.author_agent_name.as_deref(),
+            params.target_agent_name.as_deref(),
+            params.message_type.as_deref(),
+            params.reply_to_message_id,
+            params.limit,
+        ).await
+    }
 }
 
 #[cfg(test)]
@@ -148,7 +179,8 @@ mod tests {
     #[test]
     fn test_handler_creation() {
         let mock_repo = Arc::new(MockTestRepository::new());
-        let _handler = McpTaskHandler::new(mock_repo);
+        let mock_message_repo = Arc::new(MockTestRepository::new()); // For simplicity, using same mock
+        let _handler = McpTaskHandler::new(mock_repo, mock_message_repo);
         // Basic test that handler can be created
         assert!(true);
     }

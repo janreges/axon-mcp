@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use mcp_protocol::{McpTaskHandler, McpError};
 use serde_json::{json, Value};
-use task_core::{TaskRepository, ProtocolHandler};
+use task_core::{TaskRepository, TaskMessageRepository, ProtocolHandler};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::{info, error, debug, warn};
 
@@ -23,16 +23,16 @@ enum McpState {
 }
 
 /// STDIO MCP Server with proper protocol state management
-pub struct StdioMcpServer<R> {
-    handler: McpTaskHandler<R>,
+pub struct StdioMcpServer<R, M> {
+    handler: McpTaskHandler<R, M>,
     state: McpState,
 }
 
-impl<R: TaskRepository + Send + Sync + 'static> StdioMcpServer<R> {
+impl<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRepository + Send + Sync + 'static> StdioMcpServer<R, M> {
     /// Create new STDIO MCP server
-    pub fn new(repository: Arc<R>) -> Self {
+    pub fn new(repository: Arc<R>, message_repository: Arc<M>) -> Self {
         Self {
-            handler: McpTaskHandler::new(repository),
+            handler: McpTaskHandler::new(repository, message_repository),
             state: McpState::WaitingForInitialize,
         }
     }

@@ -117,9 +117,12 @@ async fn main() -> Result<()> {
             let repository = create_repository(&config)
                 .await
                 .context("Failed to create repository")?;
+                
+            // For now, use the same repository for both tasks and messages
+            let message_repository = repository.clone();
             
             // Create STDIO server
-            let stdio_server = StdioMcpServer::new(repository);
+            let stdio_server = StdioMcpServer::new(repository, message_repository);
             
             // Run STDIO server (blocks until stdin is closed)
             stdio_server.serve()

@@ -183,6 +183,9 @@ impl McpAuth {
             "discover_work" => McpScope::TaskRead, // Reading available work
             "claim_task" | "release_task" => McpScope::TaskWrite, // Modifying task ownership
             "start_work_session" | "end_work_session" => McpScope::TaskWrite, // Time tracking modifications
+            // Task Messaging Functions
+            "create_task_message" => McpScope::TaskWrite, // Creating messages
+            "get_task_messages" => McpScope::TaskRead, // Reading messages
             _ => return false, // Unknown method
         };
         

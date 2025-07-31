@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use crate::{
     error::Result,
-    models::{Task, TaskFilter, TaskState, NewTask, UpdateTask},
+    models::{Task, TaskFilter, TaskState, NewTask, UpdateTask, TaskMessage},
 };
 
 /// Protocol handler trait for MCP operations
@@ -54,6 +54,14 @@ pub trait ProtocolHandler: Send + Sync {
 
     /// End a work session
     async fn end_work_session(&self, params: EndWorkSessionParams) -> Result<()>;
+
+    // Task Communication & Messaging
+    
+    /// Create a task message (comments, questions, handoff protocols, etc.)
+    async fn create_task_message(&self, params: CreateTaskMessageParams) -> Result<TaskMessage>;
+    
+    /// Get task messages with optional filtering
+    async fn get_task_messages(&self, params: GetTaskMessagesParams) -> Result<Vec<TaskMessage>>;
 }
 
 /// MCP parameters for creating a new task
@@ -254,6 +262,30 @@ pub struct WorkSessionInfo {
     pub task_id: i32,
     pub agent_name: String,
     pub started_at: chrono::DateTime<chrono::Utc>,
+}
+
+// Task Messaging Parameter Types
+
+/// MCP parameters for creating a task message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateTaskMessageParams {
+    pub task_code: String,
+    pub author_agent_name: String,
+    pub target_agent_name: Option<String>,
+    pub message_type: String,
+    pub content: String,
+    pub reply_to_message_id: Option<i32>,
+}
+
+/// MCP parameters for getting task messages with filtering
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GetTaskMessagesParams {
+    pub task_code: String,
+    pub author_agent_name: Option<String>,
+    pub target_agent_name: Option<String>,
+    pub message_type: Option<String>,
+    pub reply_to_message_id: Option<i32>,
+    pub limit: Option<u32>,
 }
 
 #[cfg(test)]

@@ -17,37 +17,37 @@ use tokio::sync::mpsc;
 use tracing::info;
 
 use crate::{auth::McpAuth, error::McpError, handler::McpTaskHandler, serialization::*};
-use ::task_core::{TaskRepository, ProtocolHandler, DiscoverWorkParams, ClaimTaskParams, ReleaseTaskParams, StartWorkSessionParams, EndWorkSessionParams};
+use ::task_core::{TaskRepository, TaskMessageRepository, ProtocolHandler, DiscoverWorkParams, ClaimTaskParams, ReleaseTaskParams, StartWorkSessionParams, EndWorkSessionParams, CreateTaskMessageParams, GetTaskMessagesParams};
 
 /// MCP Protocol Version as required by 2025-06-18 specification
 const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
 
 /// Shared server state for handlers
 #[derive(Clone)]
-pub struct McpServerState<R> {
-    pub handler: McpTaskHandler<R>,
+pub struct McpServerState<R, M> {
+    pub handler: McpTaskHandler<R, M>,
     pub auth: McpAuth,
 }
 
 /// MCP Server with multiple transport support
-pub struct McpServer<R> {
-    handler: McpTaskHandler<R>,
+pub struct McpServer<R, M> {
+    handler: McpTaskHandler<R, M>,
     auth: McpAuth,
 }
 
-impl<R: TaskRepository + Send + Sync + 'static> McpServer<R> {
+impl<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRepository + Send + Sync + 'static> McpServer<R, M> {
     /// Create new MCP server with authentication disabled (development mode)
-    pub fn new(repository: Arc<R>) -> Self {
+    pub fn new(repository: Arc<R>, message_repository: Arc<M>) -> Self {
         Self {
-            handler: McpTaskHandler::new(repository),
+            handler: McpTaskHandler::new(repository, message_repository),
             auth: McpAuth::new(false), // Disabled by default for backward compatibility
         }
     }
     
     /// Create new MCP server with authentication enabled (production mode)
-    pub fn new_with_auth(repository: Arc<R>, auth_enabled: bool) -> Self {
+    pub fn new_with_auth(repository: Arc<R>, message_repository: Arc<M>, auth_enabled: bool) -> Self {
         Self {
-            handler: McpTaskHandler::new(repository),
+            handler: McpTaskHandler::new(repository, message_repository),
             auth: McpAuth::new(auth_enabled),
         }
     }
@@ -174,14 +174,25 @@ impl<R: TaskRepository + Send + Sync + 'static> McpServer<R> {
                 self.handler.end_work_session(params).await.map_err(McpError::from)?;
                 Ok(Value::Null) // Success with no return value
             }
+            // Task Messaging Functions
+            "create_task_message" => {
+                let params: CreateTaskMessageParams = deserialize_mcp_params(params)?;
+                let message = self.handler.create_task_message(params).await.map_err(McpError::from)?;
+                Ok(serde_json::to_value(message).map_err(|e| McpError::Serialization(e.to_string()))?)
+            }
+            "get_task_messages" => {
+                let params: GetTaskMessagesParams = deserialize_mcp_params(params)?;
+                let messages = self.handler.get_task_messages(params).await.map_err(McpError::from)?;
+                Ok(serde_json::to_value(messages).map_err(|e| McpError::Serialization(e.to_string()))?)
+            }
             _ => Err(McpError::Protocol(format!("Unknown method: {method}"))),
         }
     }
 }
 
 /// Execute MCP method - shared logic for both server instances and handlers
-async fn execute_mcp_method<R: TaskRepository + Send + Sync>(
-    handler: &McpTaskHandler<R>, 
+async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepository + Send + Sync>(
+    handler: &McpTaskHandler<R, M>, 
     method: &str, 
     params: Value, 
     id: Option<Value>
@@ -377,6 +388,33 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync>(
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
             }
         }
+        // Task Messaging Functions
+        "create_task_message" => {
+            let params: CreateTaskMessageParams = match deserialize_mcp_params(params) {
+                Ok(p) => p,
+                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+            };
+            match handler.create_task_message(params).await {
+                Ok(message) => match serde_json::to_value(message) {
+                    Ok(value) => create_success_response(id, value),
+                    Err(e) => McpError::Serialization(e.to_string()).to_json_rpc_error(id),
+                },
+                Err(e) => McpError::from(e).to_json_rpc_error(id),
+            }
+        }
+        "get_task_messages" => {
+            let params: GetTaskMessagesParams = match deserialize_mcp_params(params) {
+                Ok(p) => p,
+                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+            };
+            match handler.get_task_messages(params).await {
+                Ok(messages) => match serde_json::to_value(messages) {
+                    Ok(value) => create_success_response(id, value),
+                    Err(e) => McpError::Serialization(e.to_string()).to_json_rpc_error(id),
+                },
+                Err(e) => McpError::from(e).to_json_rpc_error(id),
+            }
+        }
         _ => {
             McpError::Protocol(format!("Unknown method: {method}")).to_json_rpc_error(id)
         }
@@ -384,8 +422,8 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync>(
 }
 
 /// SSE endpoint for MCP communication
-async fn sse_handler<R: TaskRepository + Send + Sync + 'static>(
-    State(_state): State<Arc<McpServerState<R>>>,
+async fn sse_handler<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRepository + Send + Sync + 'static>(
+    State(_state): State<Arc<McpServerState<R, M>>>,
 ) -> Result<Sse<UnboundedReceiverStream<Result<axum::response::sse::Event, axum::Error>>>, StatusCode> {
     let (tx, rx) = mpsc::unbounded_channel();
     
@@ -401,7 +439,10 @@ async fn sse_handler<R: TaskRepository + Send + Sync + 'static>(
                 "capabilities": [
                     "create_task", "update_task", "set_task_state",
                     "get_task_by_id", "get_task_by_code", "list_tasks",
-                    "assign_task", "archive_task"
+                    "assign_task", "archive_task", "health_check",
+                    "discover_work", "claim_task", "release_task", 
+                    "start_work_session", "end_work_session",
+                    "create_task_message", "get_task_messages"
                 ]
             }
         }).to_string());
@@ -431,8 +472,8 @@ async fn sse_handler<R: TaskRepository + Send + Sync + 'static>(
 }
 
 /// JSON-RPC endpoint for MCP communication
-async fn rpc_handler<R: TaskRepository + Send + Sync + 'static>(
-    State(state): State<Arc<McpServerState<R>>>,
+async fn rpc_handler<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRepository + Send + Sync + 'static>(
+    State(state): State<Arc<McpServerState<R, M>>>,
     headers: HeaderMap,
     Json(request): Json<Value>,
 ) -> Result<(HeaderMap, Json<Value>), StatusCode> {
@@ -524,7 +565,7 @@ mod tests {
     use mockall::predicate::*;
     use mockall::mock;
     use async_trait::async_trait;
-    use ::task_core::{Task, NewTask, UpdateTask, TaskFilter, TaskState, RepositoryStats};
+    use ::task_core::{Task, NewTask, UpdateTask, TaskFilter, TaskState, RepositoryStats, TaskMessage};
     use ::task_core::error::Result;
 
     mock! {
@@ -550,10 +591,36 @@ mod tests {
         }
     }
     
+    mock! {
+        TestMessageRepository {}
+        
+        #[async_trait]
+        impl TaskMessageRepository for TestMessageRepository {
+            async fn create_message(
+                &self,
+                task_code: &str,
+                author_agent_name: &str,
+                message_type: &str,
+                content: &str,
+                reply_to_message_id: Option<i32>,
+            ) -> Result<TaskMessage>;
+            
+            async fn get_messages(
+                &self,
+                task_code: &str,
+                author_agent_name: Option<&str>,
+                message_type: Option<&str>,
+                reply_to_message_id: Option<i32>,
+                limit: Option<u32>,
+            ) -> Result<Vec<TaskMessage>>;
+        }
+    }
+    
     #[test]
     fn test_server_creation() {
         let mock_repo = Arc::new(MockTestRepository::new());
-        let _server = McpServer::new(mock_repo);
+        let mock_message_repo = Arc::new(MockTestMessageRepository::new());
+        let _server = McpServer::new(mock_repo, mock_message_repo);
         // Basic test that server can be created
         assert!(true);
     }
