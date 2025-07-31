@@ -160,7 +160,7 @@ fn test_invalid_parameter_deserialization() {
 #[test]
 fn test_list_params_filter_conversion() {
     let params = ListTasksParams {
-        owner_agent_name: Some("test-owner".to_string()),
+        owner: Some("test-owner".to_string()),
         state: Some(TaskState::InProgress),
         created_after: Some("2023-01-01T00:00:00Z".to_string()),
         created_before: Some("2023-12-31T23:59:59Z".to_string()),

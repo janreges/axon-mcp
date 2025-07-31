@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use mcp_protocol::{McpTaskHandler, McpServer, McpError};
 use mcp_protocol::serialization::*;
-use task_core::{Task, NewTask, TaskState, TaskRepository, TaskFilter, RepositoryStats, ProtocolHandler};
+use task_core::{Task, NewTask, TaskState, TaskRepository, TaskMessageRepository, TaskFilter, RepositoryStats, ProtocolHandler, TaskMessage};
 use task_core::error::{Result, TaskError};
 use async_trait::async_trait;
 use serde_json::json;
@@ -183,11 +183,51 @@ impl TaskRepository for AuditTestMockRepository {
     }
 }
 
+#[async_trait]
+impl TaskMessageRepository for AuditTestMockRepository {
+    async fn create_message(
+        &self,
+        task_code: &str,
+        author_agent_name: &str,
+        target_agent_name: Option<&str>,
+        message_type: &str,
+        content: &str,
+        reply_to_message_id: Option<i32>,
+    ) -> Result<TaskMessage> {
+        Ok(TaskMessage {
+            id: 1,
+            task_code: task_code.to_string(),
+            author_agent_name: author_agent_name.to_string(),
+            target_agent_name: target_agent_name.map(|s| s.to_string()),
+            message_type: message_type.to_string(),
+            created_at: Utc::now(),
+            content: content.to_string(),
+            reply_to_message_id,
+        })
+    }
+    
+    async fn get_messages(
+        &self,
+        _task_code: &str,
+        _author_agent_name: Option<&str>,
+        _target_agent_name: Option<&str>,
+        _message_type: Option<&str>,
+        _reply_to_message_id: Option<i32>,
+        _limit: Option<u32>,
+    ) -> Result<Vec<TaskMessage>> {
+        Ok(vec![])
+    }
+    
+    async fn get_message_by_id(&self, _message_id: i32) -> Result<Option<TaskMessage>> {
+        Ok(None)
+    }
+}
+
 /// K01: Test that list_tasks now implements pagination at the database level
 #[tokio::test]
 async fn test_k01_database_level_pagination() {
     let repository = Arc::new(AuditTestMockRepository::new());
-    let handler = McpTaskHandler::new(repository);
+    let handler = McpTaskHandler::new(repository.clone(), repository);
     
     // Create 10 tasks
     for i in 1..=10 {
@@ -226,7 +266,7 @@ async fn test_k01_database_level_pagination() {
 #[tokio::test]
 async fn test_v01_routing_logic_deduplication() {
     let repository = Arc::new(AuditTestMockRepository::new());
-    let _server = McpServer::new(repository);
+    let _server = McpServer::new(repository.clone(), repository);
     
     // The fact that we can create a server instance and it compiles
     // demonstrates that the routing logic deduplication was successful
@@ -255,7 +295,7 @@ async fn test_v03_json_rpc_compliance() {
 #[tokio::test]
 async fn test_m01_version_consistency() {
     let repository = Arc::new(AuditTestMockRepository::new());
-    let handler = McpTaskHandler::new(repository);
+    let handler = McpTaskHandler::new(repository.clone(), repository);
     
     // Test health check returns the same version as the crate
     let health = handler.health_check().await.unwrap();
@@ -270,7 +310,7 @@ async fn test_m01_version_consistency() {
 #[tokio::test]
 async fn test_integrated_audit_fixes() {
     let repository = Arc::new(AuditTestMockRepository::new());
-    let handler = McpTaskHandler::new(repository);
+    let handler = McpTaskHandler::new(repository.clone(), repository);
     
     // Create multiple tasks
     for i in 1..=5 {
@@ -291,7 +331,7 @@ async fn test_integrated_audit_fixes() {
     
     // Test combined filtering and pagination (K01 fix)
     let list_params = ListTasksParams {
-        owner_agent_name: Some("agent-0".to_string()), // Should match tasks 2, 4
+        owner: Some("agent-0".to_string()), // Should match tasks 2, 4
         limit: Some(1), // Should return only 1 task
         ..Default::default()
     };

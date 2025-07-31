@@ -591,35 +591,53 @@ mod tests {
         }
     }
     
-    mock! {
-        TestMessageRepository {}
+    // Simple mock for testing server creation
+    struct SimpleTestMessageRepository;
+    
+    #[async_trait]
+    impl TaskMessageRepository for SimpleTestMessageRepository {
+        async fn create_message(
+            &self,
+            task_code: &str,
+            author_agent_name: &str,
+            _target_agent_name: Option<&str>,
+            message_type: &str,
+            content: &str,
+            reply_to_message_id: Option<i32>,
+        ) -> Result<TaskMessage> {
+            Ok(TaskMessage {
+                id: 1,
+                task_code: task_code.to_string(),
+                author_agent_name: author_agent_name.to_string(),
+                target_agent_name: None,
+                message_type: message_type.to_string(),
+                created_at: chrono::Utc::now(),
+                content: content.to_string(),
+                reply_to_message_id,
+            })
+        }
         
-        #[async_trait]
-        impl TaskMessageRepository for TestMessageRepository {
-            async fn create_message(
-                &self,
-                task_code: &str,
-                author_agent_name: &str,
-                message_type: &str,
-                content: &str,
-                reply_to_message_id: Option<i32>,
-            ) -> Result<TaskMessage>;
-            
-            async fn get_messages(
-                &self,
-                task_code: &str,
-                author_agent_name: Option<&str>,
-                message_type: Option<&str>,
-                reply_to_message_id: Option<i32>,
-                limit: Option<u32>,
-            ) -> Result<Vec<TaskMessage>>;
+        async fn get_messages(
+            &self,
+            _task_code: &str,
+            _author_agent_name: Option<&str>,
+            _target_agent_name: Option<&str>,
+            _message_type: Option<&str>,
+            _reply_to_message_id: Option<i32>,
+            _limit: Option<u32>,
+        ) -> Result<Vec<TaskMessage>> {
+            Ok(vec![])
+        }
+        
+        async fn get_message_by_id(&self, _message_id: i32) -> Result<Option<TaskMessage>> {
+            Ok(None)
         }
     }
     
     #[test]
     fn test_server_creation() {
         let mock_repo = Arc::new(MockTestRepository::new());
-        let mock_message_repo = Arc::new(MockTestMessageRepository::new());
+        let mock_message_repo = Arc::new(SimpleTestMessageRepository);
         let _server = McpServer::new(mock_repo, mock_message_repo);
         // Basic test that server can be created
         assert!(true);
