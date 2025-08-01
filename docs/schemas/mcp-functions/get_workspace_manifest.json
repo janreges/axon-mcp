@@ -1,0 +1,148 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "get_workspace_manifest",
+  "description": "Retrieves an existing workspace manifest file and parses its content for inspection or modification",
+  "type": "object",
+  "properties": {
+    "method": {
+      "type": "string",
+      "const": "get_workspace_manifest"
+    },
+    "params": {
+      "type": "object",
+      "properties": {
+        "manifest_path": {
+          "type": "string",
+          "description": "Path to the workspace manifest file",
+          "default": "./workspace-manifest.json"
+        },
+        "validate": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to validate the manifest against the schema"
+        },
+        "include_metadata": {
+          "type": "boolean", 
+          "default": true,
+          "description": "Whether to include file metadata in the response"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["method"],
+  "additionalProperties": false,
+  "response": {
+    "type": "object",
+    "properties": {
+      "exists": {
+        "type": "boolean",
+        "description": "Whether the manifest file exists"
+      },
+      "manifest_data": {
+        "type": "object",
+        "description": "Parsed manifest data (when file exists)",
+        "properties": {
+          "project_metadata": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "version": {"type": "string"},
+              "description": {"type": "string"},
+              "author": {"type": "string"},
+              "license": {"type": "string"},
+              "repository": {"type": "string"}
+            }
+          },
+          "agent_configuration": {
+            "type": "object",
+            "properties": {
+              "orchestration_mode": {
+                "type": "string",
+                "enum": ["dynamic", "static", "hybrid"]
+              },
+              "agents": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {"type": "string"},
+                    "type": {"type": "string"},
+                    "description": {"type": "string"},
+                    "capabilities": {
+                      "type": "array",
+                      "items": {"type": "string"}
+                    },
+                    "dependencies": {
+                      "type": "array", 
+                      "items": {"type": "string"}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "file_metadata": {
+        "type": "object",
+        "description": "File metadata (when include_metadata is true)",
+        "properties": {
+          "file_path": {"type": "string"},
+          "file_size": {"type": "integer", "minimum": 0},
+          "created_at": {"type": "string", "format": "date-time"},
+          "modified_at": {"type": "string", "format": "date-time"},
+          "format": {
+            "type": "string",
+            "enum": ["json", "yaml", "toml"]
+          }
+        }
+      },
+      "validation_result": {
+        "type": "object",
+        "description": "Validation results (when validate is true)",
+        "properties": {
+          "is_valid": {"type": "boolean"},
+          "schema_version": {"type": "string"},
+          "errors": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "warnings": {
+            "type": "array", 
+            "items": {"type": "string"}
+          }
+        },
+        "required": ["is_valid"]
+      },
+      "agent_summary": {
+        "type": "object",
+        "description": "Summary of agents in the manifest",
+        "properties": {
+          "total_agents": {"type": "integer", "minimum": 0},
+          "agent_types": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "orchestration_mode": {"type": "string"}
+        }
+      }
+    },
+    "required": ["exists"],
+    "additionalProperties": false
+  },
+  "examples": [
+    {
+      "method": "get_workspace_manifest",
+      "params": {
+        "manifest_path": "./workspace-manifest.json",
+        "validate": true,
+        "include_metadata": true
+      }
+    },
+    {
+      "method": "get_workspace_manifest",
+      "params": {}
+    }
+  ]
+}

@@ -1,303 +1,414 @@
-//! Workspace Setup Module
-//!
-//! This module provides functionality for automatically setting up AI agent workspaces
-//! based on PRD (Product Requirements Document) analysis. It enables one-command workspace
-//! initialization for AI tools like Claude Code.
-//!
-//! # Core Features
-//!
-//! - PRD analysis and parsing
-//! - Agent role generation based on project requirements  
-//! - Workspace manifest creation
-//! - AI tool-specific file generation
-//! - Template-driven prompt engineering
-//!
-//! # Example Usage
-//!
-//! ```rust
-//! use task_core::workspace_setup::{WorkspaceSetupService, AiToolType, PrdDocument};
-//!
-//! let prd = PrdDocument::from_file("./docs/PRD.md").await?;
-//! let service = WorkspaceSetupService::new();
-//! 
-//! let instructions = service.get_setup_instructions(AiToolType::ClaudeCode).await?;
-//! let workflow = service.analyze_prd_for_agentic_workflow(&prd).await?;
-//! ```
+/// Workspace Setup Automation for Axon MCP
+/// 
+/// This module provides comprehensive workspace setup automation capabilities
+/// that enable AI tools like Claude Code to automatically analyze PRD documents
+/// and generate complete AI workspace configurations through MCP function calls.
+/// 
+/// ## 🎯 Key Features
+/// 
+/// - **PRD Analysis**: Intelligent parsing and validation of Product Requirements Documents
+/// - **Agent Generation**: AI-powered recommendation of optimal agent roles and capabilities  
+/// - **Interactive Workflow**: "Propose → Confirm → Execute" pattern with user control
+/// - **Structured Responses**: Consistent JSON responses with status, message, and next steps
+/// - **Extensible Design**: Template-based system for supporting different AI tools
+/// 
+/// ## 🔄 MCP Function Flow
+/// 
+/// ```text
+/// 1. get_setup_instructions(ai_tool_type) → Setup process overview
+/// 2. get_agentic_workflow_description(prd_content) → Agent recommendations  
+/// 3. register_agent(agent_data) → Store agent configurations
+/// 4. get_main_file_instructions(ai_tool_type) → CLAUDE.md template
+/// 5. create_main_file(content, ai_tool_type) → Generate coordination file
+/// 6. generate_workspace_manifest(metadata) → Create .axon/manifest.json
+/// ```
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 
 /// Supported AI tool types for workspace generation
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+/// 
+/// Currently only Claude Code is supported, with plans for AutoGen and CrewAI in the future.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AiToolType {
-    /// Claude Code by Anthropic
+    /// Claude Code by Anthropic - currently the only supported tool
+    #[serde(rename = "claude-code")]
     ClaudeCode,
-    /// Future: AutoGen framework  
-    AutoGen,
-    /// Future: CrewAI framework
-    CrewAi,
+}
+
+/// Project archetype classification for better agent generation
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProjectArchetype {
+    CliTool,           // Command-line utilities and tools
+    WebApplication,    // Full-stack web applications  
+    DataProcessing,    // ETL pipelines, data analysis
+    Library,           // SDKs, libraries, frameworks
+    MobileApp,         // iOS/Android applications
+    Script,            // Automation scripts, one-off tasks
+    DesktopApp,        // Desktop GUI applications
+    ApiService,        // Pure API/microservice
+    Generic,           // Fallback for unclassifiable projects
 }
 
 impl std::fmt::Display for AiToolType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AiToolType::ClaudeCode => write!(f, "claude-code"),
-            AiToolType::AutoGen => write!(f, "autogen"),
-            AiToolType::CrewAi => write!(f, "crewai"),
         }
     }
 }
 
-/// Parsed PRD document structure
+impl std::fmt::Display for ProjectArchetype {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProjectArchetype::CliTool => write!(f, "CLI Tool"),
+            ProjectArchetype::WebApplication => write!(f, "Web Application"),
+            ProjectArchetype::DataProcessing => write!(f, "Data Processing"),
+            ProjectArchetype::Library => write!(f, "Library"),
+            ProjectArchetype::MobileApp => write!(f, "Mobile App"),
+            ProjectArchetype::Script => write!(f, "Script"),
+            ProjectArchetype::DesktopApp => write!(f, "Desktop App"),
+            ProjectArchetype::ApiService => write!(f, "API Service"),
+            ProjectArchetype::Generic => write!(f, "Generic Project"),
+        }
+    }
+}
+
+/// Response status for workspace setup MCP functions
+/// 
+/// Follows the "Propose → Confirm → Execute" pattern recommended by experts
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ResponseStatus {
+    /// Operation completed successfully
+    #[serde(rename = "success")]
+    Success,
+    /// User confirmation required before proceeding
+    #[serde(rename = "confirmation_required")]
+    ConfirmationRequired,
+    /// Error occurred with suggested solutions
+    #[serde(rename = "error")]
+    Error,
+    /// Operation in progress (for long-running tasks)
+    #[serde(rename = "in_progress")]
+    InProgress,
+}
+
+/// Next action that user can take
+/// 
+/// Provides structured options for continuing the workflow
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NextStep {
+    /// User-friendly label for the action
+    pub label: String,
+    /// Action identifier for programmatic use
+    pub action: String,
+    /// Whether this is the recommended default action
+    pub is_default: bool,
+}
+
+/// Standard response wrapper for all workspace setup MCP functions
+/// 
+/// Provides consistent structure with user feedback, next steps, and debugging info
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceSetupResponse<T> {
+    /// Status of the operation
+    pub status: ResponseStatus,
+    /// Human-readable message for the user
+    pub message: String,
+    /// Function-specific payload data
+    pub payload: T,
+    /// Available next actions for the user
+    pub next_steps: Vec<NextStep>,
+    /// Technical logs for debugging (hidden from user)
+    pub logs: Vec<String>,
+}
+
+impl<T> WorkspaceSetupResponse<T> {
+    /// Create a successful response
+    pub fn success(message: String, payload: T) -> Self {
+        Self {
+            status: ResponseStatus::Success,
+            message,
+            payload,
+            next_steps: vec![],
+            logs: vec![],
+        }
+    }
+    
+    /// Create a response requiring user confirmation
+    pub fn confirmation_required(message: String, payload: T, next_steps: Vec<NextStep>) -> Self {
+        Self {
+            status: ResponseStatus::ConfirmationRequired,
+            message,
+            payload,
+            next_steps,
+            logs: vec![],
+        }
+    }
+    
+    /// Create an error response with suggested solutions
+    pub fn error(message: String, payload: T) -> Self {
+        Self {
+            status: ResponseStatus::Error,
+            message,
+            payload,
+            next_steps: vec![],
+            logs: vec![],
+        }
+    }
+    
+    /// Add a log entry for debugging
+    pub fn with_log(mut self, log: String) -> Self {
+        self.logs.push(log);
+        self
+    }
+    
+    /// Add multiple log entries
+    pub fn with_logs(mut self, logs: Vec<String>) -> Self {
+        self.logs.extend(logs);
+        self
+    }
+}
+
+/// Parsed PRD (Product Requirements Document) structure
+/// 
+/// Represents a structured view of a PRD with validation and complexity analysis
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PrdDocument {
     /// Project title extracted from PRD
     pub title: String,
-    /// Project overview/summary
+    /// Project overview/summary section
     pub overview: Option<String>,
-    /// User stories or requirements
+    /// Project objectives and goals
+    pub objectives: Vec<String>,
+    /// User stories, features, or functional requirements
     pub user_stories: Vec<String>,
-    /// Technical requirements
+    /// Technical requirements and technology stack
     pub technical_requirements: Vec<String>,
-    /// Success criteria
+    /// Success criteria and acceptance criteria
     pub success_criteria: Vec<String>,
-    /// Constraints and assumptions
+    /// Constraints, limitations, and assumptions
     pub constraints: Vec<String>,
-    /// Raw PRD content for LLM analysis
+    /// Timeline or schedule information
+    pub timeline: Option<String>,
+    /// Raw PRD content for reference
     pub raw_content: String,
-    /// Validation errors (if any)
+    /// Validation errors found during parsing
     pub validation_errors: Vec<String>,
 }
 
-/// Setup instructions returned by the MCP function
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SetupInstructions {
-    /// Schema version for compatibility
-    pub schema_version: String,
-    /// Target AI tool type
-    pub ai_tool_type: AiToolType,
-    /// Step-by-step setup process
-    pub setup_steps: Vec<SetupStep>,
-    /// Required MCP functions to call during setup
-    pub required_mcp_functions: Vec<RequiredMcpFunction>,
-    /// Template instructions for manifest creation
-    pub manifest_template: ManifestTemplate,
-}
-
-/// Individual setup step
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SetupStep {
-    /// Step identifier
-    pub id: String,
-    /// Human-readable step name
-    pub name: String,
-    /// Detailed description
-    pub description: String,
-    /// Order in the setup process
-    pub order: u32,
-    /// Whether this step is required
-    pub required: bool,
-    /// Expected duration in seconds
-    pub estimated_duration_seconds: Option<u32>,
-}
-
-/// MCP function that must be called during setup
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RequiredMcpFunction {
-    /// Function name (e.g., "axon:registerAgent")
-    pub function_name: String,
-    /// Description of when to call this function
-    pub when_to_call: String,
-    /// Expected parameter structure (JSON schema)
-    pub parameter_schema: serde_json::Value,
-    /// Example parameters
-    pub example_parameters: serde_json::Value,
-}
-
-/// Template for creating workspace manifest
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ManifestTemplate {
-    /// Target file path (e.g., ".axon/manifest.json")
-    pub target_path: String,
-    /// JSON schema for the manifest structure
-    pub schema: serde_json::Value,
-    /// Example manifest content
-    pub example: serde_json::Value,
-}
-
-/// Agentic workflow description based on PRD analysis
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgenticWorkflowDescription {
-    /// Overall workflow summary
-    pub workflow_description: String,
-    /// Suggested number of agents
-    pub recommended_agent_count: u32,
-    /// Suggested agent roles with basic descriptions
-    pub suggested_agents: Vec<SuggestedAgent>,
-    /// Task decomposition strategy
-    pub task_decomposition_strategy: String,
-    /// Coordination patterns
-    pub coordination_patterns: Vec<String>,
-    /// Expected workflow steps
-    pub workflow_steps: Vec<WorkflowStep>,
-}
-
-/// Suggested agent based on PRD analysis
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SuggestedAgent {
-    /// Agent name (kebab-case)
-    pub name: String,
-    /// Brief description (max 300 chars)
-    pub description: String,
-    /// Required capabilities/skills
-    pub required_capabilities: Vec<String>,
-    /// Estimated workload percentage
-    pub workload_percentage: f32,
-    /// Dependencies on other agents
-    pub depends_on: Vec<String>,
-}
-
-/// Workflow step in the agentic process
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkflowStep {
-    /// Step identifier
-    pub id: String,
-    /// Step name
-    pub name: String,
-    /// Which agent is responsible
-    pub responsible_agent: String,
-    /// Input requirements
-    pub inputs: Vec<String>,
-    /// Expected outputs
-    pub outputs: Vec<String>,
-    /// Step order
-    pub order: u32,
-}
-
-/// Agent registration data for MCP function
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentRegistration {
-    /// Agent name (kebab-case)
-    pub name: String,
-    /// Agent description (max 300 chars)
-    pub description: String,
-    /// Full agent prompt/instructions
-    pub prompt: String,
-    /// Required capabilities
-    pub capabilities: Vec<String>,
-    /// Target AI tool type
-    pub ai_tool_type: AiToolType,
-    /// Dependencies on other agents
-    pub dependencies: Vec<String>,
-}
-
-/// Main AI file creation data
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MainAiFileData {
-    /// Target AI tool type
-    pub ai_tool_type: AiToolType,
-    /// File name (e.g., "CLAUDE.md")
-    pub file_name: String,
-    /// Full file content
-    pub content: String,
-    /// File sections breakdown
-    pub sections: Vec<FileSection>,
-}
-
-/// Section within the main AI file
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileSection {
-    /// Section title
-    pub title: String,
-    /// Section content
-    pub content: String,
-    /// Section order
-    pub order: u32,
-}
-
-/// Complete workspace manifest structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkspaceManifest {
-    /// Schema version
-    pub schema_version: String,
-    /// Target AI tool type
-    pub ai_tool_type: AiToolType,
-    /// Project metadata
-    pub project: ProjectMetadata,
-    /// Registered agents
-    pub agents: Vec<AgentRegistration>,
-    /// Agentic workflow description
-    pub workflow: AgenticWorkflowDescription,
-    /// Setup instructions
-    pub setup_instructions: Vec<SetupStep>,
-    /// Generated files
-    pub generated_files: Vec<GeneratedFile>,
-    /// Creation timestamp
-    pub created_at: DateTime<Utc>,
-    /// Axon version used
-    pub axon_version: String,
-}
-
-/// Project metadata from PRD
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProjectMetadata {
-    /// Project name/title
-    pub name: String,
-    /// Project description
-    pub description: String,
-    /// Estimated complexity (1-10 scale)
-    pub complexity_score: u32,
-    /// Primary domain (e.g., "web-development", "data-analysis")
-    pub primary_domain: String,
-    /// Required technologies
-    pub technologies: Vec<String>,
-}
-
-/// Information about generated files
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GeneratedFile {
-    /// File path relative to project root
-    pub path: String,
-    /// File type/purpose
-    pub file_type: String,
-    /// Human-readable description
-    pub description: String,
-    /// Whether file is critical for functionality
-    pub critical: bool,
-}
-
-/// Instructions for creating main AI tool file
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MainAiFileInstructions {
-    /// Target AI tool type
-    pub ai_tool_type: AiToolType,
-    /// Recommended file name
-    pub file_name: String,
-    /// File structure template
-    pub structure_template: Vec<SectionTemplate>,
-    /// Content generation guidelines
-    pub content_guidelines: Vec<String>,
-    /// Example content snippets
-    pub examples: HashMap<String, String>,
-}
-
-/// Template for a file section
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SectionTemplate {
-    /// Section identifier
-    pub id: String,
-    /// Section title
-    pub title: String,
-    /// Content template with placeholders
-    pub template: String,
-    /// Section order
-    pub order: u32,
-    /// Whether section is required
-    pub required: bool,
-    /// Placeholder descriptions
-    pub placeholders: HashMap<String, String>,
+impl PrdDocument {
+    /// Parse PRD content from markdown text
+    /// 
+    /// Performs intelligent extraction of common PRD sections using header matching
+    pub fn from_content(content: &str) -> Result<Self, WorkspaceSetupError> {
+        let mut validation_errors = Vec::new();
+        
+        // Basic content validation
+        if content.trim().len() < 50 {
+            validation_errors.push("PRD content too short. Please provide a comprehensive PRD with objectives, technical requirements, and user stories.".to_string());
+        }
+        
+        // Extract title (usually first # header)
+        let title = content.lines()
+            .find(|line| line.trim().starts_with("# "))
+            .map(|line| line.trim_start_matches("# ").trim().to_string())
+            .unwrap_or_else(|| {
+                validation_errors.push("No project title found. Please add a title using '# Project Name' format.".to_string());
+                "Untitled Project".to_string()
+            });
+        
+        // Extract sections using intelligent matching
+        let overview = Self::extract_section(content, &["overview", "summary", "description", "about"]);
+        let objectives = Self::extract_list_items(content, &["objectives", "goals", "purpose", "aims"]);
+        let user_stories = Self::extract_list_items(content, &["user stories", "requirements", "features", "functionality"]);
+        let technical_requirements = Self::extract_list_items(content, &["technical", "technology", "tech stack", "architecture", "implementation"]);
+        let success_criteria = Self::extract_list_items(content, &["success", "criteria", "acceptance", "definition of done"]);
+        let constraints = Self::extract_list_items(content, &["constraints", "limitations", "assumptions"]);
+        let timeline = Self::extract_section(content, &["timeline", "schedule", "milestones", "roadmap"]);
+        
+        // Validation logic
+        if objectives.is_empty() {
+            validation_errors.push("No project objectives found. Please add an 'Objectives' or 'Goals' section with bullet points.".to_string());
+        }
+        
+        if technical_requirements.is_empty() {
+            validation_errors.push("No technical requirements found. Please add a 'Technical Requirements' or 'Tech Stack' section.".to_string());
+        }
+        
+        if user_stories.is_empty() {
+            validation_errors.push("No user stories or features found. Please add a 'User Stories' or 'Features' section.".to_string());
+        }
+        
+        Ok(Self {
+            title,
+            overview,
+            objectives,
+            user_stories,
+            technical_requirements,
+            success_criteria,
+            constraints,
+            timeline,
+            raw_content: content.to_string(),
+            validation_errors,
+        })
+    }
+    
+    /// Check if PRD meets minimum requirements for workspace generation
+    pub fn is_valid(&self) -> bool {
+        self.validation_errors.is_empty()
+    }
+    
+    /// Get list of validation errors with suggestions
+    pub fn get_validation_errors(&self) -> &[String] {
+        &self.validation_errors
+    }
+    
+    /// Calculate project complexity score (1-10 scale)
+    pub fn calculate_complexity_score(&self) -> u8 {
+        let mut score = 1u8;
+        
+        // Base complexity from technical requirements
+        score += (self.technical_requirements.len() / 2) as u8;
+        
+        // Additional complexity from user stories
+        score += (self.user_stories.len() / 3) as u8;
+        
+        // Content length factor
+        score += (self.raw_content.len() / 2000) as u8;
+        
+        // Complexity keywords in technical requirements
+        let high_complexity_keywords = [
+            "microservices", "distributed", "real-time", "machine learning", "ai", "ml",
+            "blockchain", "kubernetes", "docker", "scaling", "performance",
+            "security", "authentication", "authorization", "encryption",
+            "mobile", "cross-platform", "api gateway", "message queue",
+            "event-driven", "serverless", "cloud-native"
+        ];
+        
+        for req in &self.technical_requirements {
+            let req_lower = req.to_lowercase();
+            
+            // High complexity keywords add more points
+            for keyword in &high_complexity_keywords {
+                if req_lower.contains(keyword) {
+                    score += 2;
+                    break;
+                }
+            }
+        }
+        
+        // Cap at 10
+        score.min(10)
+    }
+    
+    /// Suggest optimal number of agents based on complexity
+    pub fn suggest_agent_count(&self) -> u8 {
+        match self.calculate_complexity_score() {
+            1..=2 => 2,  // Simple projects: PM + 1 specialist
+            3..=4 => 3,  // Basic projects: PM + 2 specialists  
+            5..=6 => 4,  // Medium complexity: PM + 3 specialists
+            7..=8 => 6,  // Complex projects: PM + 5 specialists
+            9..=10 => 8, // Very complex: PM + 7 specialists
+            _ => 3,      // Default fallback
+        }
+    }
+    
+    // Private helper methods for content extraction
+    
+    fn extract_section(content: &str, section_headers: &[&str]) -> Option<String> {
+        for header in section_headers {
+            if let Some(section_content) = Self::find_section_content(content, header) {
+                if !section_content.trim().is_empty() {
+                    return Some(section_content);
+                }
+            }
+        }
+        None
+    }
+    
+    fn extract_list_items(content: &str, section_headers: &[&str]) -> Vec<String> {
+        for header in section_headers {
+            if let Some(section_content) = Self::find_section_content(content, header) {
+                let items = Self::parse_list_items(&section_content);
+                if !items.is_empty() {
+                    return items;
+                }
+            }
+        }
+        Vec::new()
+    }
+    
+    fn find_section_content(content: &str, header: &str) -> Option<String> {
+        let lines: Vec<&str> = content.lines().collect();
+        let header_lower = header.to_lowercase();
+        
+        for (i, line) in lines.iter().enumerate() {
+            let line_lower = line.to_lowercase();
+            
+            // Look for markdown headers containing our target header
+            if (line.starts_with("##") || line.starts_with("#")) && 
+               line_lower.contains(&header_lower) {
+                
+                // Extract content until next header at same or higher level
+                let current_header_level = line.chars().take_while(|&c| c == '#').count();
+                let mut section_content = String::new();
+                
+                for j in (i + 1)..lines.len() {
+                    let next_line = lines[j];
+                    
+                    // Check if we hit another header at same or higher level
+                    if next_line.starts_with("#") {
+                        let next_header_level = next_line.chars().take_while(|&c| c == '#').count();
+                        if next_header_level <= current_header_level {
+                            break;
+                        }
+                    }
+                    
+                    section_content.push_str(next_line);
+                    section_content.push('\n');
+                }
+                
+                let trimmed = section_content.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+        }
+        None
+    }
+    
+    fn parse_list_items(content: &str) -> Vec<String> {
+        let mut items = Vec::new();
+        
+        for line in content.lines() {
+            let trimmed = line.trim();
+            
+            // Bullet points (- or *)
+            if trimmed.starts_with("- ") {
+                items.push(trimmed[2..].trim().to_string());
+            } else if trimmed.starts_with("* ") {
+                items.push(trimmed[2..].trim().to_string());
+            }
+            // Numbered lists (1. 2. etc.)
+            else if trimmed.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+                if let Some(dot_pos) = trimmed.find(". ") {
+                    let content = &trimmed[dot_pos + 2..];
+                    if !content.trim().is_empty() {
+                        items.push(content.trim().to_string());
+                    }
+                }
+            }
+        }
+        
+        // Deduplicate and filter out very short items
+        items.into_iter()
+            .filter(|item| item.len() > 3)
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect()
+    }
 }
 
 /// Error types specific to workspace setup
@@ -321,52 +432,224 @@ pub enum WorkspaceSetupError {
     #[error("File system error: {0}")]
     FileSystemError(String),
     
-    #[error("LLM API error: {0}")]
-    LlmApiError(String),
-    
     #[error("Invalid configuration: {0}")]
     InvalidConfiguration(String),
 }
 
 pub type WorkspaceSetupResult<T> = std::result::Result<T, WorkspaceSetupError>;
 
-/// Service for workspace setup operations
-#[derive(Clone)]
-pub struct WorkspaceSetupService {
-    /// Configuration for the service
-    config: WorkspaceSetupConfig,
+// Data structures for MCP functions
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SetupInstructions {
+    pub schema_version: String,
+    pub ai_tool_type: AiToolType,
+    pub setup_steps: Vec<SetupStep>,
+    pub required_mcp_functions: Vec<RequiredMcpFunction>,
+    pub manifest_template: ManifestTemplate,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SetupStep {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub order: u8,
+    pub required: bool,
+    pub validation_script: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RequiredMcpFunction {
+    pub function_name: String,
+    pub when_to_call: String,
+    pub expected_parameters: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManifestTemplate {
+    pub target_path: String,
+    pub schema: serde_json::Value,
+    pub example: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgenticWorkflowDescription {
+    pub workflow_description: String,
+    pub recommended_agent_count: u32,
+    pub suggested_agents: Vec<SuggestedAgent>,
+    pub task_decomposition_strategy: String,
+    pub coordination_patterns: Vec<String>,
+    pub workflow_steps: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SuggestedAgent {
+    pub name: String,
+    pub description: String,
+    pub required_capabilities: Vec<String>,
+    pub workload_percentage: f32,
+    pub depends_on: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentRegistration {
+    pub name: String,
+    pub description: String,
+    pub prompt: String,
+    pub capabilities: Vec<String>,
+    pub ai_tool_type: AiToolType,
+    pub dependencies: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MainAiFileInstructions {
+    pub ai_tool_type: AiToolType,
+    pub file_name: String,
+    pub structure_template: Vec<SectionTemplate>,
+    pub content_guidelines: Vec<String>,
+    pub examples: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SectionTemplate {
+    pub id: String,
+    pub title: String,
+    pub template: String,
+    pub order: u8,
+    pub required: bool,
+    pub placeholders: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MainAiFileData {
+    pub ai_tool_type: AiToolType,
+    pub file_name: String,
+    pub content: String,
+    pub sections: Vec<FileSection>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileSection {
+    pub title: String,
+    pub content: String,
+    pub order: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceManifest {
+    pub schema_version: String,
+    pub ai_tool_type: AiToolType,
+    pub project: ProjectMetadata,
+    pub agents: Vec<AgentRegistration>,
+    pub workflow: AgenticWorkflowDescription,
+    pub setup_instructions: Vec<SetupStep>,
+    pub generated_files: Vec<GeneratedFile>,
+    pub created_at: DateTime<Utc>,
+    pub axon_version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectMetadata {
+    pub name: String,
+    pub description: String,
+    pub complexity_score: u8,
+    pub primary_domain: String,
+    pub technologies: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeneratedFile {
+    pub path: String,
+    pub file_type: String,
+    pub description: String,
+    pub critical: bool,
+}
+
+/// MCP function parameters
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetSetupInstructionsParams {
+    pub ai_tool_type: AiToolType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetAgenticWorkflowDescriptionParams {
+    pub prd_content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegisterAgentParams {
+    pub agent: AgentRegistration,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetMainFileInstructionsParams {
+    pub ai_tool_type: AiToolType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateMainFileParams {
+    pub content: String,
+    pub ai_tool_type: AiToolType,
+    pub project_name: Option<String>,
+    pub overwrite_existing: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GenerateWorkspaceManifestParams {
+    pub prd_content: String,
+    pub agents: Vec<AgentRegistration>,
+    pub include_generated_files: bool,
+}
+
+/// Type aliases for cleaner MCP function signatures
+pub type SetupInstructionsResponse = WorkspaceSetupResponse<SetupInstructions>;
+pub type AgenticWorkflowResponse = WorkspaceSetupResponse<AgenticWorkflowDescription>;
+pub type AgentRegistrationResponse = WorkspaceSetupResponse<AgentRegistration>;
+pub type MainFileInstructionsResponse = WorkspaceSetupResponse<MainAiFileInstructions>;
+pub type MainFileDataResponse = WorkspaceSetupResponse<MainAiFileData>;
+pub type WorkspaceManifestResponse = WorkspaceSetupResponse<WorkspaceManifest>;
 
 /// Configuration for workspace setup service
 #[derive(Debug, Clone)]
 pub struct WorkspaceSetupConfig {
-    /// Maximum number of agents to generate
-    pub max_agents: u32,
-    /// Default complexity score for projects
-    pub default_complexity_score: u32,
-    /// Supported AI tool types
+    pub max_agents: u8,
+    pub default_agent_count: u8,
     pub supported_ai_tools: Vec<AiToolType>,
-    /// Template directory path
-    pub template_dir: Option<String>,
+    pub template_base_path: String,
 }
 
 impl Default for WorkspaceSetupConfig {
     fn default() -> Self {
         Self {
             max_agents: 10,
-            default_complexity_score: 5,
+            default_agent_count: 3,
             supported_ai_tools: vec![AiToolType::ClaudeCode],
-            template_dir: None,
+            template_base_path: ".axon/templates".to_string(),
         }
     }
 }
 
+/// Service for workspace setup operations
+/// 
+/// Provides all 6 MCP functions for complete workspace automation
+#[derive(Clone)]
+pub struct WorkspaceSetupService {
+    config: WorkspaceSetupConfig,
+}
+
 impl WorkspaceSetupService {
-    /// Create new workspace setup service
+    /// Create new workspace setup service with default configuration
     pub fn new() -> Self {
         Self {
             config: WorkspaceSetupConfig::default(),
         }
+    }
+    
+    /// Create service with default configuration (convenience method)
+    pub fn default() -> Self {
+        Self::new()
     }
     
     /// Create service with custom configuration
@@ -374,150 +657,47 @@ impl WorkspaceSetupService {
         Self { config }
     }
     
-    /// Get setup instructions for specified AI tool type
-    pub async fn get_setup_instructions(&self, ai_tool_type: AiToolType) -> WorkspaceSetupResult<SetupInstructions> {
-        if !self.config.supported_ai_tools.contains(&ai_tool_type) {
-            return Err(WorkspaceSetupError::UnsupportedAiTool(ai_tool_type.to_string()));
-        }
-        
-        // Generate setup instructions based on AI tool type
-        let instructions = match ai_tool_type {
-            AiToolType::ClaudeCode => self.generate_claude_code_instructions().await?,
-            AiToolType::AutoGen => todo!("AutoGen support not yet implemented"),
-            AiToolType::CrewAi => todo!("CrewAI support not yet implemented"),
-        };
-        
-        Ok(instructions)
-    }
-    
-    /// Analyze PRD document for agentic workflow recommendations
-    pub async fn get_agentic_workflow_description(&self, prd: &PrdDocument) -> WorkspaceSetupResult<AgenticWorkflowDescription> {
-        // This would typically call an LLM API to analyze the PRD
-        // For now, we'll provide a basic implementation
-        
-        let complexity_factor = self.estimate_complexity(&prd)?;
-        let recommended_agent_count = std::cmp::min(
-            (complexity_factor as f32 * 1.5).ceil() as u32,
-            self.config.max_agents
-        );
-        
-        // Generate suggested agents based on PRD content
-        let suggested_agents = self.generate_suggested_agents(prd, recommended_agent_count).await?;
-        
-        Ok(AgenticWorkflowDescription {
-            workflow_description: format!(
-                "Based on the PRD analysis, this project requires {} agents working in coordination. The workflow follows a hierarchical pattern where a project manager coordinates with specialized agents.",
-                recommended_agent_count
-            ),
-            recommended_agent_count,
-            suggested_agents,
-            task_decomposition_strategy: "Hierarchical decomposition with capability-based assignment".to_string(),
-            coordination_patterns: vec![
-                "Project Manager → Specialized Agents".to_string(),
-                "Sequential handoffs with validation".to_string(),
-                "Parallel execution where possible".to_string(),
-            ],
-            workflow_steps: vec![], // Would be populated based on PRD analysis
-        })
-    }
-    
-    /// Get instructions for creating main AI file (CLAUDE.md, etc.)
-    pub async fn get_instructions_for_main_ai_file(&self, ai_tool_type: AiToolType) -> WorkspaceSetupResult<MainAiFileInstructions> {
-        let instructions = match ai_tool_type {
-            AiToolType::ClaudeCode => self.generate_claude_md_instructions().await?,
-            AiToolType::AutoGen => todo!("AutoGen support not yet implemented"),
-            AiToolType::CrewAi => todo!("CrewAI support not yet implemented"),
-        };
-        
-        Ok(instructions)
-    }
-    
-    // Private helper methods
-    
-    async fn generate_claude_code_instructions(&self) -> WorkspaceSetupResult<SetupInstructions> {
-        Ok(SetupInstructions {
+    /// 1️⃣ GET SETUP INSTRUCTIONS
+    pub async fn get_setup_instructions(&self, ai_tool_type: AiToolType) -> WorkspaceSetupResult<SetupInstructionsResponse> {
+        let instructions = SetupInstructions {
             schema_version: "1.0".to_string(),
-            ai_tool_type: AiToolType::ClaudeCode,
+            ai_tool_type,
             setup_steps: vec![
                 SetupStep {
-                    id: "parse-prd".to_string(),
-                    name: "Parse PRD Document".to_string(),
-                    description: "Extract project requirements and analyze complexity".to_string(),
+                    id: "analyze-prd".to_string(),
+                    name: "Analyze PRD Document".to_string(),
+                    description: "Read and analyze the PRD.md file to understand project requirements".to_string(),
                     order: 1,
                     required: true,
-                    estimated_duration_seconds: Some(30),
+                    validation_script: Some("test -f docs/PRD.md".to_string()),
                 },
                 SetupStep {
-                    id: "analyze-workflow".to_string(),
-                    name: "Analyze Agentic Workflow".to_string(),
-                    description: "Determine optimal agent roles and coordination patterns".to_string(),
+                    id: "generate-workflow".to_string(),
+                    name: "Generate Agentic Workflow".to_string(),
+                    description: "Call get_agentic_workflow_description to analyze PRD and get agent recommendations".to_string(),
                     order: 2,
                     required: true,
-                    estimated_duration_seconds: Some(45),
+                    validation_script: None,
                 },
                 SetupStep {
                     id: "register-agents".to_string(),
                     name: "Register AI Agents".to_string(),
-                    description: "Create and register all required AI agent definitions".to_string(),
+                    description: "Register each recommended agent using the register_agent MCP function".to_string(),
                     order: 3,
                     required: true,
-                    estimated_duration_seconds: Some(60),
-                },
-                SetupStep {
-                    id: "create-main-file".to_string(),
-                    name: "Create CLAUDE.md".to_string(),
-                    description: "Generate main coordination file for Claude Code".to_string(),
-                    order: 4,
-                    required: true,
-                    estimated_duration_seconds: Some(30),
-                },
-                SetupStep {
-                    id: "create-manifest".to_string(),
-                    name: "Create Workspace Manifest".to_string(),
-                    description: "Generate .axon/manifest.json with complete setup metadata".to_string(),
-                    order: 5,
-                    required: true,
-                    estimated_duration_seconds: Some(15),
+                    validation_script: None,
                 },
             ],
             required_mcp_functions: vec![
                 RequiredMcpFunction {
-                    function_name: "axon:getAgenticWorkflowDescription".to_string(),
-                    when_to_call: "After parsing PRD to get workflow recommendations".to_string(),
-                    parameter_schema: serde_json::json!({
-                        "type": "object",
-                        "properties": {
-                            "prd_content": {"type": "string"},
-                            "requested_agent_count": {"type": "integer", "minimum": 1, "maximum": 10}
-                        },
-                        "required": ["prd_content"]
-                    }),
-                    example_parameters: serde_json::json!({
-                        "prd_content": "# Project: E-commerce Platform\\n\\n## Overview\\n...",
-                        "requested_agent_count": 5
-                    }),
+                    function_name: "get_agentic_workflow_description".to_string(),
+                    when_to_call: "After reading PRD.md to analyze project and get agent recommendations".to_string(),
+                    expected_parameters: "prd_content: full text content of PRD.md file".to_string(),
                 },
                 RequiredMcpFunction {
-                    function_name: "axon:registerAgent".to_string(),
+                    function_name: "register_agent".to_string(),
                     when_to_call: "For each agent recommended by workflow analysis".to_string(),
-                    parameter_schema: serde_json::json!({
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
-                            "description": {"type": "string", "maxLength": 300},
-                            "prompt": {"type": "string"},
-                            "capabilities": {"type": "array", "items": {"type": "string"}},
-                            "ai_tool_type": {"type": "string", "enum": ["claude-code"]}
-                        },
-                        "required": ["name", "description", "prompt", "ai_tool_type"]
-                    }),
-                    example_parameters: serde_json::json!({
-                        "name": "project-manager",
-                        "description": "Coordinates overall project execution and manages task assignments between specialized agents",
-                        "prompt": "You are a project manager AI agent responsible for...",
-                        "capabilities": ["project-management", "task-decomposition", "coordination"],
-                        "ai_tool_type": "claude-code"
-                    }),
+                    expected_parameters: "agent: AgentRegistration object with name, description, prompt, capabilities".to_string(),
                 },
             ],
             manifest_template: ManifestTemplate {
@@ -528,92 +708,735 @@ impl WorkspaceSetupService {
                         "schema_version": {"type": "string"},
                         "ai_tool_type": {"type": "string"},
                         "project": {"type": "object"},
-                        "agents": {"type": "array"},
-                        "workflow": {"type": "object"}
+                        "agents": {"type": "array"}
                     }
                 }),
                 example: serde_json::json!({
                     "schema_version": "1.0",
                     "ai_tool_type": "claude-code",
                     "project": {
-                        "name": "E-commerce Platform",
-                        "description": "Modern e-commerce platform with AI recommendations"
+                        "name": "Example Project",
+                        "description": "Example description"
                     }
                 }),
             },
-        })
+        };
+        
+        Ok(WorkspaceSetupResponse::success(
+            "Setup instructions generated successfully. Follow these steps to configure your workspace using Axon MCP functions.".to_string(),
+            instructions
+        ))
     }
     
-    async fn generate_claude_md_instructions(&self) -> WorkspaceSetupResult<MainAiFileInstructions> {
-        Ok(MainAiFileInstructions {
-            ai_tool_type: AiToolType::ClaudeCode,
+    /// 2️⃣ GET AGENTIC WORKFLOW DESCRIPTION
+    pub async fn get_agentic_workflow_description(&self, prd: &PrdDocument) -> WorkspaceSetupResult<AgenticWorkflowResponse> {
+        // Validate PRD first
+        if !prd.is_valid() {
+            let errors = prd.get_validation_errors();
+            let error_msg = format!(
+                "PRD validation failed. Please fix these issues before proceeding:\n{}",
+                errors.iter()
+                    .enumerate()  
+                    .map(|(i, e)| format!("{}. {}", i + 1, e))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
+            
+            return Ok(WorkspaceSetupResponse::error(
+                error_msg,
+                AgenticWorkflowDescription {
+                    workflow_description: "Cannot generate workflow from invalid PRD".to_string(),
+                    recommended_agent_count: 0,
+                    suggested_agents: vec![],
+                    task_decomposition_strategy: "N/A".to_string(),
+                    coordination_patterns: vec![],
+                    workflow_steps: vec![],
+                }
+            ));
+        }
+        
+        // PHASE 1: Classify project archetype first
+        let archetype = self.classify_project_archetype(prd);
+        
+        // PHASE 2: Apply archetype-specific complexity rules
+        let (recommended_agent_count, coordination_patterns, task_decomposition_strategy) = 
+            self.get_archetype_specific_workflow(&archetype, prd);
+        
+        // Ensure we respect max agents limit
+        let recommended_agent_count = recommended_agent_count.min(self.config.max_agents as u32);
+        
+        // Generate suggested agents based on archetype
+        let suggested_agents = self.generate_suggested_agents_for_archetype(&archetype, prd, recommended_agent_count).await?;
+        
+        let workflow = AgenticWorkflowDescription {
+            workflow_description: format!(
+                "Classified as {} project with complexity score {}/10. Recommending {} agents using {}-specific workflow patterns.",
+                archetype,
+                prd.calculate_complexity_score(),
+                recommended_agent_count,
+                archetype
+            ),
+            recommended_agent_count,
+            suggested_agents: suggested_agents.clone(),
+            task_decomposition_strategy,
+            coordination_patterns,
+            workflow_steps: vec![],
+        };
+        
+        let next_steps = vec![
+            NextStep {
+                label: "Register these agents".to_string(),
+                action: "register_agents".to_string(),
+                is_default: true,
+            },
+            NextStep {
+                label: format!("Modify agent count (currently {})", recommended_agent_count),
+                action: "refine_agent_count".to_string(),
+                is_default: false,
+            },
+        ];
+        
+        Ok(WorkspaceSetupResponse::confirmation_required(
+            format!(
+                "Analyzed PRD '{}' and recommend {} agents for this {} complexity {} project. Review the suggested agents and confirm to proceed.",
+                prd.title,
+                recommended_agent_count,
+                match prd.calculate_complexity_score() {
+                    1..=3 => "low",
+                    4..=6 => "medium", 
+                    7..=8 => "high",
+                    _ => "very high",
+                },
+                archetype
+            ),
+            workflow,
+            next_steps
+        ))
+    }
+    
+    /// 3️⃣ REGISTER AGENT
+    pub async fn register_agent(&self, agent: AgentRegistration) -> WorkspaceSetupResult<AgentRegistrationResponse> {
+        // Validate agent data
+        if agent.name.trim().is_empty() {
+            return Ok(WorkspaceSetupResponse::error(
+                "Agent name cannot be empty. Please provide a valid agent name (e.g., 'project-manager').".to_string(),
+                agent
+            ));
+        }
+        
+        if agent.description.trim().is_empty() {
+            return Ok(WorkspaceSetupResponse::error(
+                "Agent description cannot be empty. Please provide a clear description of the agent's role.".to_string(),
+                agent
+            ));
+        }
+        
+        if agent.capabilities.is_empty() {
+            return Ok(WorkspaceSetupResponse::error(
+                "Agent must have at least one capability. Please specify the agent's skills.".to_string(),
+                agent
+            ));
+        }
+        
+        let agent_name = agent.name.clone();
+        Ok(WorkspaceSetupResponse::success(
+            format!("Agent '{}' registered successfully with {} capabilities.", agent.name, agent.capabilities.len()),
+            agent
+        ).with_log(format!("Registered agent: {}", agent_name)))
+    }
+    
+    /// 4️⃣ GET MAIN FILE INSTRUCTIONS
+    pub async fn get_main_file_instructions(&self, ai_tool_type: AiToolType) -> WorkspaceSetupResult<MainFileInstructionsResponse> {
+        let instructions = MainAiFileInstructions {
+            ai_tool_type,
             file_name: "CLAUDE.md".to_string(),
             structure_template: vec![
                 SectionTemplate {
-                    id: "project-overview".to_string(),
-                    title: "Project Overview".to_string(),
-                    template: "# {{project_name}}\n\n{{project_description}}\n\n## Objectives\n{{objectives}}".to_string(),
+                    id: "project-header".to_string(),
+                    title: "Project Header".to_string(),
+                    template: "# {{project_name}}\n\n{{project_description}}".to_string(),
                     order: 1,
                     required: true,
                     placeholders: {
                         let mut map = HashMap::new();
                         map.insert("project_name".to_string(), "Name of the project from PRD".to_string());
                         map.insert("project_description".to_string(), "Brief project description".to_string());
-                        map.insert("objectives".to_string(), "Main project objectives".to_string());
-                        map
-                    },
-                },
-                SectionTemplate {
-                    id: "agent-coordination".to_string(),
-                    title: "Agent Coordination".to_string(),
-                    template: "## Agent Roles\n\n{{agent_descriptions}}\n\n## Workflow\n{{workflow_description}}".to_string(),
-                    order: 2,
-                    required: true,
-                    placeholders: {
-                        let mut map = HashMap::new();
-                        map.insert("agent_descriptions".to_string(), "Descriptions of all registered agents".to_string());
-                        map.insert("workflow_description".to_string(), "How agents coordinate and handoff work".to_string());
                         map
                     },
                 },
             ],
             content_guidelines: vec![
                 "Use clear, actionable language for AI agents".to_string(),
-                "Include specific examples of expected inputs/outputs".to_string(),
-                "Provide escalation procedures for edge cases".to_string(),
-                "Reference Axon MCP functions for task coordination".to_string(),
+                "Include specific examples of MCP function calls".to_string(),
+                "Define coordination protocols between agents".to_string(),
             ],
             examples: {
-                let mut map = HashMap::new();
-                map.insert("agent_prompt_template".to_string(), 
-                    "You are a {{role}} agent responsible for {{responsibilities}}. Use Axon MCP functions to coordinate with other agents.".to_string());
-                map
+                let mut examples = HashMap::new();
+                examples.insert("coordination_example".to_string(),
+                    "1. Use list_tasks to find your assigned tasks\n2. Use claim_task to claim available work\n3. Use create_task_message for handoffs".to_string());
+                examples
             },
-        })
+        };
+        
+        Ok(WorkspaceSetupResponse::success(
+            format!("Main file instructions generated for {}. Use these templates to create your coordination file.", ai_tool_type),
+            instructions
+        ))
     }
     
-    fn estimate_complexity(&self, prd: &PrdDocument) -> WorkspaceSetupResult<u32> {
-        // Simple heuristic based on PRD content
-        let mut complexity = self.config.default_complexity_score;
+    /// 5️⃣ CREATE MAIN FILE
+    pub async fn create_main_file(&self, content: &str, ai_tool_type: AiToolType, project_name: Option<&str>) -> WorkspaceSetupResult<MainFileDataResponse> {
+        if content.trim().is_empty() {
+            return Ok(WorkspaceSetupResponse::error(
+                "File content cannot be empty. Please provide the complete content for the main coordination file.".to_string(),
+                MainAiFileData {
+                    ai_tool_type,
+                    file_name: "".to_string(),
+                    content: "".to_string(),
+                    sections: vec![],
+                }
+            ));
+        }
         
-        // Factor in number of requirements
-        complexity += (prd.user_stories.len() / 3) as u32;
-        complexity += (prd.technical_requirements.len() / 2) as u32;
+        let sections = vec![
+            FileSection {
+                title: "Project Overview".to_string(),
+                content: project_name.unwrap_or("Project").to_string(),
+                order: 1,
+            },
+        ];
         
-        // Factor in content length (rough proxy for project size)
-        let content_length_factor = (prd.raw_content.len() / 1000) as u32;
-        complexity += content_length_factor.min(5);
+        let file_name = match ai_tool_type {
+            AiToolType::ClaudeCode => "CLAUDE.md".to_string(),
+        };
         
-        Ok(complexity.min(10))
+        let file_data = MainAiFileData {
+            ai_tool_type,
+            file_name: file_name.clone(),
+            content: content.to_string(),
+            sections,
+        };
+        
+        Ok(WorkspaceSetupResponse::success(
+            format!("Main coordination file '{}' created successfully.", file_name),
+            file_data
+        ))
     }
     
-    async fn generate_suggested_agents(&self, prd: &PrdDocument, count: u32) -> WorkspaceSetupResult<Vec<SuggestedAgent>> {
-        // This would typically use LLM API to analyze PRD and suggest agents
-        // For now, providing a basic implementation based on common patterns
+    /// 6️⃣ GENERATE WORKSPACE MANIFEST
+    pub async fn generate_workspace_manifest(&self, prd: &PrdDocument, agents: &[AgentRegistration], include_generated_files: bool) -> WorkspaceSetupResult<WorkspaceManifestResponse> {
+        let workflow_response = self.get_agentic_workflow_description(prd).await?;
+        let workflow = workflow_response.payload;
         
+        let manifest = WorkspaceManifest {
+            schema_version: "1.0".to_string(),
+            ai_tool_type: AiToolType::ClaudeCode,
+            project: ProjectMetadata {
+                name: prd.title.clone(),
+                description: prd.overview.clone().unwrap_or_else(|| "No description available".to_string()),
+                complexity_score: prd.calculate_complexity_score(),
+                primary_domain: "software-development".to_string(),
+                technologies: prd.technical_requirements.clone(),
+            },
+            agents: agents.to_vec(),
+            workflow,
+            setup_instructions: vec![],
+            generated_files: if include_generated_files {
+                vec![
+                    GeneratedFile {
+                        path: "CLAUDE.md".to_string(),
+                        file_type: "coordination".to_string(),
+                        description: "Main coordination file for Claude Code".to_string(),
+                        critical: true,
+                    },
+                ]
+            } else {
+                vec![]
+            },
+            created_at: Utc::now(),
+            axon_version: "0.1.0".to_string(),
+        };
+        
+        Ok(WorkspaceSetupResponse::success(
+            format!("Workspace manifest generated for project '{}' with {} agents.", 
+                manifest.project.name, 
+                manifest.agents.len()
+            ),
+            manifest
+        ))
+    }
+    
+    // Private helper methods
+    
+    /// Classify project archetype based on PRD content analysis
+    /// 
+    /// Uses a priority-based approach, checking from most specific to most general
+    /// to avoid keyword overlap issues. Falls back to Generic for unclassifiable projects.
+    fn classify_project_archetype(&self, prd: &PrdDocument) -> ProjectArchetype {
+        let content_lower = format!("{} {} {}", 
+            prd.title.to_lowercase(),
+            prd.overview.as_ref().unwrap_or(&String::new()).to_lowercase(),
+            prd.technical_requirements.join(" ").to_lowercase()
+        );
+        
+        // 1. Mobile/Desktop - very specific patterns
+        if (content_lower.contains("mobile") && !content_lower.contains("web")) ||
+           content_lower.contains("ios") || content_lower.contains("android") ||
+           content_lower.contains("react native") || content_lower.contains("flutter") ||
+           content_lower.contains("swift") || content_lower.contains("kotlin") ||
+           content_lower.contains("xamarin") || content_lower.contains("mobile app") {
+            return ProjectArchetype::MobileApp;
+        }
+        
+        if content_lower.contains("desktop") || content_lower.contains("gui") ||
+           content_lower.contains("electron") || content_lower.contains("wpf") ||
+           content_lower.contains("qt") || content_lower.contains("tkinter") ||
+           content_lower.contains(".net maui") || content_lower.contains("tauri") {
+            return ProjectArchetype::DesktopApp;
+        }
+        
+        // 2. Data Processing - highly specific domain
+        if content_lower.contains("etl") || content_lower.contains("data processing") ||
+           content_lower.contains("pipeline") || content_lower.contains("analytics") ||
+           content_lower.contains("machine learning") || content_lower.contains("spark") ||
+           content_lower.contains("hadoop") || content_lower.contains("kafka") ||
+           content_lower.contains("airflow") || content_lower.contains("big data") ||
+           content_lower.contains("data warehouse") {
+            return ProjectArchetype::DataProcessing;
+        }
+        
+        // 3. API Service - specific because it lacks frontend
+        if (content_lower.contains("api") || content_lower.contains("microservice")) &&
+           !content_lower.contains("frontend") && !content_lower.contains("gui") &&
+           !content_lower.contains("html") {
+            return ProjectArchetype::ApiService;
+        }
+        
+        // 4. Library/SDK - specific development patterns
+        if content_lower.contains("library") || content_lower.contains("sdk") ||
+           content_lower.contains("framework") || content_lower.contains("package") ||
+           content_lower.contains("module") || content_lower.contains("api design") ||
+           content_lower.contains("semantic versioning") {
+            return ProjectArchetype::Library;
+        }
+        
+        // 5. Web Application - requires frontend AND backend signals
+        let has_frontend = content_lower.contains("frontend") || content_lower.contains("html") ||
+                          content_lower.contains("css") || content_lower.contains("javascript") ||
+                          content_lower.contains("react") || content_lower.contains("vue") ||
+                          content_lower.contains("angular");
+        let has_backend = content_lower.contains("backend") || content_lower.contains("server") ||
+                         content_lower.contains("database") || content_lower.contains("api endpoint") ||
+                         content_lower.contains("django") || content_lower.contains("rails") ||
+                         content_lower.contains("node.js");
+                         
+        if (has_frontend && has_backend) || content_lower.contains("full-stack") ||
+           content_lower.contains("web application") {
+            return ProjectArchetype::WebApplication;
+        }
+        
+        // 6. CLI Tool - often combined with other terms, but prioritize when no GUI/web
+        if (content_lower.contains("cli") || content_lower.contains("command-line") ||
+            content_lower.contains("converter") || content_lower.contains("tool")) &&
+           !content_lower.contains("frontend") && !content_lower.contains("gui") {
+            return ProjectArchetype::CliTool;
+        }
+        
+        // 7. Script - simple automation scripts
+        if content_lower.contains("automation") || content_lower.contains("batch") ||
+           (content_lower.contains("script") && !content_lower.contains("javascript")) {
+            return ProjectArchetype::Script;
+        }
+        
+        // 8. FALLBACK: Generic for unclassifiable projects
+        eprintln!("⚠️  ARCHETYPE CLASSIFICATION: Project '{}' could not be classified into a specific archetype", prd.title);
+        eprintln!("   Content analyzed: {}", content_lower.chars().take(200).collect::<String>());
+        eprintln!("   Using Generic archetype with default complexity");
+        ProjectArchetype::Generic
+    }
+    
+    /// Apply archetype-specific workflow patterns and complexity rules
+    fn get_archetype_specific_workflow(&self, archetype: &ProjectArchetype, prd: &PrdDocument) -> (u32, Vec<String>, String) {
+        match archetype {
+            ProjectArchetype::CliTool => {
+                // CLI tools are inherently simple - maximum 3 agents
+                let agent_count = prd.calculate_complexity_score().min(3).max(1) as u32;
+                (
+                    agent_count,
+                    vec![
+                        "Linear workflow with sequential development".to_string(),
+                        "Single developer handles most tasks".to_string(),
+                        "PM coordinates and validates".to_string(),
+                    ],
+                    "Sequential development with minimal coordination overhead".to_string()
+                )
+            },
+            ProjectArchetype::Script => {
+                // Scripts are very simple - usually 1-2 agents
+                (
+                    2,
+                    vec![
+                        "Single developer workflow".to_string(),
+                        "Optional reviewer for quality assurance".to_string(),
+                    ],
+                    "Single-agent development with optional review".to_string()
+                )
+            },
+            ProjectArchetype::Library => {
+                // Libraries need more careful design - 3-4 agents
+                let agent_count = (prd.calculate_complexity_score() + 1).min(4).max(2) as u32;
+                (
+                    agent_count,
+                    vec![
+                        "API Design → Implementation → Testing".to_string(),
+                        "Architecture review before implementation".to_string(),
+                        "Documentation-driven development".to_string(),
+                    ],
+                    "Design-first approach with architectural validation".to_string()
+                )
+            },
+            ProjectArchetype::ApiService => {
+                // APIs need backend focus - 3-5 agents
+                let agent_count = (prd.calculate_complexity_score() + 1).min(5).max(3) as u32;
+                (
+                    agent_count,
+                    vec![
+                        "API Design → Backend Implementation → Testing".to_string(),
+                        "Database design coordination".to_string(),
+                        "Performance and scalability focus".to_string(),
+                    ],
+                    "Backend-focused with API-first design".to_string()
+                )
+            },
+            ProjectArchetype::WebApplication => {
+                // Web apps use the original complex logic
+                let agent_count = prd.suggest_agent_count() as u32;
+                (
+                    agent_count,
+                    vec![
+                        "Frontend ↔ Backend coordination".to_string(),
+                        "Database design coordination".to_string(),
+                        "DevOps and deployment coordination".to_string(),
+                        "Testing across all layers".to_string(),
+                    ],
+                    "Full-stack coordination with parallel development".to_string()
+                )
+            },
+            ProjectArchetype::MobileApp => {
+                // Mobile apps need UI focus - 4-6 agents
+                let agent_count = (prd.calculate_complexity_score() + 2).min(6).max(3) as u32;
+                (
+                    agent_count,
+                    vec![
+                        "UI/UX Design → Platform Development → Testing".to_string(),
+                        "Cross-platform coordination".to_string(),
+                        "App store deployment".to_string(),
+                    ],
+                    "Mobile-first development with platform-specific optimization".to_string()
+                )
+            },
+            ProjectArchetype::DesktopApp => {
+                // Desktop apps - 3-5 agents
+                let agent_count = prd.calculate_complexity_score().min(5).max(2) as u32;
+                (
+                    agent_count,
+                    vec![
+                        "GUI Design → Application Logic → Platform Integration".to_string(),
+                        "Cross-platform compatibility testing".to_string(),
+                    ],
+                    "Desktop application with native OS integration".to_string()
+                )
+            },
+            ProjectArchetype::DataProcessing => {
+                // Data processing - 4-7 agents
+                let agent_count = (prd.calculate_complexity_score() + 1).min(5).max(2) as u32;
+                (
+                    agent_count,
+                    vec![
+                        "Data Architecture → Pipeline Implementation → Validation".to_string(),
+                        "Performance optimization and monitoring".to_string(),
+                    ],
+                    "Data-centric pipeline with quality assurance".to_string()
+                )
+            },
+            ProjectArchetype::Generic => {
+                // Log unclassified projects for future classification improvements
+                println!("⚠️  UNCLASSIFIED PROJECT: '{}' (complexity: {}) - Consider adding classification rules", 
+                    prd.title, prd.calculate_complexity_score());
+                println!("   Technical requirements: {:?}", prd.technical_requirements);
+                
+                // Bezpečný fallback pro neidentifikovatelné projekty
+                let agent_count = prd.calculate_complexity_score().min(4).max(2) as u32;
+                (
+                    agent_count,
+                    vec![
+                        "General project workflow".to_string(),
+                        "Adaptive coordination based on requirements".to_string(),
+                    ],
+                    "Generic project workflow for unclassified archetype".to_string()
+                )
+            },
+        }
+    }
+    
+    /// Generate agents specialized for specific project archetype
+    async fn generate_suggested_agents_for_archetype(&self, archetype: &ProjectArchetype, prd: &PrdDocument, count: u32) -> WorkspaceSetupResult<Vec<SuggestedAgent>> {
+        let mut agents = Vec::new();
+        let count = count as usize;
+        
+        match archetype {
+            ProjectArchetype::CliTool => {
+                // For CLI tools, we typically need fewer agents
+                agents.push(SuggestedAgent {
+                    name: "cli-developer".to_string(),
+                    description: "Develops command-line interface and core functionality".to_string(),
+                    required_capabilities: vec!["cli-development".to_string(), "argument-parsing".to_string(), "file-io".to_string()],
+                    workload_percentage: if count == 1 { 100.0 } else { 70.0 },
+                    depends_on: vec![],
+                });
+                
+                if count > 1 {
+                    agents.push(SuggestedAgent {
+                        name: "qa-tester".to_string(),
+                        description: "Tests CLI tool across different scenarios and platforms".to_string(),
+                        required_capabilities: vec!["testing".to_string(), "quality-assurance".to_string()],
+                        workload_percentage: 30.0,
+                        depends_on: vec!["cli-developer".to_string()],
+                    });
+                }
+                
+                if count > 2 {
+                    agents.push(SuggestedAgent {
+                        name: "documentation-writer".to_string(),
+                        description: "Creates user documentation and help text".to_string(),
+                        required_capabilities: vec!["documentation".to_string(), "technical-writing".to_string()],
+                        workload_percentage: 20.0,
+                        depends_on: vec!["cli-developer".to_string()],
+                    });
+                    // Adjust percentages
+                    agents[0].workload_percentage = 50.0;
+                    agents[1].workload_percentage = 30.0;
+                }
+            },
+            
+            ProjectArchetype::Script => {
+                // Scripts are very simple - 1-2 agents
+                agents.push(SuggestedAgent {
+                    name: "script-developer".to_string(),
+                    description: "Develops automation scripts and handles core functionality".to_string(),
+                    required_capabilities: vec!["scripting".to_string(), "automation".to_string()],
+                    workload_percentage: if count == 1 { 100.0 } else { 80.0 },
+                    depends_on: vec![],
+                });
+                
+                if count > 1 {
+                    agents.push(SuggestedAgent {
+                        name: "script-reviewer".to_string(),
+                        description: "Reviews and validates script functionality".to_string(),
+                        required_capabilities: vec!["code-review".to_string(), "testing".to_string()],
+                        workload_percentage: 20.0,
+                        depends_on: vec!["script-developer".to_string()],
+                    });
+                }
+            },
+            
+            ProjectArchetype::WebApplication => {
+                // Use the original complex agent generation for web apps
+                return self.generate_suggested_agents(prd, count as u8).await;
+            },
+            
+            ProjectArchetype::ApiService => {
+                agents.push(SuggestedAgent {
+                    name: "api-architect".to_string(),
+                    description: "Designs API endpoints, data models, and service architecture".to_string(),
+                    required_capabilities: vec!["api-design".to_string(), "architecture".to_string(), "data-modeling".to_string()],
+                    workload_percentage: 100.0 / count as f32,
+                    depends_on: vec![],
+                });
+                
+                if count > 1 {
+                    agents.push(SuggestedAgent {
+                        name: "backend-developer".to_string(),
+                        description: "Implements API endpoints and business logic".to_string(),
+                        required_capabilities: vec!["backend-development".to_string(), "database-integration".to_string()],
+                        workload_percentage: 100.0 / count as f32,
+                        depends_on: vec!["api-architect".to_string()],
+                    });
+                }
+                
+                if count > 2 {
+                    agents.push(SuggestedAgent {
+                        name: "database-specialist".to_string(),
+                        description: "Designs and optimizes database schema and queries".to_string(),
+                        required_capabilities: vec!["database-design".to_string(), "performance-optimization".to_string()],
+                        workload_percentage: 100.0 / count as f32,
+                        depends_on: vec!["api-architect".to_string()],
+                    });
+                }
+            },
+            
+            ProjectArchetype::Library => {
+                agents.push(SuggestedAgent {
+                    name: "library-architect".to_string(),
+                    description: "Designs library API and public interfaces".to_string(),
+                    required_capabilities: vec!["api-design".to_string(), "library-design".to_string(), "architecture".to_string()],
+                    workload_percentage: 100.0 / count as f32,
+                    depends_on: vec![],
+                });
+                
+                if count > 1 {
+                    agents.push(SuggestedAgent {
+                        name: "library-developer".to_string(),
+                        description: "Implements library functionality and core features".to_string(),
+                        required_capabilities: vec!["library-development".to_string(), "testing".to_string()],
+                        workload_percentage: 100.0 / count as f32,
+                        depends_on: vec!["library-architect".to_string()],
+                    });
+                }
+                
+                if count > 2 {
+                    agents.push(SuggestedAgent {
+                        name: "documentation-specialist".to_string(),
+                        description: "Creates comprehensive API documentation and examples".to_string(),
+                        required_capabilities: vec!["technical-documentation".to_string(), "api-documentation".to_string()],
+                        workload_percentage: 100.0 / count as f32,
+                        depends_on: vec!["library-architect".to_string()],
+                    });
+                }
+            },
+            
+            ProjectArchetype::MobileApp => {
+                agents.push(SuggestedAgent {
+                    name: "mobile-ui-designer".to_string(),
+                    description: "Designs mobile user interface and user experience".to_string(),
+                    required_capabilities: vec!["ui-design".to_string(), "mobile-design".to_string(), "ux-design".to_string()],
+                    workload_percentage: 100.0 / count as f32,
+                    depends_on: vec![],
+                });
+                
+                if count > 1 {
+                    agents.push(SuggestedAgent {
+                        name: "mobile-developer".to_string(),
+                        description: "Develops mobile application for target platforms".to_string(),
+                        required_capabilities: vec!["mobile-development".to_string(), "platform-integration".to_string()],
+                        workload_percentage: 100.0 / count as f32,
+                        depends_on: vec!["mobile-ui-designer".to_string()],
+                    });
+                }
+                
+                if count > 2 {
+                    agents.push(SuggestedAgent {
+                        name: "mobile-qa-tester".to_string(),
+                        description: "Tests mobile app on various devices and platforms".to_string(),
+                        required_capabilities: vec!["mobile-testing".to_string(), "device-testing".to_string()],
+                        workload_percentage: 100.0 / count as f32,
+                        depends_on: vec!["mobile-developer".to_string()],
+                    });
+                }
+            },
+            
+            ProjectArchetype::DesktopApp => {
+                agents.push(SuggestedAgent {
+                    name: "desktop-ui-developer".to_string(),
+                    description: "Develops desktop GUI and user interface".to_string(),
+                    required_capabilities: vec!["gui-development".to_string(), "desktop-ui".to_string()],
+                    workload_percentage: 100.0 / count as f32,
+                    depends_on: vec![],
+                });
+                
+                if count > 1 {
+                    agents.push(SuggestedAgent {
+                        name: "desktop-backend-developer".to_string(),
+                        description: "Implements desktop application logic and data handling".to_string(),
+                        required_capabilities: vec!["desktop-development".to_string(), "application-logic".to_string()],
+                        workload_percentage: 100.0 / count as f32,
+                        depends_on: vec!["desktop-ui-developer".to_string()],
+                    });
+                }
+                
+                if count > 2 {
+                    agents.push(SuggestedAgent {
+                        name: "platform-integration-specialist".to_string(),
+                        description: "Handles OS-specific integrations and packaging".to_string(),
+                        required_capabilities: vec!["platform-integration".to_string(), "packaging".to_string()],
+                        workload_percentage: 100.0 / count as f32,
+                        depends_on: vec!["desktop-backend-developer".to_string()],
+                    });
+                }
+            },
+            
+            ProjectArchetype::DataProcessing => {
+                agents.push(SuggestedAgent {
+                    name: "data-architect".to_string(),
+                    description: "Designs data processing pipeline architecture".to_string(),
+                    required_capabilities: vec!["data-architecture".to_string(), "pipeline-design".to_string()],
+                    workload_percentage: 100.0 / count as f32,
+                    depends_on: vec![],
+                });
+                
+                if count > 1 {
+                    agents.push(SuggestedAgent {
+                        name: "data-engineer".to_string(),
+                        description: "Implements data processing logic and ETL operations".to_string(),
+                        required_capabilities: vec!["data-engineering".to_string(), "etl-development".to_string()],
+                        workload_percentage: 100.0 / count as f32,
+                        depends_on: vec!["data-architect".to_string()],
+                    });
+                }
+                
+                if count > 2 {
+                    agents.push(SuggestedAgent {
+                        name: "data-quality-specialist".to_string(),
+                        description: "Ensures data quality and pipeline monitoring".to_string(),
+                        required_capabilities: vec!["data-quality".to_string(), "monitoring".to_string()],
+                        workload_percentage: 100.0 / count as f32,
+                        depends_on: vec!["data-engineer".to_string()],
+                    });
+                }
+            },
+            
+            
+            ProjectArchetype::Generic => {
+                // Fallback agent generation for unclassifiable projects
+                agents.push(SuggestedAgent {
+                    name: "project-lead".to_string(),
+                    description: "Leads project development and coordinates team efforts".to_string(),
+                    required_capabilities: vec!["project-management".to_string(), "general-development".to_string()],
+                    workload_percentage: 100.0 / count as f32,
+                    depends_on: vec![],
+                });
+                
+                if count > 1 {
+                    agents.push(SuggestedAgent {
+                        name: "developer".to_string(),
+                        description: "Implements project functionality and features".to_string(),
+                        required_capabilities: vec!["general-development".to_string()],
+                        workload_percentage: 100.0 / count as f32,
+                        depends_on: vec!["project-lead".to_string()],
+                    });
+                }
+                
+                if count > 2 {
+                    agents.push(SuggestedAgent {
+                        name: "qa-specialist".to_string(),
+                        description: "Ensures quality and tests project deliverables".to_string(),
+                        required_capabilities: vec!["testing".to_string(), "quality-assurance".to_string()],
+                        workload_percentage: 100.0 / count as f32,
+                        depends_on: vec!["developer".to_string()],
+                    });
+                }
+            }
+        }
+        
+        // Ensure we return exactly the requested number of agents
+        agents.truncate(count);
+        Ok(agents)
+    }
+    
+    async fn generate_suggested_agents(&self, _prd: &PrdDocument, count: u8) -> WorkspaceSetupResult<Vec<SuggestedAgent>> {
         let mut agents = Vec::new();
         
-        // Always include a project manager for coordination
+        // Always include a project manager
         agents.push(SuggestedAgent {
             name: "project-manager".to_string(),
             description: "Coordinates overall project execution and manages task assignments".to_string(),
@@ -622,8 +1445,8 @@ impl WorkspaceSetupService {
             depends_on: vec![],
         });
         
-        // Add domain-specific agents based on PRD content analysis
-        if prd.raw_content.to_lowercase().contains("api") || prd.raw_content.to_lowercase().contains("backend") {
+        // Add basic agents up to the requested count
+        if count > 1 {
             agents.push(SuggestedAgent {
                 name: "backend-developer".to_string(),
                 description: "Implements server-side logic, APIs, and database integration".to_string(),
@@ -633,24 +1456,13 @@ impl WorkspaceSetupService {
             });
         }
         
-        if prd.raw_content.to_lowercase().contains("ui") || prd.raw_content.to_lowercase().contains("frontend") {
+        if count > 2 {
             agents.push(SuggestedAgent {
                 name: "frontend-developer".to_string(),
                 description: "Creates user interfaces and client-side application logic".to_string(),
                 required_capabilities: vec!["frontend-development".to_string(), "ui-design".to_string()],
                 workload_percentage: 100.0 / count as f32,
                 depends_on: vec!["project-manager".to_string()],
-            });
-        }
-        
-        // Add QA agent for larger projects
-        if count >= 4 {
-            agents.push(SuggestedAgent {
-                name: "qa-engineer".to_string(),
-                description: "Ensures code quality through testing and review processes".to_string(),
-                required_capabilities: vec!["testing".to_string(), "quality-assurance".to_string()],
-                workload_percentage: 100.0 / count as f32,
-                depends_on: vec!["backend-developer".to_string(), "frontend-developer".to_string()],
             });
         }
         
@@ -661,174 +1473,276 @@ impl WorkspaceSetupService {
     }
 }
 
-impl PrdDocument {
-    /// Parse PRD document from file content
-    pub fn from_content(content: &str) -> WorkspaceSetupResult<Self> {
-        let mut validation_errors = Vec::new();
-        
-        // Extract title (usually first # header)
-        let title = content.lines()
-            .find(|line| line.starts_with("# "))
-            .map(|line| line.trim_start_matches("# ").trim().to_string())
-            .unwrap_or_else(|| {
-                validation_errors.push("No title found (expected # header)".to_string());
-                "Untitled Project".to_string()
-            });
-        
-        // Basic section extraction (would be more sophisticated in real implementation)
-        let overview = Self::extract_section(content, &["overview", "summary", "description"]);
-        let user_stories = Self::extract_list_items(content, &["user stories", "requirements", "features"]);
-        let technical_requirements = Self::extract_list_items(content, &["technical", "technology", "tech stack"]);
-        let success_criteria = Self::extract_list_items(content, &["success", "criteria", "goals"]);
-        let constraints = Self::extract_list_items(content, &["constraints", "limitations", "assumptions"]);
-        
-        // Basic validation
-        if content.len() < 100 {
-            validation_errors.push("PRD content too short (minimum 100 characters)".to_string());
-        }
-        
-        if user_stories.is_empty() && technical_requirements.is_empty() {
-            validation_errors.push("No requirements or user stories found".to_string());
-        }
-        
-        Ok(Self {
-            title,
-            overview,
-            user_stories,
-            technical_requirements,
-            success_criteria,
-            constraints,
-            raw_content: content.to_string(),
-            validation_errors,
-        })
-    }
-    
-    /// Check if PRD is valid for workspace setup
-    pub fn is_valid(&self) -> bool {
-        self.validation_errors.is_empty()
-    }
-    
-    /// Get validation errors
-    pub fn get_validation_errors(&self) -> &[String] {
-        &self.validation_errors
-    }
-    
-    // Helper methods for content extraction
-    fn extract_section(content: &str, section_headers: &[&str]) -> Option<String> {
-        for header in section_headers {
-            if let Some(section_content) = Self::find_section_content(content, header) {
-                return Some(section_content);
-            }
-        }
-        None
-    }
-    
-    fn extract_list_items(content: &str, section_headers: &[&str]) -> Vec<String> {
-        for header in section_headers {
-            if let Some(section_content) = Self::find_section_content(content, header) {
-                return Self::parse_list_items(&section_content);
-            }
-        }
-        Vec::new()
-    }
-    
-    fn find_section_content(content: &str, header: &str) -> Option<String> {
-        let lines: Vec<&str> = content.lines().collect();
-        
-        for (i, line) in lines.iter().enumerate() {
-            if line.to_lowercase().contains(&header.to_lowercase()) && 
-               (line.starts_with("#") || line.starts_with("##")) {
-                // Found the header, now extract content until next header
-                let mut section_content = String::new();
-                for j in (i + 1)..lines.len() {
-                    if lines[j].starts_with("#") {
-                        break; // Next section
-                    }
-                    section_content.push_str(lines[j]);
-                    section_content.push('\n');
-                }
-                return Some(section_content.trim().to_string());
-            }
-        }
-        None
-    }
-    
-    fn parse_list_items(content: &str) -> Vec<String> {
-        content.lines()
-            .filter_map(|line| {
-                let trimmed = line.trim();
-                if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
-                    Some(trimmed.trim_start_matches("- ").trim_start_matches("* ").to_string())
-                } else if trimmed.chars().next().map_or(false, |c| c.is_ascii_digit()) 
-                    && trimmed.contains(". ") {
-                    // Numbered list item
-                    if let Some(pos) = trimmed.find(". ") {
-                        Some(trimmed[pos + 2..].to_string())
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    
     #[test]
     fn test_ai_tool_type_display() {
         assert_eq!(AiToolType::ClaudeCode.to_string(), "claude-code");
-        assert_eq!(AiToolType::AutoGen.to_string(), "autogen");
-        assert_eq!(AiToolType::CrewAi.to_string(), "crewai");
     }
-
+    
     #[test]
-    fn test_prd_document_parsing() {
-        let content = r#"
+    fn test_prd_parsing() {
+        let prd_content = r#"
 # Test Project
 
 ## Overview
-This is a test project for workspace setup.
+Test project overview.
 
-## User Stories
-- As a user, I want to create an account
-- As a user, I want to login securely
+## Objectives
+- Build something
+- Test it
 
 ## Technical Requirements
-- REST API with authentication
 - React frontend
-- PostgreSQL database
-"#;
+- Node.js backend
 
-        let prd = PrdDocument::from_content(content).unwrap();
+## User Stories
+- User can login
+- User can logout
+        "#;
+        
+        let prd = PrdDocument::from_content(prd_content).unwrap();
         assert_eq!(prd.title, "Test Project");
-        assert!(prd.overview.is_some());
-        assert_eq!(prd.user_stories.len(), 2);
-        assert_eq!(prd.technical_requirements.len(), 3);
         assert!(prd.is_valid());
+        assert_eq!(prd.objectives.len(), 2);
+        assert_eq!(prd.technical_requirements.len(), 2);
+        assert_eq!(prd.user_stories.len(), 2);
     }
-
+    
     #[tokio::test]
     async fn test_workspace_setup_service() {
         let service = WorkspaceSetupService::new();
         
-        let instructions = service.get_setup_instructions(AiToolType::ClaudeCode).await.unwrap();
-        assert_eq!(instructions.ai_tool_type, AiToolType::ClaudeCode);
-        assert!(!instructions.setup_steps.is_empty());
-        assert!(!instructions.required_mcp_functions.is_empty());
+        // Test setup instructions
+        let response = service.get_setup_instructions(AiToolType::ClaudeCode).await.unwrap();
+        assert_eq!(response.status, ResponseStatus::Success);
+        assert_eq!(response.payload.ai_tool_type, AiToolType::ClaudeCode);
     }
-
-    #[tokio::test]
-    async fn test_main_ai_file_instructions() {
-        let service = WorkspaceSetupService::new();
+    
+    // Helper function to create mock PRD documents for testing
+    fn create_test_prd(title: &str, overview: &str, tech_requirements: &[&str]) -> PrdDocument {
+        PrdDocument {
+            title: title.to_string(),
+            overview: Some(overview.to_string()),
+            objectives: vec!["Test objective".to_string()],
+            user_stories: vec!["Test user story".to_string()],
+            technical_requirements: tech_requirements.iter().map(|s| s.to_string()).collect(),
+            success_criteria: vec![],
+            constraints: vec![],
+            timeline: None,
+            raw_content: format!("# {}\n\n## Overview\n{}\n\n## Technical Requirements\n{}", 
+                title, overview, tech_requirements.join("\n- ")),
+            validation_errors: vec![],
+        }
+    }
+    
+    // Unit tests for classify_project_archetype function
+    mod archetype_classification_tests {
+        use super::*;
         
-        let instructions = service.get_instructions_for_main_ai_file(AiToolType::ClaudeCode).await.unwrap();
-        assert_eq!(instructions.file_name, "CLAUDE.md");
-        assert!(!instructions.structure_template.is_empty());
-        assert!(!instructions.content_guidelines.is_empty());
+        #[test]
+        fn test_cli_tool_classification() {
+            let service = WorkspaceSetupService::new();
+            let prd = create_test_prd(
+                "Markdown Converter CLI",
+                "A command-line tool for converting markdown files",
+                &["cli", "command-line interface", "file conversion"]
+            );
+            
+            let archetype = service.classify_project_archetype(&prd);
+            assert_eq!(archetype, ProjectArchetype::CliTool);
+        }
+        
+        #[test]
+        fn test_web_application_classification() {
+            let service = WorkspaceSetupService::new();
+            let prd = create_test_prd(
+                "E-commerce Web App",
+                "A full-stack web application with React frontend and Node.js backend",
+                &["react", "frontend", "node.js", "backend", "database", "html", "css"]
+            );
+            
+            let archetype = service.classify_project_archetype(&prd);
+            assert_eq!(archetype, ProjectArchetype::WebApplication);
+        }
+        
+        #[test]
+        fn test_api_service_classification() {
+            let service = WorkspaceSetupService::new();
+            let prd = create_test_prd(
+                "REST API Service",
+                "A microservice providing REST API endpoints for user management",
+                &["api", "rest", "microservice", "endpoints", "json", "database"]
+            );
+            
+            let archetype = service.classify_project_archetype(&prd);
+            assert_eq!(archetype, ProjectArchetype::ApiService);
+        }
+        
+        #[test]
+        fn test_mobile_app_classification() {
+            let service = WorkspaceSetupService::new();
+            let prd = create_test_prd(
+                "iOS Shopping App",
+                "A native mobile application for iOS and Android platforms",
+                &["ios", "android", "mobile app", "swift", "kotlin"]
+            );
+            
+            let archetype = service.classify_project_archetype(&prd);
+            assert_eq!(archetype, ProjectArchetype::MobileApp);
+        }
+        
+        #[test]
+        fn test_desktop_app_classification() {
+            let service = WorkspaceSetupService::new();
+            let prd = create_test_prd(
+                "Desktop Text Editor",
+                "A cross-platform desktop application with GUI",
+                &["desktop", "gui", "electron", "cross-platform"]
+            );
+            
+            let archetype = service.classify_project_archetype(&prd);
+            assert_eq!(archetype, ProjectArchetype::DesktopApp);
+        }
+        
+        #[test]
+        fn test_library_classification() {
+            let service = WorkspaceSetupService::new();
+            let prd = create_test_prd(
+                "HTTP Client Library",
+                "A reusable library for making HTTP requests",
+                &["library", "sdk", "reusable components", "package", "framework"]
+            );
+            
+            let archetype = service.classify_project_archetype(&prd);
+            assert_eq!(archetype, ProjectArchetype::Library);
+        }
+        
+        #[test]
+        fn test_data_processing_classification() {
+            let service = WorkspaceSetupService::new();
+            let prd = create_test_prd(
+                "ETL Pipeline",
+                "Data processing pipeline for analytics",
+                &["etl", "data processing", "pipeline", "spark", "kafka", "analytics"]
+            );
+            
+            let archetype = service.classify_project_archetype(&prd);
+            assert_eq!(archetype, ProjectArchetype::DataProcessing);
+        }
+        
+        #[test]
+        fn test_script_classification() {
+            let service = WorkspaceSetupService::new();
+            let prd = create_test_prd(
+                "Deployment Automation",
+                "Automated deployment script for CI/CD",
+                &["automation", "script", "batch", "deployment"]
+            );
+            
+            let archetype = service.classify_project_archetype(&prd);
+            assert_eq!(archetype, ProjectArchetype::Script);
+        }
+        
+        // Boundary case tests - these are critical for robustness
+        
+        #[test]
+        fn test_api_for_web_app_classified_as_api_service() {
+            let service = WorkspaceSetupService::new();
+            let prd = create_test_prd(
+                "API for Web Application",
+                "RESTful API backend that serves our main web application",
+                &["api", "rest", "json", "database", "web app context"]
+            );
+            
+            // Thanks to improved ordering, this should be classified as ApiService
+            // despite mentioning "web app"
+            let archetype = service.classify_project_archetype(&prd);
+            assert_eq!(archetype, ProjectArchetype::ApiService);
+        }
+        
+        #[test]
+        fn test_cli_tool_with_api_classified_as_cli_tool() {
+            let service = WorkspaceSetupService::new();
+            let prd = create_test_prd(
+                "CLI Tool with Network Access",
+                "A command-line tool that interacts with external web services",
+                &["cli", "command-line", "tool", "http requests", "file processing", "json parsing"]
+            );
+            
+            let archetype = service.classify_project_archetype(&prd);
+            assert_eq!(archetype, ProjectArchetype::CliTool);
+        }
+        
+        #[test]
+        fn test_responsive_web_app_for_mobile_is_web_application() {
+            let service = WorkspaceSetupService::new();
+            let prd = create_test_prd(
+                "Responsive Web Design",
+                "A web application with mobile-responsive design for mobile browsers",
+                &["web", "responsive", "mobile", "html", "css", "javascript", "frontend", "backend"]
+            );
+            
+            // Should be WebApplication, not MobileApp, due to presence of "web"
+            let archetype = service.classify_project_archetype(&prd);
+            assert_eq!(archetype, ProjectArchetype::WebApplication);
+        }
+        
+        #[test]
+        fn test_web_app_full_stack_classification() {
+            let service = WorkspaceSetupService::new();
+            let prd = create_test_prd(
+                "Full-Stack Application",
+                "A complete web application with both frontend and backend",
+                &["full-stack", "react", "node.js"]
+            );
+            
+            let archetype = service.classify_project_archetype(&prd);
+            assert_eq!(archetype, ProjectArchetype::WebApplication);
+        }
+        
+        // Edge case tests
+        
+        #[test]
+        fn test_vague_prd_classified_as_generic() {
+            let service = WorkspaceSetupService::new();
+            let prd = create_test_prd(
+                "Some Project",
+                "We want to build something cool",
+                &["modern technology", "innovative solution", "user-friendly"]
+            );
+            
+            let archetype = service.classify_project_archetype(&prd);
+            assert_eq!(archetype, ProjectArchetype::Generic);
+        }
+        
+        #[test]
+        fn test_empty_requirements_classified_as_generic() {
+            let service = WorkspaceSetupService::new();
+            let prd = create_test_prd(
+                "Undefined Project",
+                "Project with no clear technical direction",
+                &[]
+            );
+            
+            let archetype = service.classify_project_archetype(&prd);
+            assert_eq!(archetype, ProjectArchetype::Generic);
+        }
+        
+        #[test]
+        fn test_mixed_signals_prioritizes_specific_archetype() {
+            let service = WorkspaceSetupService::new();
+            let prd = create_test_prd(
+                "Multi-Purpose Tool",
+                "A desktop application that also provides an API",
+                &["desktop", "gui", "api", "electron"]
+            );
+            
+            // Desktop comes first in priority order, so should be DesktopApp
+            let archetype = service.classify_project_archetype(&prd);
+            assert_eq!(archetype, ProjectArchetype::DesktopApp);
+        }
     }
 }

@@ -1,5 +1,5 @@
 use task_core::{
-    WorkspaceSetupService, AiToolType, PrdDocument, WorkspaceSetupConfig,
+    WorkspaceSetupService, AiToolType, PrdDocument,
 };
 
 const SAMPLE_PRD: &str = r#"
@@ -7,6 +7,12 @@ const SAMPLE_PRD: &str = r#"
 
 ## Overview
 Build a modern e-commerce platform with AI-powered product recommendations and multi-vendor support.
+
+## Objectives
+- Create a scalable multi-vendor e-commerce platform
+- Implement AI-powered product recommendations
+- Ensure high performance and availability
+- Support mobile and web interfaces
 
 ## User Stories
 - As a customer, I want to browse products by category
@@ -38,9 +44,9 @@ async fn test_workspace_setup_service() {
     assert!(instructions.is_ok());
     
     let instructions = instructions.unwrap();
-    assert_eq!(instructions.ai_tool_type, AiToolType::ClaudeCode);
-    assert!(!instructions.setup_steps.is_empty());
-    assert!(!instructions.required_mcp_functions.is_empty());
+    assert_eq!(instructions.payload.ai_tool_type, AiToolType::ClaudeCode);
+    assert!(!instructions.payload.setup_steps.is_empty());
+    assert!(!instructions.payload.required_mcp_functions.is_empty());
     
     println!("✅ Setup instructions test passed");
 }
@@ -53,6 +59,7 @@ async fn test_prd_parsing() {
     let prd = prd.unwrap();
     assert_eq!(prd.title, "E-commerce Platform");
     assert!(prd.is_valid());
+    assert_eq!(prd.objectives.len(), 4);  // Added objectives section
     assert_eq!(prd.user_stories.len(), 3);
     assert_eq!(prd.technical_requirements.len(), 4);
     assert_eq!(prd.success_criteria.len(), 3);
@@ -69,13 +76,13 @@ async fn test_agentic_workflow_analysis() {
     assert!(workflow.is_ok());
     
     let workflow = workflow.unwrap();
-    assert!(workflow.recommended_agent_count > 0);
-    assert!(workflow.recommended_agent_count <= 10);
-    assert!(!workflow.suggested_agents.is_empty());
+    assert!(workflow.payload.recommended_agent_count > 0);
+    assert!(workflow.payload.recommended_agent_count <= 10);
+    assert!(!workflow.payload.suggested_agents.is_empty());
     
     println!("✅ Agentic workflow analysis test passed");
-    println!("   Recommended agents: {}", workflow.recommended_agent_count);
-    for agent in &workflow.suggested_agents {
+    println!("   Recommended agents: {}", workflow.payload.recommended_agent_count);
+    for agent in &workflow.payload.suggested_agents {
         println!("   - {}: {}", agent.name, agent.description);
     }
 }
@@ -84,13 +91,13 @@ async fn test_agentic_workflow_analysis() {
 async fn test_main_ai_file_instructions() {
     let service = WorkspaceSetupService::new();
     
-    let instructions = service.get_instructions_for_main_ai_file(AiToolType::ClaudeCode).await;
+    let instructions = service.get_main_file_instructions(AiToolType::ClaudeCode).await;
     assert!(instructions.is_ok());
     
     let instructions = instructions.unwrap();
-    assert_eq!(instructions.file_name, "CLAUDE.md");
-    assert!(!instructions.structure_template.is_empty());
-    assert!(!instructions.content_guidelines.is_empty());
+    assert_eq!(instructions.payload.file_name, "CLAUDE.md");
+    assert!(!instructions.payload.structure_template.is_empty());
+    assert!(!instructions.payload.content_guidelines.is_empty());
     
     println!("✅ Main AI file instructions test passed");
 }
@@ -119,6 +126,9 @@ fn test_prd_validation() {
     let minimal_prd = r#"
 # Test Project
 
+## Objectives
+- Test the system functionality
+
 ## User Stories
 - As a user, I want to test this system
 
@@ -134,9 +144,19 @@ fn test_prd_validation() {
 
 #[test]
 fn test_ai_tool_type_display() {
+    // Test currently supported AI tool type
     assert_eq!(AiToolType::ClaudeCode.to_string(), "claude-code");
-    assert_eq!(AiToolType::AutoGen.to_string(), "autogen");
-    assert_eq!(AiToolType::CrewAi.to_string(), "crewai");
     
     println!("✅ AI tool type display test passed");
+}
+
+#[tokio::test]
+async fn test_only_claude_code_supported() {
+    let service = WorkspaceSetupService::new();
+    
+    // Test that only ClaudeCode is currently supported
+    let claude_result = service.get_setup_instructions(AiToolType::ClaudeCode).await;
+    assert!(claude_result.is_ok());
+    
+    println!("✅ Claude Code AI tool type correctly supported");
 }

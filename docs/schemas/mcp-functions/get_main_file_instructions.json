@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "get_main_file_instructions",
+  "description": "Generates instructions for creating the main AI tool configuration file (e.g., CLAUDE.md) based on workflow analysis",
+  "type": "object",
+  "properties": {
+    "method": {
+      "type": "string",
+      "const": "get_main_file_instructions"
+    },
+    "params": {
+      "type": "object",
+      "properties": {
+        "ai_tool_type": {
+          "type": "string",
+          "enum": ["ClaudeCode"],
+          "description": "The AI tool type for main file generation"
+        },
+        "workflow_context": {
+          "type": "object",
+          "properties": {
+            "project_title": {
+              "type": "string",
+              "description": "Title of the project"
+            },
+            "recommended_agent_count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            "suggested_agents": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string"},
+                  "description": {"type": "string"}
+                },
+                "required": ["name", "description"]
+              }
+            }
+          },
+          "required": ["project_title", "recommended_agent_count", "suggested_agents"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["ai_tool_type", "workflow_context"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["method", "params"],
+  "additionalProperties": false,
+  "response": {
+    "type": "object",
+    "properties": {
+      "filename": {
+        "type": "string",
+        "description": "Recommended filename for the main file"
+      },
+      "content_template": {
+        "type": "string",
+        "description": "Template content for the main AI tool file with placeholders"
+      },
+      "template_variables": {
+        "type": "object",
+        "description": "Variables that can be substituted in the template",
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
+      "setup_instructions": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Step-by-step instructions for setting up the main file"
+      }
+    },
+    "required": ["filename", "content_template", "template_variables", "setup_instructions"],
+    "additionalProperties": false
+  },
+  "examples": [
+    {
+      "method": "get_main_file_instructions",
+      "params": {
+        "ai_tool_type": "ClaudeCode",
+        "workflow_context": {
+          "project_title": "Markdown to HTML Converter",
+          "recommended_agent_count": 3,
+          "suggested_agents": [
+            {
+              "name": "cli-developer",
+              "description": "Develops command-line interface and core functionality"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

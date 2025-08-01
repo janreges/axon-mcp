@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "create_main_ai_file MCP Function",
+  "description": "Schema for creating the main AI coordination file",
+  "definitions": {
+    "AiToolType": {
+      "type": "string",
+      "enum": ["claude-code"]
+    }
+  },
+  "request": {
+    "type": "object",
+    "properties": {
+      "content": {
+        "type": "string",
+        "minLength": 100,
+        "description": "Complete content for the main AI file"
+      },
+      "ai_tool_type": {"$ref": "#/definitions/AiToolType"},
+      "project_name": {
+        "type": "string",
+        "description": "Name of the project"
+      },
+      "overwrite_existing": {
+        "type": "boolean",
+        "default": false,
+        "description": "Whether to overwrite existing file"
+      }
+    },
+    "required": ["content", "ai_tool_type"],
+    "additionalProperties": false
+  },
+  "response": {
+    "type": "object",
+    "properties": {
+      "ai_tool_type": {"$ref": "#/definitions/AiToolType"},
+      "file_name": {"type": "string"},
+      "content": {"type": "string"},
+      "sections": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "title": {"type": "string"},
+            "content": {"type": "string"},
+            "order": {"type": "integer"}
+          },
+          "required": ["title", "content", "order"]
+        }
+      }
+    },
+    "required": ["ai_tool_type", "file_name", "content", "sections"],
+    "additionalProperties": false
+  },
+  "examples": {
+    "request": {
+      "content": "# E-commerce Platform Project\\n\\nThis project implements a modern e-commerce platform.\\n\\n## Agent Coordination\\n\\nAgents should coordinate through Axon MCP functions.",
+      "ai_tool_type": "claude-code",
+      "project_name": "E-commerce Platform",
+      "overwrite_existing": false
+    },
+    "response": {
+      "ai_tool_type": "claude-code",
+      "file_name": "CLAUDE.md",
+      "content": "# E-commerce Platform Project\\n\\nThis project implements a modern e-commerce platform.\\n\\n## Agent Coordination\\n\\nAgents should coordinate through Axon MCP functions.",
+      "sections": [
+        {
+          "title": "Project Overview",
+          "content": "This project implements a modern e-commerce platform.",
+          "order": 1
+        },
+        {
+          "title": "Agent Coordination", 
+          "content": "Agents should coordinate through Axon MCP functions.",
+          "order": 2
+        }
+      ]
+    }
+  }
+}

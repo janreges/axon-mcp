@@ -1,0 +1,120 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "get_setup_instructions",
+  "description": "Retrieves comprehensive setup instructions for a specific AI tool integration with the MCP Task Management System",
+  "type": "object",
+  "properties": {
+    "method": {
+      "type": "string",
+      "const": "get_setup_instructions"
+    },
+    "params": {
+      "type": "object",
+      "properties": {
+        "ai_tool_type": {
+          "type": "string",
+          "enum": ["ClaudeCode"],
+          "description": "The AI tool type for which setup instructions are requested. Currently supports ClaudeCode."
+        }
+      },
+      "required": ["ai_tool_type"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["method", "params"],
+  "additionalProperties": false,
+  "response": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "type": "string",
+        "description": "Version of the setup instructions schema"
+      },
+      "ai_tool_type": {
+        "type": "string",
+        "enum": ["ClaudeCode"]
+      },
+      "setup_steps": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "step_number": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "title": {
+              "type": "string",
+              "description": "Brief title for the setup step"
+            },
+            "description": {
+              "type": "string",
+              "description": "Detailed description of what needs to be done"
+            },
+            "commands": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Commands to execute for this step"
+            },
+            "verification": {
+              "type": "string",
+              "description": "How to verify this step was completed successfully"
+            }
+          },
+          "required": ["step_number", "title", "description"],
+          "additionalProperties": false
+        },
+        "minItems": 1
+      },
+      "required_mcp_functions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "MCP function name"
+            },
+            "description": {
+              "type": "string",
+              "description": "Function description"
+            },
+            "required": {
+              "type": "boolean",
+              "description": "Whether this function is required for basic operation"
+            }
+          },
+          "required": ["name", "description", "required"],
+          "additionalProperties": false
+        }
+      },
+      "manifest_template": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": ["json", "yaml", "toml"]
+          },
+          "template_content": {
+            "type": "string",
+            "description": "Template content for workspace manifest"
+          }
+        },
+        "required": ["format", "template_content"],
+        "additionalProperties": false
+      }
+    },
+    "required": ["schema_version", "ai_tool_type", "setup_steps", "required_mcp_functions", "manifest_template"],
+    "additionalProperties": false
+  },
+  "examples": [
+    {
+      "method": "get_setup_instructions",
+      "params": {
+        "ai_tool_type": "ClaudeCode"
+      }
+    }
+  ]
+}

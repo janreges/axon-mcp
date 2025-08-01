@@ -1,0 +1,546 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Axon Workspace Setup MCP Function Schemas",
+  "description": "JSON schemas for all Axon workspace setup automation MCP functions",
+  "definitions": {
+    "AiToolType": {
+      "type": "string",
+      "enum": ["claude-code"],
+      "description": "Currently supported AI tool type for workspace generation (only Claude Code is implemented)"
+    },
+    "AgentCapability": {
+      "type": "string",
+      "enum": [
+        "project-management", "coordination", "frontend", "backend", "database",
+        "devops", "testing", "qa", "security", "mobile", "data-science",
+        "machine-learning", "ui-ux", "content", "documentation", "integration",
+        "api-design", "architecture", "performance", "monitoring", "deployment"
+      ],
+      "description": "Standard agent capabilities for capability-based matching"
+    },
+    "SuggestedAgent": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*[a-z0-9]$",
+          "description": "Agent name in kebab-case format"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 500,
+          "description": "Detailed description of agent role and responsibilities"
+        },
+        "required_capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AgentCapability"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "List of required capabilities for this agent"
+        },
+        "workload_percentage": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 100.0,
+          "description": "Estimated percentage of total project workload"
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of agent names this agent depends on"
+        }
+      },
+      "required": ["name", "description", "required_capabilities", "workload_percentage", "depends_on"],
+      "additionalProperties": false
+    },
+    "SetupStep": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the setup step"
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable title for the step"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of what this step accomplishes"
+        },
+        "commands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Commands to execute for this step"
+        },
+        "files_to_create": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {"type": "string"},
+              "content": {"type": "string"},
+              "executable": {"type": "boolean", "default": false}
+            },
+            "required": ["path", "content"]
+          },
+          "description": "Files to create during this step"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Execution order for this step"
+        },
+        "required": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether this step is required for workspace setup"
+        }
+      },
+      "required": ["id", "title", "description", "order"],
+      "additionalProperties": false
+    },
+    "StructureTemplate": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the template section"
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable title for the section"
+        },
+        "template": {
+          "type": "string",
+          "description": "Template content with placeholders"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Order of this section in the file"
+        },
+        "required": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether this section is required"
+        },
+        "placeholders": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z_][a-zA-Z0-9_]*$": {
+              "type": "string",
+              "description": "Description of what this placeholder should contain"
+            }
+          },
+          "description": "Placeholder variables and their descriptions"
+        }
+      },
+      "required": ["id", "title", "template", "order"],
+      "additionalProperties": false
+    },
+    "GeneratedFileInfo": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative path to the generated file"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["coordination", "agent-definition", "command", "config", "documentation"],
+          "description": "Type of generated file"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the file's purpose"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Size of the generated file in bytes"
+        }
+      },
+      "required": ["path", "type", "description"],
+      "additionalProperties": false
+    }
+  },
+  "schemas": {
+    "GetSetupInstructionsParams": {
+      "type": "object",
+      "properties": {
+        "ai_tool_type": {
+          "$ref": "#/definitions/AiToolType"
+        }
+      },
+      "required": ["ai_tool_type"],
+      "additionalProperties": false
+    },
+    "SetupInstructions": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+$",
+          "description": "Schema version for compatibility tracking"
+        },
+        "ai_tool_type": {
+          "$ref": "#/definitions/AiToolType"
+        },
+        "setup_steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SetupStep"
+          },
+          "minItems": 1,
+          "description": "Ordered list of setup steps"
+        },
+        "required_mcp_functions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true,
+          "description": "List of MCP functions required for this tool"
+        },
+        "manifest_template": {
+          "type": "object",
+          "description": "Template structure for workspace manifest"
+        }
+      },
+      "required": ["schema_version", "ai_tool_type", "setup_steps", "required_mcp_functions"],
+      "additionalProperties": false
+    },
+    "GetAgenticWorkflowDescriptionParams": {
+      "type": "object",
+      "properties": {
+        "prd_content": {
+          "type": "string",
+          "minLength": 100,
+          "description": "Complete PRD content in markdown format"
+        },
+        "requested_agent_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Desired number of agents for the workflow"
+        }
+      },
+      "required": ["prd_content"],
+      "additionalProperties": false
+    },
+    "AgenticWorkflowDescription": {
+      "type": "object",
+      "properties": {
+        "workflow_description": {
+          "type": "string",
+          "minLength": 50,
+          "description": "Comprehensive description of the recommended workflow"
+        },
+        "recommended_agent_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Optimal number of agents for this project"
+        },
+        "suggested_agents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SuggestedAgent"
+          },
+          "minItems": 1,
+          "description": "List of recommended agents with their roles"
+        },
+        "task_decomposition_strategy": {
+          "type": "string",
+          "enum": [
+            "Hierarchical decomposition",
+            "Sequential pipeline",
+            "Parallel workstreams",
+            "Feature-based teams",
+            "Cross-functional squads"
+          ],
+          "description": "Recommended approach for breaking down work"
+        },
+        "coordination_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Recommended patterns for agent coordination"
+        }
+      },
+      "required": ["workflow_description", "recommended_agent_count", "suggested_agents", "task_decomposition_strategy", "coordination_patterns"],
+      "additionalProperties": false
+    },
+    "RegisterAgentParams": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*[a-z0-9]$",
+          "description": "Agent name in kebab-case format"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 500,
+          "description": "Detailed description of agent role"
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 50,
+          "description": "Complete system prompt for the agent"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AgentCapability"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "List of agent capabilities"
+        },
+        "ai_tool_type": {
+          "$ref": "#/definitions/AiToolType"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of agents this agent depends on"
+        }
+      },
+      "required": ["name", "description", "prompt", "capabilities", "ai_tool_type"],
+      "additionalProperties": false
+    },
+    "AgentRegistration": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Registered agent name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Agent description"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Agent system prompt"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AgentCapability"
+          },
+          "description": "Agent capabilities"
+        },
+        "ai_tool_type": {
+          "$ref": "#/definitions/AiToolType"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Agent dependencies"
+        }
+      },
+      "required": ["name", "description", "prompt", "capabilities", "ai_tool_type", "dependencies"],
+      "additionalProperties": false
+    },
+    "GetInstructionsForMainAiFileParams": {
+      "type": "object",
+      "properties": {
+        "ai_tool_type": {
+          "$ref": "#/definitions/AiToolType"
+        }
+      },
+      "required": ["ai_tool_type"],
+      "additionalProperties": false
+    },
+    "MainAiFileInstructions": {
+      "type": "object",
+      "properties": {
+        "ai_tool_type": {
+          "$ref": "#/definitions/AiToolType"
+        },
+        "file_name": {
+          "type": "string",
+          "description": "Name of the main coordination file"
+        },
+        "structure_template": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/StructureTemplate"
+          },
+          "minItems": 1,
+          "description": "Template structure for the main file"
+        },
+        "content_guidelines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Guidelines for creating effective content"
+        }
+      },
+      "required": ["ai_tool_type", "file_name", "structure_template", "content_guidelines"],
+      "additionalProperties": false
+    },
+    "CreateMainAiFileParams": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "minLength": 100,
+          "description": "Complete content for the main AI file"
+        },
+        "ai_tool_type": {
+          "$ref": "#/definitions/AiToolType"
+        },
+        "project_name": {
+          "type": "string",
+          "description": "Name of the project"
+        },
+        "overwrite_existing": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to overwrite existing file"
+        }
+      },
+      "required": ["content", "ai_tool_type"],
+      "additionalProperties": false
+    },
+    "MainAiFileData": {
+      "type": "object",
+      "properties": {
+        "ai_tool_type": {
+          "$ref": "#/definitions/AiToolType"
+        },
+        "file_name": {
+          "type": "string",
+          "description": "Name of the created file"
+        },
+        "content": {
+          "type": "string",
+          "description": "Complete file content"
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": {"type": "string"},
+              "content": {"type": "string"},
+              "order": {"type": "integer"}
+            },
+            "required": ["title", "content", "order"]
+          },
+          "description": "Parsed sections of the file"
+        }
+      },
+      "required": ["ai_tool_type", "file_name", "content", "sections"],
+      "additionalProperties": false
+    },
+    "GetWorkspaceManifestParams": {
+      "type": "object",
+      "properties": {
+        "ai_tool_type": {
+          "$ref": "#/definitions/AiToolType"
+        },
+        "include_generated_files": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to include generated file information"
+        }
+      },
+      "required": ["ai_tool_type"],
+      "additionalProperties": false
+    },
+    "WorkspaceManifest": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+$",
+          "description": "Manifest schema version"
+        },
+        "ai_tool_type": {
+          "$ref": "#/definitions/AiToolType"
+        },
+        "project": {
+          "type": "object",
+          "properties": {
+            "name": {"type": "string"},
+            "description": {"type": "string"},
+            "complexity_score": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "primary_domain": {"type": "string"},
+            "technologies": {
+              "type": "array",
+              "items": {"type": "string"}
+            }
+          },
+          "required": ["name", "description", "complexity_score", "primary_domain", "technologies"]
+        },
+        "agents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SuggestedAgent"
+          },
+          "description": "List of configured agents"
+        },
+        "workflow": {
+          "type": "object",
+          "properties": {
+            "task_decomposition_strategy": {"type": "string"},
+            "coordination_patterns": {
+              "type": "array",
+              "items": {"type": "string"}
+            }
+          },
+          "required": ["task_decomposition_strategy", "coordination_patterns"]
+        },
+        "setup_instructions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SetupStep"
+          },
+          "description": "Setup steps that were executed"
+        },
+        "generated_files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/GeneratedFileInfo"
+          },
+          "description": "Information about generated files"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when workspace was created"
+        },
+        "axon_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+",
+          "description": "Version of Axon used to create this workspace"
+        }
+      },
+      "required": ["schema_version", "ai_tool_type", "project", "agents", "workflow", "setup_instructions", "created_at", "axon_version"],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,132 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "get_agentic_workflow_description MCP Function",
+  "description": "Schema for analyzing PRD and generating agent workflow recommendations",
+  "definitions": {
+    "AgentCapability": {
+      "type": "string",
+      "enum": [
+        "project-management", "coordination", "frontend", "backend", "database",
+        "devops", "testing", "qa", "security", "mobile", "data-science",
+        "machine-learning", "ui-ux", "content", "documentation", "integration",
+        "api-design", "architecture", "performance", "monitoring", "deployment"
+      ]
+    },
+    "SuggestedAgent": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*[a-z0-9]$"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 500
+        },
+        "required_capabilities": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/AgentCapability"},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "workload_percentage": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 100.0
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      },
+      "required": ["name", "description", "required_capabilities", "workload_percentage", "depends_on"],
+      "additionalProperties": false
+    }
+  },
+  "request": {
+    "type": "object",
+    "properties": {
+      "prd_content": {
+        "type": "string",
+        "minLength": 100,
+        "description": "Complete PRD content in markdown format"
+      },
+      "requested_agent_count": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 20,
+        "description": "Desired number of agents for the workflow"
+      }
+    },
+    "required": ["prd_content"],
+    "additionalProperties": false
+  },
+  "response": {
+    "type": "object",
+    "properties": {
+      "workflow_description": {
+        "type": "string",
+        "minLength": 50
+      },
+      "recommended_agent_count": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 20
+      },
+      "suggested_agents": {
+        "type": "array",
+        "items": {"$ref": "#/definitions/SuggestedAgent"},
+        "minItems": 1
+      },
+      "task_decomposition_strategy": {
+        "type": "string",
+        "enum": [
+          "Hierarchical decomposition",
+          "Sequential pipeline", 
+          "Parallel workstreams",
+          "Feature-based teams",
+          "Cross-functional squads"
+        ]
+      },
+      "coordination_patterns": {
+        "type": "array",
+        "items": {"type": "string"}
+      }
+    },
+    "required": ["workflow_description", "recommended_agent_count", "suggested_agents", "task_decomposition_strategy", "coordination_patterns"],
+    "additionalProperties": false
+  },
+  "examples": {
+    "request": {
+      "prd_content": "# E-commerce Platform\n\n## Overview\nBuild a modern e-commerce platform...\n\n## User Stories\n- As a customer, I want to browse products\n\n## Technical Requirements\n- React frontend\n- REST API",
+      "requested_agent_count": 5
+    },
+    "response": {
+      "workflow_description": "5-agent e-commerce development workflow with specialized roles for frontend, backend, database, testing, and project management",
+      "recommended_agent_count": 5,
+      "suggested_agents": [
+        {
+          "name": "project-manager",
+          "description": "Coordinates overall project execution and manages deliverables across all development phases",
+          "required_capabilities": ["project-management", "coordination"],
+          "workload_percentage": 20.0,
+          "depends_on": []
+        },
+        {
+          "name": "frontend-developer",
+          "description": "Develops React-based user interfaces with responsive design and modern UX patterns",
+          "required_capabilities": ["frontend", "ui-ux"],
+          "workload_percentage": 30.0,
+          "depends_on": ["project-manager"]
+        }
+      ],
+      "task_decomposition_strategy": "Feature-based teams",
+      "coordination_patterns": [
+        "Daily standups via task messages",
+        "Feature handoffs between frontend and backend",
+        "Code review through task state transitions"
+      ]
+    }
+  }
+}

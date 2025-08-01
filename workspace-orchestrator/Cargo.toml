@@ -1,0 +1,19 @@
+[package]
+name = "workspace-orchestrator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Workspace dependencies
+task-core = { path = "../core" }
+
+# External dependencies
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = "1.0"
+anyhow = { workspace = true }
+handlebars = { workspace = true }
+reqwest = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+clap = { workspace = true }

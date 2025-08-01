@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "get_instructions_for_main_ai_file MCP Function",
+  "description": "Schema for getting template instructions for main AI coordination file",
+  "definitions": {
+    "AiToolType": {
+      "type": "string", 
+      "enum": ["claude-code"]
+    },
+    "StructureTemplate": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "template": {"type": "string"},
+        "order": {"type": "integer", "minimum": 1},
+        "required": {"type": "boolean", "default": true},
+        "placeholders": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z_][a-zA-Z0-9_]*$": {"type": "string"}
+          }
+        }
+      },
+      "required": ["id", "title", "template", "order"],
+      "additionalProperties": false
+    }
+  },
+  "request": {
+    "type": "object",
+    "properties": {
+      "ai_tool_type": {"$ref": "#/definitions/AiToolType"}
+    },
+    "required": ["ai_tool_type"],
+    "additionalProperties": false
+  },
+  "response": {
+    "type": "object", 
+    "properties": {
+      "ai_tool_type": {"$ref": "#/definitions/AiToolType"},
+      "file_name": {"type": "string"},
+      "structure_template": {
+        "type": "array",
+        "items": {"$ref": "#/definitions/StructureTemplate"},
+        "minItems": 1
+      },
+      "content_guidelines": {
+        "type": "array",
+        "items": {"type": "string"}
+      }
+    },
+    "required": ["ai_tool_type", "file_name", "structure_template", "content_guidelines"],
+    "additionalProperties": false
+  },
+  "examples": {
+    "request": {
+      "ai_tool_type": "claude-code"
+    },
+    "response": {
+      "ai_tool_type": "claude-code",
+      "file_name": "CLAUDE.md",
+      "structure_template": [
+        {
+          "id": "project-overview",
+          "title": "Project Overview", 
+          "template": "# {{project_name}}\\n\\n{{project_description}}",
+          "order": 1,
+          "required": true,
+          "placeholders": {
+            "project_name": "Name of the project from PRD",
+            "project_description": "Brief project description"
+          }
+        },
+        {
+          "id": "agent-coordination",
+          "title": "Agent Coordination",
+          "template": "## Agent Coordination\\n\\n{{coordination_instructions}}",
+          "order": 2,
+          "required": true,
+          "placeholders": {
+            "coordination_instructions": "Instructions for agent coordination through Axon MCP"
+          }
+        }
+      ],
+      "content_guidelines": [
+        "Use clear, actionable language for AI agents",
+        "Include specific examples of expected inputs/outputs",
+        "Define coordination protocols between agents",
+        "Specify task handoff procedures"
+      ]
+    }
+  }
+}

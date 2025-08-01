@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "register_agent MCP Function", 
+  "description": "Schema for registering AI agents in the workspace",
+  "definitions": {
+    "AiToolType": {
+      "type": "string",
+      "enum": ["claude-code"]
+    },
+    "AgentCapability": {
+      "type": "string",
+      "enum": [
+        "project-management", "coordination", "frontend", "backend", "database",
+        "devops", "testing", "qa", "security", "mobile", "data-science", 
+        "machine-learning", "ui-ux", "content", "documentation", "integration",
+        "api-design", "architecture", "performance", "monitoring", "deployment"
+      ]
+    }
+  },
+  "request": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]*[a-z0-9]$",
+        "description": "Agent name in kebab-case format"
+      },
+      "description": {
+        "type": "string",
+        "minLength": 10,
+        "maxLength": 500,
+        "description": "Detailed description of agent role"
+      },
+      "prompt": {
+        "type": "string",
+        "minLength": 50,
+        "description": "Complete system prompt for the agent"
+      },
+      "capabilities": {
+        "type": "array",
+        "items": {"$ref": "#/definitions/AgentCapability"},
+        "minItems": 1,
+        "uniqueItems": true,
+        "description": "List of agent capabilities"
+      },
+      "ai_tool_type": {"$ref": "#/definitions/AiToolType"},
+      "dependencies": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "List of agents this agent depends on"
+      }
+    },
+    "required": ["name", "description", "prompt", "capabilities", "ai_tool_type"],
+    "additionalProperties": false
+  },
+  "response": {
+    "type": "object",
+    "properties": {
+      "name": {"type": "string"},
+      "description": {"type": "string"},
+      "prompt": {"type": "string"},
+      "capabilities": {
+        "type": "array",
+        "items": {"$ref": "#/definitions/AgentCapability"}
+      },
+      "ai_tool_type": {"$ref": "#/definitions/AiToolType"},
+      "dependencies": {
+        "type": "array",
+        "items": {"type": "string"}
+      }
+    },
+    "required": ["name", "description", "prompt", "capabilities", "ai_tool_type", "dependencies"],
+    "additionalProperties": false
+  },
+  "examples": {
+    "request": {
+      "name": "frontend-developer",
+      "description": "Develops user interfaces and client-side applications using React",
+      "prompt": "You are a frontend developer specializing in React applications. You focus on creating responsive, accessible, and performant user interfaces. Use Axon MCP functions to coordinate with other team members.",
+      "capabilities": ["frontend", "ui-ux"],
+      "ai_tool_type": "claude-code",
+      "dependencies": ["project-manager"]
+    },
+    "response": {
+      "name": "frontend-developer",
+      "description": "Develops user interfaces and client-side applications using React",
+      "prompt": "You are a frontend developer specializing in React applications. You focus on creating responsive, accessible, and performant user interfaces. Use Axon MCP functions to coordinate with other team members.",
+      "capabilities": ["frontend", "ui-ux"],
+      "ai_tool_type": "claude-code",
+      "dependencies": ["project-manager"]
+    }
+  }
+}

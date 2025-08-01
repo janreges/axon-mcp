@@ -1,0 +1,117 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "get_agentic_workflow_description",
+  "description": "Analyzes a Product Requirements Document (PRD) and generates an intelligent agent team composition with workflow description based on ProjectArchetype classification",
+  "type": "object",
+  "properties": {
+    "method": {
+      "type": "string",
+      "const": "get_agentic_workflow_description"
+    },
+    "params": {
+      "type": "object",
+      "properties": {
+        "prd_content": {
+          "type": "string",
+          "description": "The complete Product Requirements Document content as a string. Should include project overview, objectives, user stories, technical requirements, and success criteria.",
+          "minLength": 100,
+          "maxLength": 50000
+        }
+      },
+      "required": ["prd_content"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["method", "params"],
+  "additionalProperties": false,
+  "response": {
+    "type": "object",
+    "properties": {
+      "workflow_description": {
+        "type": "string",
+        "description": "High-level description of the recommended workflow approach"
+      },
+      "recommended_agent_count": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 12,
+        "description": "Optimal number of agents for this project based on complexity analysis"
+      },
+      "suggested_agents": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Agent role name (e.g., 'cli-developer', 'qa-tester')"
+            },
+            "description": {
+              "type": "string",
+              "description": "Detailed description of agent responsibilities"
+            },
+            "required_capabilities": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "List of capabilities this agent requires"
+            },
+            "workload_percentage": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Expected workload percentage for this agent"
+            },
+            "depends_on": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "List of agent names this agent depends on"
+            }
+          },
+          "required": ["name", "description", "required_capabilities", "workload_percentage", "depends_on"],
+          "additionalProperties": false
+        },
+        "minItems": 1,
+        "maxItems": 12
+      },
+      "task_decomposition_strategy": {
+        "type": "string",
+        "description": "Strategy for breaking down the project into manageable tasks"
+      },
+      "coordination_patterns": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Patterns for coordinating work between agents"
+      },
+      "workflow_steps": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "High-level workflow steps for project completion"
+      }
+    },
+    "required": [
+      "workflow_description",
+      "recommended_agent_count", 
+      "suggested_agents",
+      "task_decomposition_strategy",
+      "coordination_patterns",
+      "workflow_steps"
+    ],
+    "additionalProperties": false
+  },
+  "examples": [
+    {
+      "method": "get_agentic_workflow_description",
+      "params": {
+        "prd_content": "# Markdown to HTML Converter\n\n## Overview\nSimple command-line tool that converts Markdown files to HTML format.\n\n## Objectives\n- Convert .md files to .html files\n- Support basic Markdown syntax\n\n## Technical Requirements\n- Command-line interface\n- Cross-platform compatibility\n- File I/O operations"
+      }
+    }
+  ]
+}

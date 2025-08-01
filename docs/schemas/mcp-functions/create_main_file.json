@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "create_main_file",
+  "description": "Creates the actual main AI tool configuration file with dynamically generated content based on project analysis",
+  "type": "object",
+  "properties": {
+    "method": {
+      "type": "string",
+      "const": "create_main_file"
+    },
+    "params": {
+      "type": "object", 
+      "properties": {
+        "ai_tool_type": {
+          "type": "string",
+          "enum": ["ClaudeCode"],
+          "description": "The AI tool type for file creation"
+        },
+        "project_context": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Project title"
+            },
+            "overview": {
+              "type": "string",
+              "description": "Project overview/description"
+            },
+            "workflow_description": {
+              "type": "string",
+              "description": "Generated workflow description"
+            },
+            "suggested_agents": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string"},
+                  "description": {"type": "string"},
+                  "required_capabilities": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                  }
+                },
+                "required": ["name", "description", "required_capabilities"]
+              },
+              "minItems": 1
+            }
+          },
+          "required": ["title", "overview", "workflow_description", "suggested_agents"],
+          "additionalProperties": false
+        },
+        "output_path": {
+          "type": "string",
+          "description": "Path where the main file should be created",
+          "default": "./CLAUDE.md"
+        }
+      },
+      "required": ["ai_tool_type", "project_context"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["method", "params"],
+  "additionalProperties": false,
+  "response": {
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean",
+        "description": "Whether the file was created successfully"
+      },
+      "file_path": {
+        "type": "string",
+        "description": "Path where the file was created"
+      },
+      "content_length": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Length of the generated content in characters"
+      },
+      "generated_agents": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "List of agent names that were included in the generated file"
+      },
+      "template_version": {
+        "type": "string",
+        "description": "Version of the template used for generation"
+      },
+      "creation_timestamp": {
+        "type": "string",
+        "format": "date-time",
+        "description": "When the file was created"
+      }
+    },
+    "required": ["success", "file_path", "content_length", "generated_agents", "template_version", "creation_timestamp"],
+    "additionalProperties": false
+  },
+  "examples": [
+    {
+      "method": "create_main_file",
+      "params": {
+        "ai_tool_type": "ClaudeCode",
+        "project_context": {
+          "title": "Markdown to HTML Converter",
+          "overview": "Simple CLI tool for converting Markdown to HTML",
+          "workflow_description": "Sequential development with parallel testing",
+          "suggested_agents": [
+            {
+              "name": "cli-developer", 
+              "description": "Develops CLI interface",
+              "required_capabilities": ["rust", "cli"]
+            }
+          ]
+        },
+        "output_path": "./CLAUDE.md"
+      }
+    }
+  ]
+}

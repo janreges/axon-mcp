@@ -22,10 +22,11 @@
 //! async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
 //!     // In real usage, you would use database::SqliteTaskRepository
 //!     // let repository = Arc::new(database::SqliteTaskRepository::new("tasks.db").await?);
-//!     # use task_core::{TaskRepository, Task, NewTask, UpdateTask, TaskFilter, TaskState, RepositoryStats};
+//!     # use task_core::{TaskRepository, TaskMessageRepository, Task, TaskMessage, NewTask, UpdateTask, TaskFilter, TaskState, RepositoryStats};
 //!     # use task_core::error::Result;
 //!     # use async_trait::async_trait;
 //!     # struct MockRepo;
+//!     # struct MockMessageRepo;
 //!     # #[async_trait]
 //!     # impl TaskRepository for MockRepo {
 //!     #     async fn create(&self, _task: NewTask) -> Result<Task> { unimplemented!() }
@@ -44,8 +45,15 @@
 //!     #     async fn start_work_session(&self, _task_id: i32, _agent_name: &str) -> Result<i32> { unimplemented!() }
 //!     #     async fn end_work_session(&self, _session_id: i32, _notes: Option<String>, _productivity_score: Option<f64>) -> Result<()> { unimplemented!() }
 //!     # }
+//!     # #[async_trait]
+//!     # impl TaskMessageRepository for MockMessageRepo {
+//!     #     async fn create_message(&self, _task_code: &str, _author_agent_name: &str, _target_agent_name: Option<&str>, _message_type: &str, _content: &str, _reply_to_message_id: Option<i32>) -> Result<TaskMessage> { unimplemented!() }
+//!     #     async fn get_messages(&self, _task_code: &str, _author_agent_name: Option<&str>, _target_agent_name: Option<&str>, _message_type: Option<&str>, _reply_to_message_id: Option<i32>, _limit: Option<u32>) -> Result<Vec<TaskMessage>> { unimplemented!() }
+//!     #     async fn get_message_by_id(&self, _message_id: i32) -> Result<Option<TaskMessage>> { unimplemented!() }
+//!     # }
 //!     let repository = Arc::new(MockRepo);
-//!     let server = McpServer::new(repository);
+//!     let message_repository = Arc::new(MockMessageRepo);
+//!     let server = McpServer::new(repository, message_repository);
 //!     server.serve("127.0.0.1:3000").await?;
 //!     Ok(())
 //! }

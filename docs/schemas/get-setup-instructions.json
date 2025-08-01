@@ -1,0 +1,106 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "get_setup_instructions MCP Function",
+  "description": "Schema for Axon workspace setup instructions request and response",
+  "definitions": {
+    "AiToolType": {
+      "type": "string",
+      "enum": ["claude-code"],
+      "description": "Currently supported AI tool type (only Claude Code is implemented)"
+    },
+    "SetupStep": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "description": {"type": "string"},
+        "commands": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "files_to_create": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {"type": "string"},
+              "content": {"type": "string"},
+              "executable": {"type": "boolean", "default": false}
+            },
+            "required": ["path", "content"]
+          }
+        },
+        "order": {"type": "integer", "minimum": 1},
+        "required": {"type": "boolean", "default": true}
+      },
+      "required": ["id", "title", "description", "order"],
+      "additionalProperties": false
+    }
+  },
+  "request": {
+    "type": "object",
+    "properties": {
+      "ai_tool_type": {"$ref": "#/definitions/AiToolType"}
+    },
+    "required": ["ai_tool_type"],
+    "additionalProperties": false
+  },
+  "response": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "type": "string",
+        "pattern": "^\\d+\\.\\d+$"
+      },
+      "ai_tool_type": {"$ref": "#/definitions/AiToolType"},
+      "setup_steps": {
+        "type": "array",
+        "items": {"$ref": "#/definitions/SetupStep"},
+        "minItems": 1
+      },
+      "required_mcp_functions": {
+        "type": "array",
+        "items": {"type": "string"},
+        "uniqueItems": true
+      },
+      "manifest_template": {"type": "object"}
+    },
+    "required": ["schema_version", "ai_tool_type", "setup_steps", "required_mcp_functions"],
+    "additionalProperties": false
+  },
+  "examples": {
+    "request": {
+      "ai_tool_type": "claude-code"
+    },
+    "response": {
+      "schema_version": "1.0",
+      "ai_tool_type": "claude-code",
+      "setup_steps": [
+        {
+          "id": "create-directories",
+          "title": "Create workspace directories",
+          "description": "Set up the basic directory structure for Claude Code workspace",
+          "commands": [
+            "mkdir -p .claude/agents",
+            "mkdir -p .claude/commands",
+            "mkdir -p .axon"
+          ],
+          "order": 1,
+          "required": true
+        }
+      ],
+      "required_mcp_functions": [
+        "get_agentic_workflow_description",
+        "register_agent",
+        "create_main_ai_file"
+      ],
+      "manifest_template": {
+        "schema_version": "1.0",
+        "ai_tool_type": "claude-code",
+        "project": {},
+        "agents": [],
+        "workflow": {}
+      }
+    }
+  }
+}

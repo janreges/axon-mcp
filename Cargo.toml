@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "core",
-    "mcp-server", "database", "mcp-protocol", "mocks",
+    "mcp-server", "database", "mcp-protocol", "mocks", "workspace-orchestrator",
 ]
 resolver = "2"
 
@@ -16,3 +16,5 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 config = "0.13"
 anyhow = "1.0"
 clap = { version = "4.0", features = ["derive", "env"] }
+handlebars = "4.3"
+reqwest = { version = "0.11", features = ["json"] }

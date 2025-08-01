@@ -1,0 +1,163 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "generate_workspace_manifest",
+  "description": "Generates a comprehensive workspace manifest file containing project metadata, agent configurations, and deployment information",
+  "type": "object",
+  "properties": {
+    "method": {
+      "type": "string",
+      "const": "generate_workspace_manifest"
+    },
+    "params": {
+      "type": "object",
+      "properties": {
+        "project_metadata": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Project name"
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+$",
+              "description": "Semantic version of the project"
+            },
+            "description": {
+              "type": "string",
+              "description": "Project description"
+            },
+            "author": {
+              "type": "string",
+              "description": "Project author or organization"
+            },
+            "license": {
+              "type": "string",
+              "description": "Project license"
+            },
+            "repository": {
+              "type": "string",
+              "format": "uri",
+              "description": "Repository URL"
+            }
+          },
+          "required": ["name", "version", "description"],
+          "additionalProperties": false
+        },
+        "agent_configuration": {
+          "type": "object",
+          "properties": {
+            "orchestration_mode": {
+              "type": "string",
+              "enum": ["dynamic", "static", "hybrid"],
+              "description": "How agents are orchestrated"
+            },
+            "agents": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string"},
+                  "type": {"type": "string"},
+                  "description": {"type": "string"},
+                  "capabilities": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                  },
+                  "dependencies": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                  },
+                  "configuration": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": ["name", "type", "description", "capabilities"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["orchestration_mode", "agents"],
+          "additionalProperties": false
+        },
+        "output_format": {
+          "type": "string",
+          "enum": ["json", "yaml", "toml"],
+          "default": "json",
+          "description": "Format for the generated manifest"
+        }
+      },
+      "required": ["project_metadata", "agent_configuration"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["method", "params"], 
+  "additionalProperties": false,
+  "response": {
+    "type": "object",
+    "properties": {
+      "manifest_content": {
+        "type": "string",
+        "description": "Generated manifest content in the requested format"
+      },
+      "format": {
+        "type": "string",
+        "enum": ["json", "yaml", "toml"],
+        "description": "Format of the generated manifest"
+      },
+      "schema_version": {
+        "type": "string",
+        "description": "Version of the manifest schema used"
+      },
+      "generated_at": {
+        "type": "string",
+        "format": "date-time",
+        "description": "Timestamp when manifest was generated"
+      },
+      "agent_count": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Number of agents included in the manifest"
+      },
+      "validation_status": {
+        "type": "string",
+        "enum": ["valid", "warning", "error"],
+        "description": "Validation status of the generated manifest"
+      },
+      "validation_messages": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Validation messages or warnings"
+      }
+    },
+    "required": ["manifest_content", "format", "schema_version", "generated_at", "agent_count", "validation_status"],
+    "additionalProperties": false
+  },
+  "examples": [
+    {
+      "method": "generate_workspace_manifest",
+      "params": {
+        "project_metadata": {
+          "name": "markdown-converter",
+          "version": "1.0.0",
+          "description": "CLI tool for Markdown to HTML conversion"
+        },
+        "agent_configuration": {
+          "orchestration_mode": "dynamic",
+          "agents": [
+            {
+              "name": "cli-developer",
+              "type": "developer",
+              "description": "CLI development specialist",
+              "capabilities": ["rust", "cli", "file-io"]
+            }
+          ]
+        },
+        "output_format": "json"
+      }
+    }
+  ]
+}
