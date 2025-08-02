@@ -62,9 +62,9 @@ enum TaskState {
 }
 ```
 
-### Required MCP Functions (15 Total)
+### Required MCP Functions (22 Total)
 
-#### Core Task Management (8 Functions)
+#### Core Task Management (9 Functions)
 - **create_task**: Add new task with validation
 - **update_task**: Modify task details and metadata
 - **set_task_state**: Change task lifecycle state
@@ -73,6 +73,7 @@ enum TaskState {
 - **list_tasks**: Query tasks with filtering (owner, state, date range)
 - **assign_task**: Transfer task ownership between agents
 - **archive_task**: Move task to archived state with audit trail
+- **health_check**: Check server health and status
 
 #### Advanced Multi-Agent Coordination (5 Functions)
 - **discover_work**: Find available tasks based on agent capabilities
@@ -84,6 +85,14 @@ enum TaskState {
 #### Inter-Agent Messaging (2 Functions)
 - **create_task_message**: Send targeted messages between agents within tasks
 - **get_task_messages**: Retrieve messages with advanced filtering by sender, recipient, type
+
+#### Workspace Setup Automation (6 Functions)
+- **get_setup_instructions**: Generate AI workspace setup instructions based on PRD analysis
+- **get_agentic_workflow_description**: Analyze PRD and recommend optimal agent roles and workflow
+- **register_agent**: Register an AI agent in the workspace
+- **get_instructions_for_main_ai_file**: Get instructions for creating main AI coordination file
+- **create_main_ai_file**: Create the main AI coordination file (CLAUDE.md, etc.)
+- **get_workspace_manifest**: Generate complete workspace manifest for AI automation
 
 ### Advanced Inter-Agent Messaging System
 
