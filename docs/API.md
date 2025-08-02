@@ -7,7 +7,6 @@ This document provides comprehensive documentation for all Model Context Protoco
 The server implements the MCP specification using:
 - **Transport**: Server-Sent Events (SSE) over HTTP
 - **Protocol**: JSON-RPC 2.0 for message exchange
-- **Authentication**: Currently none (future enhancement)
 - **Endpoint**: `/mcp/v1` (default)
 
 ## Connection
@@ -122,7 +121,7 @@ Creates a new task with validation.
 - `code` (string, required): Unique human-readable identifier
 - `name` (string, required): Brief task title  
 - `description` (string, required): Detailed task requirements
-- `owner_agent_name` (string, required): Agent identifier
+- `owner_agent_name` (string, optional): Agent identifier (null for unassigned tasks)
 
 **Returns:** Complete Task object with generated ID and timestamps
 
@@ -256,7 +255,7 @@ Changes a task's lifecycle state with validation.
 ```
 
 **State Transition Rules:**
-- `Created` → `InProgress`, `Blocked`, `PendingDecomposition`, `WaitingForDependency`
+- `Created` → `InProgress`, `PendingDecomposition`, `WaitingForDependency`
 - `InProgress` → `Blocked`, `Review`, `Done`, `PendingHandoff`
 - `Blocked` → `InProgress`
 - `Review` → `InProgress`, `Done`
@@ -870,7 +869,7 @@ await sendMCPRequest({
 await sendMCPRequest({
     method: "archive_task",
     params: {
-        task_id: taskId
+        id: taskId
     }
 });
 ```
@@ -923,7 +922,8 @@ Currently no rate limiting is implemented. Future versions will include:
 - **Input Validation**: All parameters validated before processing
 - **SQL Injection Prevention**: Parameterized queries only
 - **Error Information**: Error messages don't leak sensitive data
-- **Authentication**: Planned for future releases
+
+*Note: This server is designed for local development use and does not include authentication mechanisms.*
 
 ## Monitoring and Debugging
 

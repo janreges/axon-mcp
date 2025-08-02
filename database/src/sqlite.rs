@@ -108,6 +108,14 @@ impl SqliteTaskRepository {
         tracing::info!("Database migrations completed successfully");
         Ok(())
     }
+
+    /// Get access to the underlying database pool for custom operations
+    /// 
+    /// This method is primarily intended for testing scenarios where
+    /// direct SQL execution is needed.
+    pub fn pool(&self) -> &SqlitePool {
+        &self.pool
+    }
 }
 
 #[async_trait]
@@ -517,8 +525,9 @@ impl TaskRepository for SqliteTaskRepository {
             return Err(TaskError::NotOwned(agent_name.to_string(), task_id));
         }
         
-        // Clear task owner (set to NULL)
-        sqlx::query("UPDATE tasks SET owner_agent_name = NULL WHERE id = ?")
+        // Clear task owner and reset state to Created for re-claiming
+        sqlx::query("UPDATE tasks SET owner_agent_name = NULL, state = ? WHERE id = ?")
+            .bind(crate::common::state_to_string(TaskState::Created))
             .bind(task_id)
             .execute(&self.pool)
             .await
@@ -528,40 +537,62 @@ impl TaskRepository for SqliteTaskRepository {
         self.get_by_id(task_id).await?.ok_or_else(|| TaskError::not_found_id(task_id))
     }
 
-    async fn start_work_session(&self, task_id: i32, _agent_name: &str) -> Result<i32> {
-        // Simple implementation - just return a session ID
-        // In full implementation, this would create a work_sessions record
-        
-        // Verify task exists
-        let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ?)")
+    async fn start_work_session(&self, task_id: i32, agent_name: &str) -> Result<i32> {
+        // Verify task exists and agent owns it
+        let task = sqlx::query_as::<_, (String,)>("SELECT COALESCE(owner_agent_name, '') FROM tasks WHERE id = ?")
             .bind(task_id)
-            .fetch_one(&self.pool)
+            .fetch_optional(&self.pool)
             .await
             .map_err(sqlx_error_to_task_error)?;
             
-        if !exists {
-            return Err(TaskError::not_found_id(task_id));
+        let (current_owner,) = match task {
+            Some(task) => task,
+            None => return Err(TaskError::not_found_id(task_id)),
+        };
+        
+        if current_owner != agent_name {
+            return Err(TaskError::NotOwned(agent_name.to_string(), task_id));
         }
         
-        // For now, return task_id as session_id
-        // TODO: Implement proper work_sessions table
-        Ok(task_id)
+        // Create work session record
+        let session_id: i32 = sqlx::query_scalar(
+            "INSERT INTO work_sessions (task_id, agent_name, started_at) VALUES (?, ?, ?) RETURNING id"
+        )
+        .bind(task_id)
+        .bind(agent_name)
+        .bind(Utc::now())
+        .fetch_one(&self.pool)
+        .await
+        .map_err(sqlx_error_to_task_error)?;
+        
+        Ok(session_id)
     }
 
-    async fn end_work_session(&self, session_id: i32, _notes: Option<String>, _productivity_score: Option<f64>) -> Result<()> {
-        // Simple implementation - just verify session exists
-        // In full implementation, this would update work_sessions record
+    async fn end_work_session(&self, session_id: i32, notes: Option<String>, productivity_score: Option<f64>) -> Result<()> {
+        // Check if session exists and is still active
+        let session_exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM work_sessions WHERE id = ? AND ended_at IS NULL)"
+        )
+        .bind(session_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(sqlx_error_to_task_error)?;
         
-        // For now, just verify task exists (using session_id as task_id)
-        let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ?)")
-            .bind(session_id)
-            .fetch_one(&self.pool)
-            .await
-            .map_err(sqlx_error_to_task_error)?;
-            
-        if !exists {
+        if !session_exists {
             return Err(TaskError::SessionNotFound(session_id));
         }
+        
+        // End the work session with optional notes and productivity score
+        sqlx::query(
+            "UPDATE work_sessions SET ended_at = ?, notes = ?, productivity_score = ? WHERE id = ?"
+        )
+        .bind(Utc::now())
+        .bind(notes)
+        .bind(productivity_score)
+        .bind(session_id)
+        .execute(&self.pool)
+        .await
+        .map_err(sqlx_error_to_task_error)?;
         
         Ok(())
     }
@@ -849,6 +880,106 @@ mod tests {
             },
             other => panic!("Expected InvalidStateTransition error, got: {:?}", other),
         }
+    }
+
+    #[tokio::test]
+    async fn test_release_task_resets_state() {
+        let repo = create_test_repository().await;
+        
+        // Create and claim a task
+        let new_task = NewTask::new(
+            "RELEASE-TEST".to_string(),
+            "Release Test".to_string(),
+            "Test release task functionality".to_string(),
+            None,
+        );
+        
+        let task = repo.create(new_task).await.unwrap();
+        let claimed_task = repo.claim_task(task.id, "test-agent").await.unwrap();
+        
+        // Verify task is claimed and in InProgress state
+        assert_eq!(claimed_task.state, TaskState::InProgress);
+        assert_eq!(claimed_task.owner_agent_name, Some("test-agent".to_string()));
+        
+        // Release the task
+        let released_task = repo.release_task(task.id, "test-agent").await.unwrap();
+        
+        // Verify task is released and back to Created state
+        assert_eq!(released_task.state, TaskState::Created, 
+            "CRITICAL: release_task() must reset state to Created");
+        assert!(released_task.owner_agent_name.is_none(),
+            "CRITICAL: release_task() must clear owner");
+            
+        // Verify task can be claimed again by another agent
+        let reclaimed_task = repo.claim_task(task.id, "another-agent").await.unwrap();
+        assert_eq!(reclaimed_task.state, TaskState::InProgress);
+        assert_eq!(reclaimed_task.owner_agent_name, Some("another-agent".to_string()));
+        
+        println!("✅ SUCCESS: release_task correctly resets state to Created!");
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_claim_task_race_conditions() {
+        let repo = create_test_repository().await;
+        
+        // Create a task that multiple agents will try to claim
+        let new_task = NewTask::new(
+            "RACE-TEST".to_string(),
+            "Race Condition Test".to_string(),
+            "Test concurrent claiming to verify race condition prevention".to_string(),
+            None,
+        );
+        
+        let task = repo.create(new_task).await.unwrap();
+        assert_eq!(task.state, TaskState::Created);
+        
+        // Create multiple agents trying to claim the same task concurrently
+        let agent_names = vec!["agent-1", "agent-2", "agent-3", "agent-4", "agent-5"];
+        let mut handles = vec![];
+        
+        for agent_name in agent_names {
+            let repo_clone = repo.clone();
+            let task_id = task.id;
+            let agent_name = agent_name.to_string();
+            
+            let handle = tokio::spawn(async move {
+                repo_clone.claim_task(task_id, &agent_name).await
+            });
+            handles.push(handle);
+        }
+        
+        // Wait for all attempts to complete
+        let results: Vec<Result<Task>> = futures::future::join_all(handles)
+            .await
+            .into_iter()
+            .map(|r| r.unwrap())
+            .collect();
+        
+        // Exactly one should succeed, others should fail
+        let successes: Vec<_> = results.iter().filter(|r| r.is_ok()).collect();
+        let failures: Vec<_> = results.iter().filter(|r| r.is_err()).collect();
+        
+        assert_eq!(successes.len(), 1, "Exactly one agent should successfully claim the task");
+        assert_eq!(failures.len(), 4, "Four agents should fail to claim the task");
+        
+        // Verify the successful claim
+        let claimed_task = successes[0].as_ref().unwrap();
+        assert_eq!(claimed_task.state, TaskState::InProgress);
+        assert!(claimed_task.owner_agent_name.is_some());
+        
+        // Verify failures are for correct reasons
+        for failure in failures {
+            match failure.as_ref().unwrap_err() {
+                TaskError::AlreadyClaimed(_, _) |
+                TaskError::InvalidStateTransition(_, _) |
+                TaskError::Conflict(_) => {
+                    // These are expected error types for race conditions
+                }
+                other => panic!("Unexpected error type: {:?}", other),
+            }
+        }
+        
+        println!("✅ SUCCESS: Concurrent claim_task properly handles race conditions!");
     }
 
     #[tokio::test]

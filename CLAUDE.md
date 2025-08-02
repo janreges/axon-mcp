@@ -46,10 +46,20 @@ struct Task {
     code: String,               // Human-readable identifier (e.g., "ARCH-01", "DB-15")
     name: String,               // Brief task title
     description: String,        // Detailed task requirements
-    owner_agent_name: String,   // Assigned agent identifier
+    owner_agent_name: Option<String>, // Assigned agent identifier (None for unassigned)
     state: TaskState,           // Current lifecycle state
     inserted_at: DateTime<Utc>, // Creation timestamp
     done_at: Option<DateTime<Utc>>, // Completion timestamp
+    
+    // MCP v2 Extensions
+    workflow_definition_id: Option<i32>,
+    workflow_cursor: Option<String>,
+    priority_score: f64,
+    parent_task_id: Option<i32>,
+    failure_count: i32,
+    required_capabilities: Vec<String>,
+    estimated_effort: Option<i32>,
+    confidence_threshold: f64,
 }
 
 enum TaskState {
@@ -59,6 +69,10 @@ enum TaskState {
     Review,
     Done,
     Archived,
+    PendingDecomposition,
+    PendingHandoff,
+    Quarantined,
+    WaitingForDependency,
 }
 ```
 
@@ -283,7 +297,7 @@ Each crate also contains its own README.md with specific documentation.
 The project is fully implemented and functional:
 
 ### ✅ Completed Features
-- **All 15 MCP Functions**: Core task management, advanced coordination, and messaging
+- **All 22 MCP Functions**: Core task management, advanced coordination, messaging, and workspace automation
 - **Multi-Transport Support**: HTTP/JSON-RPC and legacy SSE support
 - **SQLite Database**: Full persistence with migrations and connection pooling
 - **Comprehensive Testing**: 64+ tests across all crates with high coverage
