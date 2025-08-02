@@ -186,6 +186,14 @@ impl McpAuth {
             // Task Messaging Functions
             "create_task_message" => McpScope::TaskWrite, // Creating messages
             "get_task_messages" => McpScope::TaskRead, // Reading messages
+            // Workspace Setup Functions (MCP v2)
+            "get_setup_instructions" => McpScope::TaskRead, // Reading setup information
+            "get_agentic_workflow_description" => McpScope::TaskRead, // Analyzing PRD content
+            "get_instructions_for_main_ai_file" => McpScope::TaskRead, // Reading template instructions
+            "create_main_ai_file" => McpScope::TaskWrite, // Creating AI tool files
+            "generate_workspace_manifest" => McpScope::TaskWrite, // Creating manifests
+            "get_workspace_manifest" => McpScope::TaskRead, // Reading manifests
+            "register_agent" => McpScope::TaskWrite, // Registering agents in workspace
             _ => return false, // Unknown method
         };
         

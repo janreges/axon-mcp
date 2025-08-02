@@ -17,37 +17,37 @@ use tokio::sync::mpsc;
 use tracing::info;
 
 use crate::{auth::McpAuth, error::McpError, handler::McpTaskHandler, serialization::*};
-use ::task_core::{TaskRepository, TaskMessageRepository, ProtocolHandler, DiscoverWorkParams, ClaimTaskParams, ReleaseTaskParams, StartWorkSessionParams, EndWorkSessionParams, CreateTaskMessageParams, GetTaskMessagesParams};
+use ::task_core::{TaskRepository, TaskMessageRepository, WorkspaceContextRepository, ProtocolHandler, DiscoverWorkParams, ClaimTaskParams, ReleaseTaskParams, StartWorkSessionParams, EndWorkSessionParams, CreateTaskMessageParams, GetTaskMessagesParams};
 
 /// MCP Protocol Version as required by 2025-06-18 specification
 const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
 
 /// Shared server state for handlers
 #[derive(Clone)]
-pub struct McpServerState<R, M> {
-    pub handler: McpTaskHandler<R, M>,
+pub struct McpServerState<R, M, W> {
+    pub handler: McpTaskHandler<R, M, W>,
     pub auth: McpAuth,
 }
 
 /// MCP Server with multiple transport support
-pub struct McpServer<R, M> {
-    handler: McpTaskHandler<R, M>,
+pub struct McpServer<R, M, W> {
+    handler: McpTaskHandler<R, M, W>,
     auth: McpAuth,
 }
 
-impl<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRepository + Send + Sync + 'static> McpServer<R, M> {
+impl<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRepository + Send + Sync + 'static, W: WorkspaceContextRepository + Send + Sync + 'static> McpServer<R, M, W> {
     /// Create new MCP server with authentication disabled (development mode)
-    pub fn new(repository: Arc<R>, message_repository: Arc<M>) -> Self {
+    pub fn new(repository: Arc<R>, message_repository: Arc<M>, workspace_context_repository: Arc<W>) -> Self {
         Self {
-            handler: McpTaskHandler::new(repository, message_repository),
+            handler: McpTaskHandler::new(repository, message_repository, workspace_context_repository),
             auth: McpAuth::new(false), // Disabled by default for backward compatibility
         }
     }
     
     /// Create new MCP server with authentication enabled (production mode)
-    pub fn new_with_auth(repository: Arc<R>, message_repository: Arc<M>, auth_enabled: bool) -> Self {
+    pub fn new_with_auth(repository: Arc<R>, message_repository: Arc<M>, workspace_context_repository: Arc<W>, auth_enabled: bool) -> Self {
         Self {
-            handler: McpTaskHandler::new(repository, message_repository),
+            handler: McpTaskHandler::new(repository, message_repository, workspace_context_repository),
             auth: McpAuth::new(auth_enabled),
         }
     }
@@ -222,8 +222,8 @@ impl<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRepository + Send 
 }
 
 /// Execute MCP method - shared logic for both server instances and handlers
-async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepository + Send + Sync>(
-    handler: &McpTaskHandler<R, M>, 
+async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepository + Send + Sync, W: WorkspaceContextRepository + Send + Sync>(
+    handler: &McpTaskHandler<R, M, W>, 
     method: &str, 
     params: Value, 
     id: Option<Value>
@@ -532,8 +532,8 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
 }
 
 /// SSE endpoint for MCP communication
-async fn sse_handler<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRepository + Send + Sync + 'static>(
-    State(_state): State<Arc<McpServerState<R, M>>>,
+async fn sse_handler<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRepository + Send + Sync + 'static, W: WorkspaceContextRepository + Send + Sync + 'static>(
+    State(_state): State<Arc<McpServerState<R, M, W>>>,
 ) -> Result<Sse<UnboundedReceiverStream<Result<axum::response::sse::Event, axum::Error>>>, StatusCode> {
     let (tx, rx) = mpsc::unbounded_channel();
     
@@ -585,8 +585,8 @@ async fn sse_handler<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRe
 }
 
 /// JSON-RPC endpoint for MCP communication
-async fn rpc_handler<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRepository + Send + Sync + 'static>(
-    State(state): State<Arc<McpServerState<R, M>>>,
+async fn rpc_handler<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRepository + Send + Sync + 'static, W: WorkspaceContextRepository + Send + Sync + 'static>(
+    State(state): State<Arc<McpServerState<R, M, W>>>,
     headers: HeaderMap,
     Json(request): Json<Value>,
 ) -> Result<(HeaderMap, Json<Value>), StatusCode> {
@@ -678,8 +678,9 @@ mod tests {
     use mockall::predicate::*;
     use mockall::mock;
     use async_trait::async_trait;
-    use ::task_core::{Task, NewTask, UpdateTask, TaskFilter, TaskState, RepositoryStats, TaskMessage};
+    use ::task_core::{Task, NewTask, UpdateTask, TaskFilter, TaskState, RepositoryStats, TaskMessage, WorkspaceContextRepository};
     use ::task_core::error::Result;
+    use ::task_core::workspace_setup::WorkspaceContext;
 
     mock! {
         TestRepository {}
@@ -747,11 +748,38 @@ mod tests {
         }
     }
     
+    // Simple mock workspace context repository for testing
+    struct SimpleTestWorkspaceContextRepository;
+    
+    #[async_trait]
+    impl WorkspaceContextRepository for SimpleTestWorkspaceContextRepository {
+        async fn create(&self, context: WorkspaceContext) -> Result<WorkspaceContext> {
+            Ok(context)
+        }
+        
+        async fn get_by_id(&self, _workspace_id: &str) -> Result<Option<WorkspaceContext>> {
+            Ok(None)
+        }
+        
+        async fn update(&self, context: WorkspaceContext) -> Result<WorkspaceContext> {
+            Ok(context)
+        }
+        
+        async fn delete(&self, _workspace_id: &str) -> Result<()> {
+            Ok(())
+        }
+        
+        async fn health_check(&self) -> Result<()> {
+            Ok(())
+        }
+    }
+    
     #[test]
     fn test_server_creation() {
         let mock_repo = Arc::new(MockTestRepository::new());
         let mock_message_repo = Arc::new(SimpleTestMessageRepository);
-        let _server = McpServer::new(mock_repo, mock_message_repo);
+        let mock_workspace_repo = Arc::new(SimpleTestWorkspaceContextRepository);
+        let _server = McpServer::new(mock_repo, mock_message_repo, mock_workspace_repo);
         // Basic test that server can be created
         assert!(true);
     }

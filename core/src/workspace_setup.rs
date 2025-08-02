@@ -570,26 +570,31 @@ pub struct GeneratedFile {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetSetupInstructionsParams {
+    pub workspace_id: String,
     pub ai_tool_type: AiToolType,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetAgenticWorkflowDescriptionParams {
+    pub workspace_id: String,
     pub prd_content: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisterAgentParams {
+    pub workspace_id: String,
     pub agent: AgentRegistration,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetMainFileInstructionsParams {
+    pub workspace_id: String,
     pub ai_tool_type: AiToolType,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateMainFileParams {
+    pub workspace_id: String,
     pub content: String,
     pub ai_tool_type: AiToolType,
     pub project_name: Option<String>,
@@ -598,6 +603,7 @@ pub struct CreateMainFileParams {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenerateWorkspaceManifestParams {
+    pub workspace_id: String,
     pub prd_content: String,
     pub agents: Vec<AgentRegistration>,
     pub include_generated_files: bool,
@@ -768,6 +774,9 @@ impl WorkspaceSetupService {
         // Generate suggested agents based on archetype
         let suggested_agents = self.generate_suggested_agents_for_archetype(&archetype, prd, recommended_agent_count).await?;
         
+        // Generate workflow steps based on project archetype and agents
+        let workflow_steps = self.generate_workflow_steps(&archetype, &suggested_agents);
+        
         let workflow = AgenticWorkflowDescription {
             workflow_description: format!(
                 "Classified as {} project with complexity score {}/10. Recommending {} agents using {}-specific workflow patterns.",
@@ -780,7 +789,7 @@ impl WorkspaceSetupService {
             suggested_agents: suggested_agents.clone(),
             task_decomposition_strategy,
             coordination_patterns,
-            workflow_steps: vec![],
+            workflow_steps,
         };
         
         let next_steps = vec![
@@ -954,7 +963,7 @@ impl WorkspaceSetupService {
                 vec![]
             },
             created_at: Utc::now(),
-            axon_version: "0.1.0".to_string(),
+            axon_version: "1.2.0".to_string(),
         };
         
         Ok(WorkspaceSetupResponse::success(
@@ -1435,41 +1444,237 @@ impl WorkspaceSetupService {
     
     async fn generate_suggested_agents(&self, _prd: &PrdDocument, count: u8) -> WorkspaceSetupResult<Vec<SuggestedAgent>> {
         let mut agents = Vec::new();
+        let workload_per_agent = 100.0 / count as f32;
         
-        // Always include a project manager
-        agents.push(SuggestedAgent {
-            name: "project-manager".to_string(),
-            description: "Coordinates overall project execution and manages task assignments".to_string(),
-            required_capabilities: vec!["project-management".to_string(), "coordination".to_string()],
-            workload_percentage: 100.0 / count as f32,
-            depends_on: vec![],
-        });
+        // Define comprehensive agent roles for web applications
+        let web_app_agents = vec![
+            ("project-manager", "Coordinates overall project execution and manages task assignments", vec!["project-management", "coordination"], vec![]),
+            ("backend-developer", "Implements server-side logic, APIs, and database integration", vec!["backend-development", "api-design"], vec!["project-manager"]),
+            ("frontend-developer", "Creates user interfaces and client-side application logic", vec!["frontend-development", "ui-design"], vec!["project-manager"]),
+            ("database-architect", "Designs database schema, optimizes queries, and manages data models", vec!["database-design", "sql", "data-modeling"], vec!["backend-developer"]),
+            ("devops-engineer", "Manages deployment, infrastructure, and CI/CD pipelines", vec!["devops", "cloud-infrastructure", "ci-cd"], vec!["backend-developer"]),
+            ("qa-engineer", "Designs and executes test plans, ensures quality assurance", vec!["testing", "quality-assurance", "automation"], vec!["frontend-developer", "backend-developer"]),
+            ("ui-ux-designer", "Creates user interface designs and user experience flows", vec!["ui-design", "ux-design", "user-research"], vec!["project-manager"]),
+            ("security-specialist", "Implements security measures and conducts security audits", vec!["security", "penetration-testing", "compliance"], vec!["backend-developer"]),
+        ];
         
-        // Add basic agents up to the requested count
-        if count > 1 {
+        // Add agents up to the requested count
+        for i in 0..count.min(web_app_agents.len() as u8) {
+            let (name, description, capabilities, dependencies) = &web_app_agents[i as usize];
             agents.push(SuggestedAgent {
-                name: "backend-developer".to_string(),
-                description: "Implements server-side logic, APIs, and database integration".to_string(),
-                required_capabilities: vec!["backend-development".to_string(), "api-design".to_string()],
-                workload_percentage: 100.0 / count as f32,
-                depends_on: vec!["project-manager".to_string()],
+                name: name.to_string(),
+                description: description.to_string(),
+                required_capabilities: capabilities.iter().map(|s| s.to_string()).collect(),
+                workload_percentage: workload_per_agent,
+                depends_on: dependencies.iter().map(|s| s.to_string()).collect(),
             });
         }
         
-        if count > 2 {
+        // If we need more agents than our predefined roles, add generic developers
+        while agents.len() < count as usize {
+            let agent_number = agents.len() + 1;
             agents.push(SuggestedAgent {
-                name: "frontend-developer".to_string(),
-                description: "Creates user interfaces and client-side application logic".to_string(),
-                required_capabilities: vec!["frontend-development".to_string(), "ui-design".to_string()],
-                workload_percentage: 100.0 / count as f32,
+                name: format!("developer-{}", agent_number),
+                description: format!("Additional development resource #{}", agent_number),
+                required_capabilities: vec!["general-development".to_string(), "problem-solving".to_string()],
+                workload_percentage: workload_per_agent,
                 depends_on: vec!["project-manager".to_string()],
             });
         }
-        
-        // Truncate to requested count
-        agents.truncate(count as usize);
         
         Ok(agents)
+    }
+    
+    /// Generate workflow steps based on project archetype and suggested agents
+    fn generate_workflow_steps(&self, archetype: &ProjectArchetype, suggested_agents: &[SuggestedAgent]) -> Vec<String> {
+        let mut steps = Vec::new();
+        
+        match archetype {
+            ProjectArchetype::WebApplication => {
+                steps.push("1. Project setup and initial planning - project-manager coordinates team kickoff".to_string());
+                steps.push("2. Database design and schema creation - database-architect designs core data models".to_string());
+                steps.push("3. UI/UX design and wireframing - ui-ux-designer creates user interface mockups".to_string());
+                steps.push("4. Backend API development - backend-developer implements server-side logic and APIs".to_string());
+                steps.push("5. Frontend application development - frontend-developer builds user interface components".to_string());
+                steps.push("6. Integration and system testing - qa-engineer verifies all components work together".to_string());
+                steps.push("7. Security audit and hardening - security-specialist reviews and secures the application".to_string());
+                steps.push("8. DevOps setup and deployment - devops-engineer configures CI/CD and production environment".to_string());
+            },
+            ProjectArchetype::CliTool => {
+                steps.push("1. Command-line interface design - cli-developer designs argument parsing and commands".to_string());
+                steps.push("2. Core functionality implementation - cli-developer implements main business logic".to_string());
+                steps.push("3. Error handling and validation - cli-developer adds robust error handling".to_string());
+                steps.push("4. Testing and documentation - cli-developer creates tests and user documentation".to_string());
+                steps.push("5. Package and distribution - cli-developer prepares for distribution and installation".to_string());
+            },
+            ProjectArchetype::ApiService => {
+                steps.push("1. API design and specification - api-architect designs endpoint specifications".to_string());
+                steps.push("2. Data model and persistence layer - backend-developer implements data access layer".to_string());
+                steps.push("3. API endpoint implementation - backend-developer implements REST/GraphQL endpoints".to_string());
+                steps.push("4. Authentication and authorization - security-specialist implements access control".to_string());
+                steps.push("5. API testing and validation - qa-engineer creates comprehensive API test suite".to_string());
+                steps.push("6. Documentation and deployment - devops-engineer sets up API documentation and deployment".to_string());
+            },
+            ProjectArchetype::MobileApp => {
+                steps.push("1. Mobile UI/UX design - mobile-ui-designer creates platform-specific designs".to_string());
+                steps.push("2. Mobile app development - mobile-developer implements app for target platforms".to_string());
+                steps.push("3. Platform integration - mobile-developer integrates with platform-specific features".to_string());
+                steps.push("4. Device testing - mobile-qa-tester tests on various devices and screen sizes".to_string());
+                steps.push("5. App store preparation - mobile-developer prepares for app store submission".to_string());
+            },
+            ProjectArchetype::Library => {
+                steps.push("1. Library architecture design - library-architect defines API and structure".to_string());
+                steps.push("2. Core implementation - library-developer implements main functionality".to_string());
+                steps.push("3. API documentation - documentation-writer creates comprehensive API docs".to_string());
+                steps.push("4. Testing and examples - library-developer creates tests and usage examples".to_string());
+                steps.push("5. Package and publish - library-developer prepares for package distribution".to_string());
+            },
+            ProjectArchetype::DataProcessing => {
+                steps.push("1. Data pipeline architecture - data-architect designs processing pipeline".to_string());
+                steps.push("2. Data ingestion implementation - data-engineer implements data input mechanisms".to_string());
+                steps.push("3. Processing logic development - data-engineer implements transformation logic".to_string());
+                steps.push("4. Output and storage integration - data-engineer implements data output and storage".to_string());
+                steps.push("5. Performance optimization and monitoring - data-engineer optimizes for scale".to_string());
+            },
+            ProjectArchetype::DesktopApp => {
+                steps.push("1. Desktop UI design - desktop-ui-developer designs application interface".to_string());
+                steps.push("2. Application logic implementation - desktop-backend-developer implements business logic".to_string());
+                steps.push("3. UI integration - desktop-ui-developer connects UI with backend logic".to_string());
+                steps.push("4. Cross-platform testing - desktop-qa-tester tests on different operating systems".to_string());
+                steps.push("5. Installation package creation - desktop-backend-developer creates installers".to_string());
+            },
+            ProjectArchetype::Script => {
+                steps.push("1. Script requirements analysis - developer analyzes automation requirements".to_string());
+                steps.push("2. Core script implementation - developer implements main automation logic".to_string());
+                steps.push("3. Error handling and logging - developer adds robust error handling".to_string());
+                steps.push("4. Testing and validation - developer creates test scenarios".to_string());
+                steps.push("5. Documentation and deployment - developer creates usage documentation".to_string());
+            },
+            ProjectArchetype::Generic => {
+                // Generate generic steps based on available agents
+                if suggested_agents.iter().any(|a| a.name.contains("manager")) {
+                    steps.push("1. Project planning and requirements analysis - project-manager defines scope and goals".to_string());
+                }
+                if suggested_agents.iter().any(|a| a.name.contains("developer")) {
+                    steps.push("2. Core implementation - developers implement main functionality".to_string());
+                }
+                if suggested_agents.iter().any(|a| a.name.contains("qa") || a.name.contains("test")) {
+                    steps.push("3. Quality assurance and testing - qa-engineer creates and executes test plans".to_string());
+                }
+                if suggested_agents.iter().any(|a| a.name.contains("devops") || a.name.contains("deploy")) {
+                    steps.push("4. Deployment and operations - devops-engineer handles deployment and monitoring".to_string());
+                }
+                
+                // Add generic fallback steps if no specific agents found
+                if steps.is_empty() {
+                    steps.push("1. Project setup and initial development".to_string());
+                    steps.push("2. Implementation of core functionality".to_string());
+                    steps.push("3. Testing and quality assurance".to_string());
+                    steps.push("4. Deployment and finalization".to_string());
+                }
+            },
+        }
+        
+        steps
+    }
+}
+
+/// Workspace context for stateful workflow orchestration
+/// 
+/// This stores the state between MCP function calls within a single workspace setup workflow,
+/// enabling functions to share data and build upon previous results.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceContext {
+    pub workspace_id: String,
+    pub version: i32,
+    pub prd_content: Option<String>,
+    pub workflow_data: Option<AgenticWorkflowDescription>,
+    pub registered_agents: Vec<AgentRegistration>,
+    pub generated_files: Vec<GeneratedFileMetadata>,
+    pub manifest_data: Option<WorkspaceManifest>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Metadata for files generated during workspace setup
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeneratedFileMetadata {
+    pub path: String,
+    pub description: String,
+    pub ai_tool_type: AiToolType,
+    pub content_type: String,
+    pub created_at: DateTime<Utc>,
+}
+
+impl WorkspaceContext {
+    /// Create a new workspace context
+    pub fn new(workspace_id: String) -> Self {
+        let now = Utc::now();
+        Self {
+            workspace_id,
+            version: 1,
+            prd_content: None,
+            workflow_data: None,
+            registered_agents: Vec::new(),
+            generated_files: Vec::new(),
+            manifest_data: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    /// Update PRD content and increment version
+    pub fn update_prd(&mut self, prd_content: String) {
+        self.prd_content = Some(prd_content);
+        self.increment_version();
+    }
+
+    /// Update workflow data and increment version
+    pub fn update_workflow(&mut self, workflow_data: AgenticWorkflowDescription) {
+        self.workflow_data = Some(workflow_data);
+        self.increment_version();
+    }
+
+    /// Register an agent and increment version
+    pub fn register_agent(&mut self, agent: AgentRegistration) {
+        self.registered_agents.push(agent);
+        self.increment_version();
+    }
+
+    /// Add generated file metadata and increment version
+    pub fn add_generated_file(&mut self, file_metadata: GeneratedFileMetadata) {
+        self.generated_files.push(file_metadata);
+        self.increment_version();
+    }
+
+    /// Update manifest and increment version
+    pub fn update_manifest(&mut self, manifest: WorkspaceManifest) {
+        self.manifest_data = Some(manifest);
+        self.increment_version();
+    }
+
+    /// Get recommended agent count from workflow data
+    pub fn get_recommended_agent_count(&self) -> u32 {
+        self.workflow_data
+            .as_ref()
+            .map(|w| w.recommended_agent_count)
+            .unwrap_or(0)
+    }
+
+    /// Check if workflow data is available
+    pub fn has_workflow_data(&self) -> bool {
+        self.workflow_data.is_some()
+    }
+
+    /// Check if PRD is available
+    pub fn has_prd(&self) -> bool {
+        self.prd_content.is_some()
+    }
+
+    /// Private helper to increment version and update timestamp
+    fn increment_version(&mut self) {
+        self.version += 1;
+        self.updated_at = Utc::now();
     }
 }
 

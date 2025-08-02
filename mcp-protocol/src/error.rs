@@ -78,6 +78,10 @@ impl From<TaskError> for McpError {
             TaskError::SessionNotFound(session_id) => McpError::NotFound(format!("Work session {session_id} not found")),
             TaskError::CircuitBreakerOpen(agent) => McpError::Protocol(format!("Circuit breaker open for agent {agent}")),
             TaskError::UnknownAgent(agent) => McpError::NotFound(format!("Unknown agent: {agent}")),
+            TaskError::Conflict(msg) => McpError::Validation(format!("Conflict: {msg}")),
+            TaskError::Serialization(msg) => McpError::Protocol(format!("Serialization error: {msg}")),
+            TaskError::Deserialization(msg) => McpError::Protocol(format!("Deserialization error: {msg}")),
+            TaskError::DuplicateKey(key) => McpError::DuplicateCode(key),
         }
     }
 }

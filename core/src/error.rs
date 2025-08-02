@@ -87,6 +87,22 @@ pub enum TaskError {
     /// Agent validation failed
     #[error("Unknown agent: {0}")]
     UnknownAgent(String),
+    
+    /// Conflict error (e.g., optimistic locking failure)
+    #[error("Conflict: {0}")]
+    Conflict(String),
+
+    /// Serialization error when converting data to JSON
+    #[error("Serialization error: {0}")]
+    Serialization(String),
+
+    /// Deserialization error when converting JSON to data
+    #[error("Deserialization error: {0}")]
+    Deserialization(String),
+
+    /// Duplicate key error (e.g., workspace_id already exists)
+    #[error("Duplicate key: {0}")]
+    DuplicateKey(String),
 }
 
 impl TaskError {
@@ -153,6 +169,10 @@ impl TaskError {
             TaskError::SessionNotFound(_) => 404, // Not Found
             TaskError::CircuitBreakerOpen(_) => 503, // Service Unavailable
             TaskError::UnknownAgent(_) => 400, // Bad Request
+            TaskError::Conflict(_) => 409, // Conflict
+            TaskError::Serialization(_) => 500, // Internal Server Error
+            TaskError::Deserialization(_) => 500, // Internal Server Error
+            TaskError::DuplicateKey(_) => 409, // Conflict
         }
     }
 }
