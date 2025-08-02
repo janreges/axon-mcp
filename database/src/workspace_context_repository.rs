@@ -32,7 +32,7 @@ impl WorkspaceContextRepository for SqliteWorkspaceContextRepository {
     async fn create(&self, context: WorkspaceContext) -> Result<WorkspaceContext> {
         let now = Utc::now();
         let serialized_data = serde_json::to_string(&context)
-            .map_err(|e| TaskError::Serialization(format!("Failed to serialize WorkspaceContext: {}", e)))?;
+            .map_err(|e| TaskError::Serialization(format!("Failed to serialize WorkspaceContext: {e}")))?;
 
         let result = sqlx::query(
             "INSERT INTO workspace_contexts (workspace_id, data, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
@@ -50,7 +50,7 @@ impl WorkspaceContextRepository for SqliteWorkspaceContextRepository {
             Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
                 Err(TaskError::DuplicateKey(format!("Workspace ID '{}' already exists", context.workspace_id)))
             }
-            Err(e) => Err(TaskError::Database(format!("Failed to create workspace context: {}", e))),
+            Err(e) => Err(TaskError::Database(format!("Failed to create workspace context: {e}"))),
         }
     }
 
@@ -59,37 +59,54 @@ impl WorkspaceContextRepository for SqliteWorkspaceContextRepository {
             .bind(workspace_id)
             .fetch_optional(&*self.pool)
             .await
-            .map_err(|e| TaskError::Database(format!("Failed to get workspace context: {}", e)))?;
+            .map_err(|e| TaskError::Database(format!("Failed to get workspace context: {e}")))?;
 
         match row {
             Some(row) => {
                 let data_str: String = row.get("data");
                 let context: WorkspaceContext = serde_json::from_str(&data_str)
-                    .map_err(|e| TaskError::Deserialization(format!("Failed to deserialize WorkspaceContext: {}", e)))?;
+                    .map_err(|e| TaskError::Deserialization(format!("Failed to deserialize WorkspaceContext: {e}")))?;
                 Ok(Some(context))
             }
             None => Ok(None),
         }
     }
 
-    async fn update(&self, context: WorkspaceContext) -> Result<WorkspaceContext> {
+    async fn update(&self, mut context: WorkspaceContext) -> Result<WorkspaceContext> {
         let now = Utc::now();
+        let old_version = context.version;
+        context.version += 1; // Increment version for optimistic locking
+        context.updated_at = now;
+        
         let serialized_data = serde_json::to_string(&context)
-            .map_err(|e| TaskError::Serialization(format!("Failed to serialize WorkspaceContext: {}", e)))?;
+            .map_err(|e| TaskError::Serialization(format!("Failed to serialize WorkspaceContext: {e}")))?;
 
+        // Optimistic locking: only update if version matches
         let result = sqlx::query(
-            "UPDATE workspace_contexts SET data = ?, version = ?, updated_at = ? WHERE workspace_id = ?"
+            "UPDATE workspace_contexts SET data = ?, version = ?, updated_at = ? WHERE workspace_id = ? AND version = ?"
         )
         .bind(&serialized_data)
         .bind(context.version)
         .bind(now.to_rfc3339())
         .bind(&context.workspace_id)
+        .bind(old_version) // Check old version for optimistic locking
         .execute(&*self.pool)
         .await
-        .map_err(|e| TaskError::Database(format!("Failed to update workspace context: {}", e)))?;
+        .map_err(|e| TaskError::Database(format!("Failed to update workspace context: {e}")))?;
 
         if result.rows_affected() == 0 {
-            return Err(TaskError::NotFound(format!("Workspace ID '{}' not found", context.workspace_id)));
+            // Check if workspace exists at all
+            let exists = sqlx::query("SELECT 1 FROM workspace_contexts WHERE workspace_id = ?")
+                .bind(&context.workspace_id)
+                .fetch_optional(&*self.pool)
+                .await
+                .map_err(|e| TaskError::Database(format!("Failed to check workspace existence: {e}")))?;
+                
+            if exists.is_none() {
+                return Err(TaskError::NotFound(format!("Workspace ID '{}' not found", context.workspace_id)));
+            } else {
+                return Err(TaskError::Conflict(format!("Workspace '{}' was modified by another operation (version conflict)", context.workspace_id)));
+            }
         }
 
         Ok(context)
@@ -100,10 +117,10 @@ impl WorkspaceContextRepository for SqliteWorkspaceContextRepository {
             .bind(workspace_id)
             .execute(&*self.pool)
             .await
-            .map_err(|e| TaskError::Database(format!("Failed to delete workspace context: {}", e)))?;
+            .map_err(|e| TaskError::Database(format!("Failed to delete workspace context: {e}")))?;
 
         if result.rows_affected() == 0 {
-            return Err(TaskError::NotFound(format!("Workspace ID '{}' not found", workspace_id)));
+            return Err(TaskError::NotFound(format!("Workspace ID '{workspace_id}' not found")));
         }
 
         Ok(())
@@ -113,7 +130,7 @@ impl WorkspaceContextRepository for SqliteWorkspaceContextRepository {
         sqlx::query("SELECT 1")
             .fetch_one(&*self.pool)
             .await
-            .map_err(|e| TaskError::Database(format!("Health check failed: {}", e)))?;
+            .map_err(|e| TaskError::Database(format!("Health check failed: {e}")))?;
         
         Ok(())
     }
@@ -185,19 +202,50 @@ mod tests {
         let pool = setup_test_db().await;
         let repo = SqliteWorkspaceContextRepository::new(Arc::new(pool));
         
-        let mut context = WorkspaceContext::new("update-test".to_string());
+        let context = WorkspaceContext::new("update-test".to_string());
         
-        // Create context
-        repo.create(context.clone()).await.unwrap();
+        // Create context, initial version is 1
+        let created_context = repo.create(context.clone()).await.unwrap();
+        assert_eq!(created_context.version, 1);
         
-        // Modify and update
-        context.version += 1;
-        let updated = repo.update(context.clone()).await.unwrap();
-        assert_eq!(updated.version, context.version);
+        // Update the context. The update function will handle the version increment.
+        let updated = repo.update(created_context).await.unwrap();
+        assert_eq!(updated.version, 2); // Version should now be 2
         
         // Verify update
-        let retrieved = repo.get_by_id("update-test").await.unwrap();
-        assert_eq!(retrieved.unwrap().version, context.version);
+        let retrieved = repo.get_by_id("update-test").await.unwrap().unwrap();
+        assert_eq!(retrieved.version, 2);
+    }
+
+    #[tokio::test]
+    async fn test_update_conflict() {
+        let pool = setup_test_db().await;
+        let repo = SqliteWorkspaceContextRepository::new(Arc::new(pool));
+        
+        let context = WorkspaceContext::new("conflict-test".to_string());
+        repo.create(context.clone()).await.unwrap();
+
+        // 1. Fetch the context twice, simulating two concurrent processes
+        let mut context1 = repo.get_by_id("conflict-test").await.unwrap().unwrap();
+        let mut context2 = repo.get_by_id("conflict-test").await.unwrap().unwrap();
+
+        // 2. First process updates the context successfully
+        context1.prd_content = Some("update 1".to_string());
+        let updated1 = repo.update(context1).await.unwrap();
+        assert_eq!(updated1.version, 2);
+
+        // 3. Second process tries to update using stale data
+        context2.prd_content = Some("update 2".to_string());
+        let result2 = repo.update(context2).await;
+
+        // 4. Assert that the second update failed with a conflict error
+        assert!(result2.is_err());
+        assert!(matches!(result2.unwrap_err(), TaskError::Conflict(_)));
+
+        // 5. Verify that the first update is still the one in the DB
+        let final_context = repo.get_by_id("conflict-test").await.unwrap().unwrap();
+        assert_eq!(final_context.version, 2);
+        assert_eq!(final_context.prd_content.unwrap(), "update 1");
     }
 
     #[tokio::test]

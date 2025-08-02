@@ -213,7 +213,7 @@ pub fn build_work_discovery_query(agent_capabilities: &[String], limit: Option<i
                 query_builder.push(" OR ");
             }
             query_builder.push("required_capabilities LIKE ");
-            query_builder.push_bind(format!("%\"{}\"", capability));
+            query_builder.push_bind(format!("%\"{capability}\""));
         }
         query_builder.push(")");
     }

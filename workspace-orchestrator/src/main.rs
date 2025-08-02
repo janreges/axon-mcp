@@ -2,7 +2,6 @@ use anyhow::Result;
 use clap::Parser;
 use handlebars::Handlebars;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fs;
 use task_core::{PrdDocument, workspace_setup::{*, SuggestedAgent}};
@@ -88,7 +87,7 @@ impl McpClient {
         
         debug!("Calling MCP function: get_agentic_workflow_description");
         let response = self.client
-            .post(&format!("{}/mcp", self.base_url))
+            .post(format!("{}/mcp", self.base_url))
             .json(&payload)
             .send()
             .await?;

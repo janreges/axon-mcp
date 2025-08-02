@@ -294,22 +294,29 @@ impl TaskRepository for SqliteTaskRepository {
         use crate::common::build_filter_query;
         use sqlx::Execute;
         
-        // DEBUG: Log the filter being applied
-        tracing::info!("🔍 LIST FILTER DEBUG: filter = {:?}", filter);
+        // Debug logging - only in debug builds for performance
+        #[cfg(debug_assertions)]
+        {
+            tracing::debug!("🔍 LIST FILTER DEBUG: filter = {:?}", filter);
+        }
         
         let mut query_builder = build_filter_query(&filter);
         let query = query_builder.build();
         
-        // DEBUG: Log the exact SQL being generated
-        tracing::info!("🔍 GENERATED SQL: {}", query.sql());
+        #[cfg(debug_assertions)]
+        {
+            tracing::debug!("🔍 GENERATED SQL: {}", query.sql());
+        }
         
         let rows = query
             .fetch_all(&self.pool)
             .await
             .map_err(sqlx_error_to_task_error)?;
 
-        // DEBUG: Log the result count
-        tracing::info!("🔍 QUERY RESULT COUNT: {} rows", rows.len());
+        #[cfg(debug_assertions)]
+        {
+            tracing::debug!("🔍 QUERY RESULT COUNT: {} rows", rows.len());
+        }
 
         let mut tasks = Vec::new();
         for row in rows {
@@ -494,7 +501,7 @@ impl TaskRepository for SqliteTaskRepository {
                     return Err(TaskError::invalid_transition(current_state, TaskState::InProgress));
                 } else {
                     // Should not happen, but handle gracefully
-                    return Err(TaskError::Conflict(format!("Failed to claim task {} due to concurrent modification", task_id)));
+                    return Err(TaskError::Conflict(format!("Failed to claim task {task_id} due to concurrent modification")));
                 }
             } else {
                 // Task doesn't exist

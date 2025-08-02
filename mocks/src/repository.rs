@@ -376,7 +376,7 @@ impl TaskRepository for MockTaskRepository {
     // MCP v2 Advanced Multi-Agent Features
 
     async fn discover_work(&self, agent_name: &str, capabilities: &[String], max_tasks: u32) -> Result<Vec<Task>> {
-        self.record_call_with_params("discover_work", &format!("agent={}, max_tasks={}", agent_name, max_tasks));
+        self.record_call_with_params("discover_work", &format!("agent={agent_name}, max_tasks={max_tasks}"));
         
         // Check for error injection
         self.check_error_injection()?;
@@ -406,7 +406,7 @@ impl TaskRepository for MockTaskRepository {
     }
 
     async fn claim_task(&self, task_id: i32, agent_name: &str) -> Result<Task> {
-        self.record_call_with_params("claim_task", &format!("task_id={}, agent={}", task_id, agent_name));
+        self.record_call_with_params("claim_task", &format!("task_id={task_id}, agent={agent_name}"));
         
         // Check for error injection
         self.check_error_injection()?;
@@ -426,7 +426,7 @@ impl TaskRepository for MockTaskRepository {
     }
 
     async fn release_task(&self, task_id: i32, agent_name: &str) -> Result<Task> {
-        self.record_call_with_params("release_task", &format!("task_id={}, agent={}", task_id, agent_name));
+        self.record_call_with_params("release_task", &format!("task_id={task_id}, agent={agent_name}"));
         
         // Check for error injection
         self.check_error_injection()?;
@@ -446,7 +446,7 @@ impl TaskRepository for MockTaskRepository {
     }
 
     async fn start_work_session(&self, task_id: i32, agent_name: &str) -> Result<i32> {
-        self.record_call_with_params("start_work_session", &format!("task_id={}, agent={}", task_id, agent_name));
+        self.record_call_with_params("start_work_session", &format!("task_id={task_id}, agent={agent_name}"));
         
         // Check for error injection
         self.check_error_injection()?;
@@ -461,7 +461,7 @@ impl TaskRepository for MockTaskRepository {
     }
 
     async fn end_work_session(&self, session_id: i32, _notes: Option<String>, _productivity_score: Option<f64>) -> Result<()> {
-        self.record_call_with_params("end_work_session", &format!("session_id={}", session_id));
+        self.record_call_with_params("end_work_session", &format!("session_id={session_id}"));
         
         // Check for error injection
         self.check_error_injection()?;

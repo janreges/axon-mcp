@@ -1,27 +1,27 @@
-/// Workspace Setup Automation for Axon MCP
-/// 
-/// This module provides comprehensive workspace setup automation capabilities
-/// that enable AI tools like Claude Code to automatically analyze PRD documents
-/// and generate complete AI workspace configurations through MCP function calls.
-/// 
-/// ## 🎯 Key Features
-/// 
-/// - **PRD Analysis**: Intelligent parsing and validation of Product Requirements Documents
-/// - **Agent Generation**: AI-powered recommendation of optimal agent roles and capabilities  
-/// - **Interactive Workflow**: "Propose → Confirm → Execute" pattern with user control
-/// - **Structured Responses**: Consistent JSON responses with status, message, and next steps
-/// - **Extensible Design**: Template-based system for supporting different AI tools
-/// 
-/// ## 🔄 MCP Function Flow
-/// 
-/// ```text
-/// 1. get_setup_instructions(ai_tool_type) → Setup process overview
-/// 2. get_agentic_workflow_description(prd_content) → Agent recommendations  
-/// 3. register_agent(agent_data) → Store agent configurations
-/// 4. get_main_file_instructions(ai_tool_type) → CLAUDE.md template
-/// 5. create_main_file(content, ai_tool_type) → Generate coordination file
-/// 6. generate_workspace_manifest(metadata) → Create .axon/manifest.json
-/// ```
+//! Workspace Setup Automation for Axon MCP
+//! 
+//! This module provides comprehensive workspace setup automation capabilities
+//! that enable AI tools like Claude Code to automatically analyze PRD documents
+//! and generate complete AI workspace configurations through MCP function calls.
+//! 
+//! ## 🎯 Key Features
+//! 
+//! - **PRD Analysis**: Intelligent parsing and validation of Product Requirements Documents
+//! - **Agent Generation**: AI-powered recommendation of optimal agent roles and capabilities  
+//! - **Interactive Workflow**: "Propose → Confirm → Execute" pattern with user control
+//! - **Structured Responses**: Consistent JSON responses with status, message, and next steps
+//! - **Extensible Design**: Template-based system for supporting different AI tools
+//! 
+//! ## 🔄 MCP Function Flow
+//! 
+//! ```text
+//! 1. get_setup_instructions(ai_tool_type) → Setup process overview
+//! 2. get_agentic_workflow_description(prd_content) → Agent recommendations  
+//! 3. register_agent(agent_data) → Store agent configurations
+//! 4. get_main_file_instructions(ai_tool_type) → CLAUDE.md template
+//! 5. create_main_file(content, ai_tool_type) → Generate coordination file
+//! 6. generate_workspace_manifest(metadata) → Create .axon/manifest.json
+//! ```
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -355,8 +355,7 @@ impl PrdDocument {
                 let current_header_level = line.chars().take_while(|&c| c == '#').count();
                 let mut section_content = String::new();
                 
-                for j in (i + 1)..lines.len() {
-                    let next_line = lines[j];
+                for next_line in lines.iter().skip(i + 1) {
                     
                     // Check if we hit another header at same or higher level
                     if next_line.starts_with("#") {
@@ -386,13 +385,13 @@ impl PrdDocument {
             let trimmed = line.trim();
             
             // Bullet points (- or *)
-            if trimmed.starts_with("- ") {
-                items.push(trimmed[2..].trim().to_string());
-            } else if trimmed.starts_with("* ") {
-                items.push(trimmed[2..].trim().to_string());
+            if let Some(stripped) = trimmed.strip_prefix("- ") {
+                items.push(stripped.trim().to_string());
+            } else if let Some(stripped) = trimmed.strip_prefix("* ") {
+                items.push(stripped.trim().to_string());
             }
             // Numbered lists (1. 2. etc.)
-            else if trimmed.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+            else if trimmed.chars().next().is_some_and(|c| c.is_ascii_digit()) {
                 if let Some(dot_pos) = trimmed.find(". ") {
                     let content = &trimmed[dot_pos + 2..];
                     if !content.trim().is_empty() {
@@ -645,17 +644,18 @@ pub struct WorkspaceSetupService {
     config: WorkspaceSetupConfig,
 }
 
+impl Default for WorkspaceSetupService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WorkspaceSetupService {
     /// Create new workspace setup service with default configuration
     pub fn new() -> Self {
         Self {
             config: WorkspaceSetupConfig::default(),
         }
-    }
-    
-    /// Create service with default configuration (convenience method)
-    pub fn default() -> Self {
-        Self::new()
     }
     
     /// Create service with custom configuration
@@ -799,7 +799,7 @@ impl WorkspaceSetupService {
                 is_default: true,
             },
             NextStep {
-                label: format!("Modify agent count (currently {})", recommended_agent_count),
+                label: format!("Modify agent count (currently {recommended_agent_count})"),
                 action: "refine_agent_count".to_string(),
                 is_default: false,
             },
@@ -851,7 +851,7 @@ impl WorkspaceSetupService {
         Ok(WorkspaceSetupResponse::success(
             format!("Agent '{}' registered successfully with {} capabilities.", agent.name, agent.capabilities.len()),
             agent
-        ).with_log(format!("Registered agent: {}", agent_name)))
+        ).with_log(format!("Registered agent: {agent_name}")))
     }
     
     /// 4️⃣ GET MAIN FILE INSTRUCTIONS
@@ -888,7 +888,7 @@ impl WorkspaceSetupService {
         };
         
         Ok(WorkspaceSetupResponse::success(
-            format!("Main file instructions generated for {}. Use these templates to create your coordination file.", ai_tool_type),
+            format!("Main file instructions generated for {ai_tool_type}. Use these templates to create your coordination file."),
             instructions
         ))
     }
@@ -927,7 +927,7 @@ impl WorkspaceSetupService {
         };
         
         Ok(WorkspaceSetupResponse::success(
-            format!("Main coordination file '{}' created successfully.", file_name),
+            format!("Main coordination file '{file_name}' created successfully."),
             file_data
         ))
     }
@@ -1069,7 +1069,7 @@ impl WorkspaceSetupService {
         match archetype {
             ProjectArchetype::CliTool => {
                 // CLI tools are inherently simple - maximum 3 agents
-                let agent_count = prd.calculate_complexity_score().min(3).max(1) as u32;
+                let agent_count = prd.calculate_complexity_score().clamp(1, 3) as u32;
                 (
                     agent_count,
                     vec![
@@ -1093,7 +1093,7 @@ impl WorkspaceSetupService {
             },
             ProjectArchetype::Library => {
                 // Libraries need more careful design - 3-4 agents
-                let agent_count = (prd.calculate_complexity_score() + 1).min(4).max(2) as u32;
+                let agent_count = (prd.calculate_complexity_score() + 1).clamp(2, 4) as u32;
                 (
                     agent_count,
                     vec![
@@ -1106,7 +1106,7 @@ impl WorkspaceSetupService {
             },
             ProjectArchetype::ApiService => {
                 // APIs need backend focus - 3-5 agents
-                let agent_count = (prd.calculate_complexity_score() + 1).min(5).max(3) as u32;
+                let agent_count = (prd.calculate_complexity_score() + 1).clamp(3, 5) as u32;
                 (
                     agent_count,
                     vec![
@@ -1133,7 +1133,7 @@ impl WorkspaceSetupService {
             },
             ProjectArchetype::MobileApp => {
                 // Mobile apps need UI focus - 4-6 agents
-                let agent_count = (prd.calculate_complexity_score() + 2).min(6).max(3) as u32;
+                let agent_count = (prd.calculate_complexity_score() + 2).clamp(3, 6) as u32;
                 (
                     agent_count,
                     vec![
@@ -1146,7 +1146,7 @@ impl WorkspaceSetupService {
             },
             ProjectArchetype::DesktopApp => {
                 // Desktop apps - 3-5 agents
-                let agent_count = prd.calculate_complexity_score().min(5).max(2) as u32;
+                let agent_count = prd.calculate_complexity_score().clamp(2, 5) as u32;
                 (
                     agent_count,
                     vec![
@@ -1158,7 +1158,7 @@ impl WorkspaceSetupService {
             },
             ProjectArchetype::DataProcessing => {
                 // Data processing - 4-7 agents
-                let agent_count = (prd.calculate_complexity_score() + 1).min(5).max(2) as u32;
+                let agent_count = (prd.calculate_complexity_score() + 1).clamp(2, 5) as u32;
                 (
                     agent_count,
                     vec![
@@ -1175,7 +1175,7 @@ impl WorkspaceSetupService {
                 println!("   Technical requirements: {:?}", prd.technical_requirements);
                 
                 // Bezpečný fallback pro neidentifikovatelné projekty
-                let agent_count = prd.calculate_complexity_score().min(4).max(2) as u32;
+                let agent_count = prd.calculate_complexity_score().clamp(2, 4) as u32;
                 (
                     agent_count,
                     vec![
@@ -1474,8 +1474,8 @@ impl WorkspaceSetupService {
         while agents.len() < count as usize {
             let agent_number = agents.len() + 1;
             agents.push(SuggestedAgent {
-                name: format!("developer-{}", agent_number),
-                description: format!("Additional development resource #{}", agent_number),
+                name: format!("developer-{agent_number}"),
+                description: format!("Additional development resource #{agent_number}"),
                 required_capabilities: vec!["general-development".to_string(), "problem-solving".to_string()],
                 workload_percentage: workload_per_agent,
                 depends_on: vec!["project-manager".to_string()],

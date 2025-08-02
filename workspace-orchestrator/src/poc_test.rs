@@ -1,4 +1,4 @@
-use crate::{ClaudemdTemplate, OrchestratorConfig};
+use crate::ClaudemdTemplate;
 use anyhow::Result;
 use std::fs;
 use task_core::{PrdDocument, workspace_setup::*};

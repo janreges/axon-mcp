@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 /// 
 /// This module provides the core business logic for MCP v2 features optimized
 /// for local SQLite-based deployments with 8-20 AI agents.
-
 /// Work discovery response for agents
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum DiscoverWorkResponse {
@@ -179,7 +178,7 @@ impl PriorityCalculator {
         priority -= failure_penalty;
 
         // Ensure priority stays within reasonable bounds
-        priority.max(0.0).min(20.0)
+        priority.clamp(0.0, 20.0)
     }
 
     /// Check if task should be considered for assignment

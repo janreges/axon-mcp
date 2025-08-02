@@ -3,7 +3,7 @@
 //! Implements the MCP server supporting both modern Streamable HTTP transport (2025-06-18)
 //! and legacy Server-Sent Events for backward compatibility.
 
-use std::sync::Arc;
+use std::{sync::Arc, net::SocketAddr};
 use axum::{
     extract::State,
     http::{StatusCode, HeaderMap, header},
@@ -16,7 +16,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio::sync::mpsc;
 use tracing::info;
 
-use crate::{auth::McpAuth, error::McpError, handler::McpTaskHandler, serialization::*};
+use crate::{error::McpError, handler::McpTaskHandler, serialization::*};
 use ::task_core::{TaskRepository, TaskMessageRepository, WorkspaceContextRepository, ProtocolHandler, DiscoverWorkParams, ClaimTaskParams, ReleaseTaskParams, StartWorkSessionParams, EndWorkSessionParams, CreateTaskMessageParams, GetTaskMessagesParams};
 
 /// MCP Protocol Version as required by 2025-06-18 specification
@@ -26,39 +26,31 @@ const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
 #[derive(Clone)]
 pub struct McpServerState<R, M, W> {
     pub handler: McpTaskHandler<R, M, W>,
-    pub auth: McpAuth,
 }
 
 /// MCP Server with multiple transport support
 pub struct McpServer<R, M, W> {
     handler: McpTaskHandler<R, M, W>,
-    auth: McpAuth,
 }
 
 impl<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRepository + Send + Sync + 'static, W: WorkspaceContextRepository + Send + Sync + 'static> McpServer<R, M, W> {
-    /// Create new MCP server with authentication disabled (development mode)
+    /// Create new MCP server for local usage (no authentication)
     pub fn new(repository: Arc<R>, message_repository: Arc<M>, workspace_context_repository: Arc<W>) -> Self {
         Self {
             handler: McpTaskHandler::new(repository, message_repository, workspace_context_repository),
-            auth: McpAuth::new(false), // Disabled by default for backward compatibility
         }
     }
     
-    /// Create new MCP server with authentication enabled (production mode)
-    pub fn new_with_auth(repository: Arc<R>, message_repository: Arc<M>, workspace_context_repository: Arc<W>, auth_enabled: bool) -> Self {
-        Self {
-            handler: McpTaskHandler::new(repository, message_repository, workspace_context_repository),
-            auth: McpAuth::new(auth_enabled),
-        }
-    }
-    
-    /// Start the MCP server
+    /// Start the MCP server for local PC usage
     pub async fn serve(self, addr: &str) -> Result<(), Box<dyn std::error::Error>> {
         let app = self.create_router();
         
-        info!("Starting MCP server on {}", addr);
+        let socket_addr: SocketAddr = addr.parse()
+            .map_err(|e| format!("Invalid address '{addr}': {e}"))?;
         
-        let listener = tokio::net::TcpListener::bind(addr).await?;
+        info!("Starting MCP server on {}", socket_addr);
+        
+        let listener = tokio::net::TcpListener::bind(socket_addr).await?;
         axum::serve(listener, app).await?;
         
         Ok(())
@@ -68,7 +60,6 @@ impl<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRepository + Send 
     fn create_router(self) -> Router {
         let state = Arc::new(McpServerState {
             handler: self.handler,
-            auth: self.auth,
         });
         
         Router::new()
@@ -79,146 +70,6 @@ impl<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRepository + Send 
             .with_state(state)
     }
     
-    /// Route MCP method to appropriate handler - shared logic for both SSE and RPC
-    #[allow(dead_code)]
-    async fn route_method(&self, method: &str, params: Value, id: Option<Value>) -> Value {
-        let result = self.execute_method(method, params).await;
-        
-        match result {
-            Ok(value) => create_success_response(id, value),
-            Err(err) => err.to_json_rpc_error(id),
-        }
-    }
-    
-    /// Execute MCP method - core method routing logic
-    #[allow(dead_code)]
-    async fn execute_method(&self, method: &str, params: Value) -> Result<Value, McpError> {
-        match method {
-            "create_task" => {
-                let params: CreateTaskParams = deserialize_mcp_params(params)?;
-                let task = self.handler.create_task(params).await.map_err(McpError::from)?;
-                serialize_task_for_mcp(&task)
-            }
-            "update_task" => {
-                let params: UpdateTaskParams = deserialize_mcp_params(params)?;
-                let task = self.handler.update_task(params).await.map_err(McpError::from)?;
-                serialize_task_for_mcp(&task)
-            }
-            "set_task_state" => {
-                let params: SetStateParams = deserialize_mcp_params(params)?;
-                let task = self.handler.set_task_state(params).await.map_err(McpError::from)?;
-                serialize_task_for_mcp(&task)
-            }
-            "get_task_by_id" => {
-                let params: GetTaskByIdParams = deserialize_mcp_params(params)?;
-                match self.handler.get_task_by_id(params).await.map_err(McpError::from)? {
-                    Some(task) => serialize_task_for_mcp(&task),
-                    None => Ok(Value::Null),
-                }
-            }
-            "get_task_by_code" => {
-                let params: GetTaskByCodeParams = deserialize_mcp_params(params)?;
-                match self.handler.get_task_by_code(params).await.map_err(McpError::from)? {
-                    Some(task) => serialize_task_for_mcp(&task),
-                    None => Ok(Value::Null),
-                }
-            }
-            "list_tasks" => {
-                let params: ListTasksParams = deserialize_mcp_params(params)?;
-                let tasks = self.handler.list_tasks(params).await.map_err(McpError::from)?;
-                let task_values: Result<Vec<_>, _> = tasks.iter()
-                    .map(serialize_task_for_mcp)
-                    .collect();
-                Ok(Value::Array(task_values?))
-            }
-            "assign_task" => {
-                let params: AssignTaskParams = deserialize_mcp_params(params)?;
-                let task = self.handler.assign_task(params).await.map_err(McpError::from)?;
-                serialize_task_for_mcp(&task)
-            }
-            "archive_task" => {
-                let params: ArchiveTaskParams = deserialize_mcp_params(params)?;
-                let task = self.handler.archive_task(params).await.map_err(McpError::from)?;
-                serialize_task_for_mcp(&task)
-            }
-            "health_check" => {
-                let health = self.handler.health_check().await.map_err(McpError::from)?;
-                Ok(serde_json::to_value(health).map_err(|e| McpError::Serialization(e.to_string()))?)
-            }
-            // MCP v2 Advanced Multi-Agent Functions
-            "discover_work" => {
-                let params: DiscoverWorkParams = deserialize_mcp_params(params)?;
-                let tasks = self.handler.discover_work(params).await.map_err(McpError::from)?;
-                let task_values: Result<Vec<_>, _> = tasks.iter()
-                    .map(serialize_task_for_mcp)
-                    .collect();
-                Ok(Value::Array(task_values?))
-            }
-            "claim_task" => {
-                let params: ClaimTaskParams = deserialize_mcp_params(params)?;
-                let task = self.handler.claim_task(params).await.map_err(McpError::from)?;
-                serialize_task_for_mcp(&task)
-            }
-            "release_task" => {
-                let params: ReleaseTaskParams = deserialize_mcp_params(params)?;
-                let task = self.handler.release_task(params).await.map_err(McpError::from)?;
-                serialize_task_for_mcp(&task)
-            }
-            "start_work_session" => {
-                let params: StartWorkSessionParams = deserialize_mcp_params(params)?;
-                let session_info = self.handler.start_work_session(params).await.map_err(McpError::from)?;
-                Ok(serde_json::to_value(session_info).map_err(|e| McpError::Serialization(e.to_string()))?)
-            }
-            "end_work_session" => {
-                let params: EndWorkSessionParams = deserialize_mcp_params(params)?;
-                self.handler.end_work_session(params).await.map_err(McpError::from)?;
-                Ok(Value::Null) // Success with no return value
-            }
-            // Task Messaging Functions
-            "create_task_message" => {
-                let params: CreateTaskMessageParams = deserialize_mcp_params(params)?;
-                let message = self.handler.create_task_message(params).await.map_err(McpError::from)?;
-                Ok(serde_json::to_value(message).map_err(|e| McpError::Serialization(e.to_string()))?)
-            }
-            "get_task_messages" => {
-                let params: GetTaskMessagesParams = deserialize_mcp_params(params)?;
-                let messages = self.handler.get_task_messages(params).await.map_err(McpError::from)?;
-                Ok(serde_json::to_value(messages).map_err(|e| McpError::Serialization(e.to_string()))?)
-            }
-            // Workspace Setup Functions
-            "get_setup_instructions" => {
-                let params: ::task_core::GetSetupInstructionsParams = deserialize_mcp_params(params)?;
-                let instructions = self.handler.get_setup_instructions(params).await.map_err(McpError::from)?;
-                Ok(serde_json::to_value(instructions).map_err(|e| McpError::Serialization(e.to_string()))?)
-            }
-            "get_agentic_workflow_description" => {
-                let params: ::task_core::GetAgenticWorkflowDescriptionParams = deserialize_mcp_params(params)?;
-                let workflow = self.handler.get_agentic_workflow_description(params).await.map_err(McpError::from)?;
-                Ok(serde_json::to_value(workflow).map_err(|e| McpError::Serialization(e.to_string()))?)
-            }
-            "register_agent" => {
-                let params: ::task_core::RegisterAgentParams = deserialize_mcp_params(params)?;
-                let agent = self.handler.register_agent(params).await.map_err(McpError::from)?;
-                Ok(serde_json::to_value(agent).map_err(|e| McpError::Serialization(e.to_string()))?)
-            }
-            "get_instructions_for_main_ai_file" => {
-                let params: ::task_core::GetInstructionsForMainAiFileParams = deserialize_mcp_params(params)?;
-                let instructions = self.handler.get_instructions_for_main_ai_file(params).await.map_err(McpError::from)?;
-                Ok(serde_json::to_value(instructions).map_err(|e| McpError::Serialization(e.to_string()))?)
-            }
-            "create_main_ai_file" => {
-                let params: ::task_core::CreateMainAiFileParams = deserialize_mcp_params(params)?;
-                let file_data = self.handler.create_main_ai_file(params).await.map_err(McpError::from)?;
-                Ok(serde_json::to_value(file_data).map_err(|e| McpError::Serialization(e.to_string()))?)
-            }
-            "get_workspace_manifest" => {
-                let params: ::task_core::GetWorkspaceManifestParams = deserialize_mcp_params(params)?;
-                let manifest = self.handler.get_workspace_manifest(params).await.map_err(McpError::from)?;
-                Ok(serde_json::to_value(manifest).map_err(|e| McpError::Serialization(e.to_string()))?)
-            }
-            _ => Err(McpError::Protocol(format!("Unknown method: {method}"))),
-        }
-    }
 }
 
 /// Execute MCP method - shared logic for both server instances and handlers
@@ -622,7 +473,7 @@ async fn rpc_handler<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRe
         }
         Some(version) => {
             // Unsupported version
-            let error = McpError::Protocol(format!("Unsupported MCP-Protocol-Version: {}. Supported versions: {}, 2025-03-26", version, MCP_PROTOCOL_VERSION));
+            let error = McpError::Protocol(format!("Unsupported MCP-Protocol-Version: {version}. Supported versions: {MCP_PROTOCOL_VERSION}, 2025-03-26"));
             return Ok((response_headers, Json(error.to_json_rpc_error(id))));
         }
         None => {
@@ -637,13 +488,6 @@ async fn rpc_handler<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRe
         return Ok((response_headers, Json(error.to_json_rpc_error(id))));
     }
     
-    // Validate authentication for the request
-    let token_validation = state.auth.validate_token(&headers).await;
-    if !token_validation.is_valid {
-        let auth_error = McpAuth::create_auth_error("invalid_token", "The provided authentication token is invalid", id);
-        return Ok((response_headers, auth_error));
-    }
-    
     // Parse JSON-RPC request - return JSON-RPC errors instead of HTTP errors
     let method = match request.get("method").and_then(|v| v.as_str()) {
         Some(method) => method,
@@ -654,12 +498,6 @@ async fn rpc_handler<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRe
     };
     
     let params = request.get("params").unwrap_or(&Value::Null).clone();
-    
-    // Validate that the token has the required scope for this method
-    if !state.auth.check_scope(&token_validation, method) {
-        let auth_error = McpAuth::create_auth_error("insufficient_scope", &format!("Token does not have required scope for method: {}", method), id);
-        return Ok((response_headers, auth_error));
-    }
     
     // Execute the method directly through the handler
     let response = execute_mcp_method(&state.handler, method, params, id).await;

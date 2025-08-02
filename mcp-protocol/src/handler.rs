@@ -13,8 +13,12 @@ use ::task_core::{
     AgentRegistration, MainAiFileInstructions, MainAiFileData, WorkspaceManifest, PrdDocument,
 };
 use ::task_core::error::Result;
+use ::task_core::TaskError;
 use crate::serialization::*;
 use async_trait::async_trait;
+
+// Maximum attempts for get-or-modify loops to handle race conditions
+const MAX_ATTEMPTS: u8 = 5;
 
 /// MCP Task Handler that bridges MCP protocol with TaskRepository, TaskMessageRepository, and WorkspaceContextRepository
 #[derive(Clone)]
@@ -203,12 +207,12 @@ impl<R: TaskRepository + Send + Sync, M: TaskMessageRepository + Send + Sync, W:
             .await
             .map_err(|e| match e {
                 WorkspaceSetupError::UnsupportedAiTool(tool) => {
-                    ::task_core::TaskError::Validation(format!("Unsupported AI tool type: {}", tool))
+                    ::task_core::TaskError::Validation(format!("Unsupported AI tool type: {tool}"))
                 }
                 WorkspaceSetupError::InvalidConfiguration(msg) => {
-                    ::task_core::TaskError::Validation(format!("Invalid configuration: {}", msg))
+                    ::task_core::TaskError::Validation(format!("Invalid configuration: {msg}"))
                 }
-                _ => ::task_core::TaskError::Protocol(format!("Workspace setup error: {}", e)),
+                _ => ::task_core::TaskError::Protocol(format!("Workspace setup error: {e}")),
             })?;
         
         Ok(response.payload)
@@ -221,12 +225,12 @@ impl<R: TaskRepository + Send + Sync, M: TaskMessageRepository + Send + Sync, W:
         let prd = PrdDocument::from_content(&params.prd_content)
             .map_err(|e| match e {
                 WorkspaceSetupError::PrdParsingFailed(msg) => {
-                    ::task_core::TaskError::Validation(format!("PRD parsing failed: {}", msg))
+                    ::task_core::TaskError::Validation(format!("PRD parsing failed: {msg}"))
                 }
                 WorkspaceSetupError::PrdValidationFailed { errors } => {
-                    ::task_core::TaskError::Validation(format!("PRD validation failed: {:?}", errors))
+                    ::task_core::TaskError::Validation(format!("PRD validation failed: {errors:?}"))
                 }
-                _ => ::task_core::TaskError::Protocol(format!("PRD processing error: {}", e)),
+                _ => ::task_core::TaskError::Protocol(format!("PRD processing error: {e}")),
             })?;
         
         // Check if PRD is valid
@@ -239,7 +243,40 @@ impl<R: TaskRepository + Send + Sync, M: TaskMessageRepository + Send + Sync, W:
         let response = self.workspace_setup_service
             .get_agentic_workflow_description(&prd)
             .await
-            .map_err(|e| ::task_core::TaskError::Protocol(format!("Workflow analysis error: {}", e)))?;
+            .map_err(|e| ::task_core::TaskError::Protocol(format!("Workflow analysis error: {e}")))?;
+        
+        // Get-or-create workspace context for statefulness
+        let maybe_context = self.workspace_context_repository
+            .get_by_id(&params.workspace_id)
+            .await?;
+
+        let mut workspace_context = maybe_context
+            .clone()
+            .unwrap_or_else(|| ::task_core::workspace_setup::WorkspaceContext::new(params.workspace_id.clone()));
+        
+        // Update context with new data
+        workspace_context.prd_content = Some(params.prd_content);
+        workspace_context.workflow_data = Some(response.payload.clone());
+        
+        // Save context (create if new, update if existing)
+        if maybe_context.is_some() {
+            // The context existed, so we must call update
+            self.workspace_context_repository
+                .update(workspace_context)
+                .await
+                .map_err(|e| match e {
+                    ::task_core::TaskError::Conflict(msg) => ::task_core::TaskError::Conflict(
+                        format!("Concurrent modification detected: {msg}. Please retry the operation.")
+                    ),
+                    _ => ::task_core::TaskError::Database(format!("Failed to update workspace context: {e}"))
+                })?;
+        } else {
+            // The context was new, so we must call create
+            self.workspace_context_repository
+                .create(workspace_context)
+                .await
+                .map_err(|e| ::task_core::TaskError::Database(format!("Failed to create workspace context: {e}")))?;
+        }
         
         Ok(response.payload)
     }
@@ -265,33 +302,148 @@ impl<R: TaskRepository + Send + Sync, M: TaskMessageRepository + Send + Sync, W:
             ));
         }
         
-        // Create agent registration
-        Ok(AgentRegistration {
-            name: params.name,
-            description: params.description,
-            prompt: params.prompt,
-            capabilities: params.capabilities,
-            ai_tool_type: params.ai_tool_type,
-            dependencies: params.dependencies.unwrap_or_default(),
-        })
+        // Get-or-modify pattern with retry loop for race condition handling
+        let mut attempt = 0u8;
+        loop {
+            // 1. Load existing context if present
+            let maybe_context = self
+                .workspace_context_repository
+                .get_by_id(&params.workspace_id)
+                .await?;
+
+            // 2. Check if context exists and prepare for modification
+            let context_exists = maybe_context.is_some();
+            let mut workspace_context = maybe_context
+                .unwrap_or_else(|| ::task_core::workspace_setup::WorkspaceContext::new(params.workspace_id.clone()));
+
+            // 3. Duplicate-agent guard (in case another peer registered same name first)
+            if workspace_context
+                .registered_agents
+                .iter()
+                .any(|agent| agent.name == params.name)
+            {
+                return Err(TaskError::DuplicateKey(format!(
+                    "Agent with name '{}' already exists",
+                    params.name
+                )));
+            }
+
+            // 4. Construct new AgentRegistration
+            let agent_registration = AgentRegistration {
+                name: params.name.clone(),
+                description: params.description.clone(),
+                prompt: params.prompt.clone(),
+                capabilities: params.capabilities.clone(),
+                ai_tool_type: params.ai_tool_type,
+                dependencies: params
+                    .dependencies
+                    .clone()
+                    .unwrap_or_default(),
+            };
+
+            // 5. Mutate context
+            workspace_context.registered_agents.push(agent_registration.clone());
+            workspace_context.updated_at = chrono::Utc::now();
+
+            // 6. Persist with get-or-modify pattern
+            let write_result = if context_exists {
+                self.workspace_context_repository.update(workspace_context).await
+            } else {
+                self.workspace_context_repository.create(workspace_context).await
+            };
+
+            match write_result {
+                Ok(_) => return Ok(agent_registration), // success
+                Err(TaskError::DuplicateKey(_)) | Err(TaskError::Conflict(_)) => {
+                    // Race condition detected
+                    if attempt >= MAX_ATTEMPTS {
+                        return Err(TaskError::DuplicateKey(format!(
+                            "Workspace concurrently modified after {MAX_ATTEMPTS} attempts; please retry"
+                        )));
+                    }
+                    attempt += 1;
+                    // Small exponential back-off to reduce contention
+                    tokio::time::sleep(tokio::time::Duration::from_millis(10 * attempt as u64)).await;
+                    continue;
+                }
+                Err(e) => return Err(e), // any other failure
+            }
+        }
     }
     
     async fn get_instructions_for_main_ai_file(&self, params: GetInstructionsForMainAiFileParams) -> Result<MainAiFileInstructions> {
         let response = self.workspace_setup_service
             .get_main_file_instructions(params.ai_tool_type)
             .await
-            .map_err(|e| ::task_core::TaskError::Protocol(format!("Main AI file instructions error: {}", e)))?;
+            .map_err(|e| ::task_core::TaskError::Protocol(format!("Main AI file instructions error: {e}")))?;
         
         Ok(response.payload)
     }
     
     async fn create_main_ai_file(&self, params: CreateMainAiFileParams) -> Result<MainAiFileData> {
-        let response = self.workspace_setup_service
+        // Generate the main AI file (only once – outside the retry loop)
+        let response = self
+            .workspace_setup_service
             .create_main_file(&params.content, params.ai_tool_type, params.project_name.as_deref())
             .await
-            .map_err(|e| ::task_core::TaskError::Protocol(format!("Main AI file creation error: {}", e)))?;
-        
-        Ok(response.payload)
+            .map_err(|e| ::task_core::TaskError::Protocol(format!("Main AI file creation error: {e}")))?;
+
+        // Pre-build the file metadata so it can be reused when we retry
+        let file_metadata = ::task_core::workspace_setup::GeneratedFileMetadata {
+            path: response.payload.file_name.clone(),
+            description: format!("Main AI coordination file for {}", params.ai_tool_type),
+            ai_tool_type: params.ai_tool_type,
+            content_type: "text/markdown".to_string(),
+            created_at: chrono::Utc::now(),
+        };
+
+        // Get-or-modify pattern with retry loop for race condition handling
+        let mut attempt = 0u8;
+        loop {
+            // 1. Fetch or create workspace context
+            let maybe_context = self
+                .workspace_context_repository
+                .get_by_id(&params.workspace_id)
+                .await?;
+
+            let context_exists = maybe_context.is_some();
+            let mut workspace_context = maybe_context
+                .unwrap_or_else(|| ::task_core::workspace_setup::WorkspaceContext::new(params.workspace_id.clone()));
+
+            // 2. Avoid duplicate insertion on retry
+            if !workspace_context
+                .generated_files
+                .iter()
+                .any(|f| f.path == file_metadata.path)
+            {
+                workspace_context.generated_files.push(file_metadata.clone());
+                workspace_context.updated_at = chrono::Utc::now();
+            }
+
+            // 3. Persist
+            let write_result = if context_exists {
+                self.workspace_context_repository.update(workspace_context).await
+            } else {
+                self.workspace_context_repository.create(workspace_context).await
+            };
+
+            match write_result {
+                Ok(_) => return Ok(response.payload.clone()),
+                Err(TaskError::DuplicateKey(_)) | Err(TaskError::Conflict(_)) => {
+                    // Race condition detected
+                    if attempt >= MAX_ATTEMPTS {
+                        return Err(TaskError::Conflict(format!(
+                            "Workspace concurrently modified after {MAX_ATTEMPTS} attempts; please retry"
+                        )));
+                    }
+                    attempt += 1;
+                    // Small exponential back-off to reduce contention
+                    tokio::time::sleep(tokio::time::Duration::from_millis(10 * attempt as u64)).await;
+                    continue;
+                }
+                Err(e) => return Err(e),
+            }
+        }
     }
     
     async fn get_workspace_manifest(&self, params: GetWorkspaceManifestParams) -> Result<WorkspaceManifest> {
@@ -303,10 +455,11 @@ impl<R: TaskRepository + Send + Sync, M: TaskMessageRepository + Send + Sync, W:
         
         // Parse PRD from workspace context
         let prd_content = workspace_context.prd_content
+            .as_ref()
             .ok_or_else(|| ::task_core::TaskError::Validation("Workspace has no PRD content".to_string()))?;
             
-        let prd = ::task_core::workspace_setup::PrdDocument::from_content(&prd_content)
-            .map_err(|e| ::task_core::TaskError::Validation(format!("Failed to parse PRD: {}", e)))?;
+        let prd = ::task_core::workspace_setup::PrdDocument::from_content(prd_content)
+            .map_err(|e| ::task_core::TaskError::Validation(format!("Failed to parse PRD: {e}")))?;
         
         // Use registered agents from workspace context
         let agents = workspace_context.registered_agents.clone();
@@ -316,7 +469,7 @@ impl<R: TaskRepository + Send + Sync, M: TaskMessageRepository + Send + Sync, W:
         let response = self.workspace_setup_service
             .generate_workspace_manifest(&prd, &agents, include_generated_files)
             .await
-            .map_err(|e| ::task_core::TaskError::Protocol(format!("Workspace manifest generation error: {}", e)))?;
+            .map_err(|e| ::task_core::TaskError::Protocol(format!("Workspace manifest generation error: {e}")))?;
         
         Ok(response.payload)
     }
