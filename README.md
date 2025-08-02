@@ -240,10 +240,10 @@ Always include context and clear handoffs in your messages.
 
 ## 📋 Complete MCP Function Reference
 
-Axon implements **21 comprehensive MCP functions** organized in four categories:
+Axon implements **22 comprehensive MCP functions** organized in four categories:
 
 <details>
-<summary><strong>📝 Core Task Management (8 Functions)</strong></summary>
+<summary><strong>📝 Core Task Management (9 Functions)</strong></summary>
 
 - **`create_task`** - Create new tasks with validation
 - **`update_task`** - Modify task metadata and descriptions  
@@ -253,6 +253,7 @@ Axon implements **21 comprehensive MCP functions** organized in four categories:
 - **`list_tasks`** - Query tasks with filters (owner, state, date range)
 - **`set_task_state`** - Change task lifecycle state with validation
 - **`archive_task`** - Move completed tasks to archive
+- **`health_check`** - Check server health and status
 
 </details>
 
