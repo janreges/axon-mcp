@@ -3,7 +3,7 @@
 //! Implements the ProtocolHandler trait for MCP communication.
 
 use std::sync::Arc;
-use ::task_core::{TaskRepository, TaskMessageRepository, ProtocolHandler, Task, NewTask, HealthStatus, TaskMessage};
+use ::task_core::{TaskRepository, TaskMessageRepository, WorkspaceContextRepository, ProtocolHandler, Task, NewTask, HealthStatus, TaskMessage};
 use ::task_core::{DiscoverWorkParams, ClaimTaskParams, ReleaseTaskParams, StartWorkSessionParams, EndWorkSessionParams, WorkSessionInfo};
 use ::task_core::{CreateTaskMessageParams, GetTaskMessagesParams};
 use ::task_core::{
@@ -16,20 +16,26 @@ use ::task_core::error::Result;
 use crate::serialization::*;
 use async_trait::async_trait;
 
-/// MCP Task Handler that bridges MCP protocol with TaskRepository and TaskMessageRepository
+/// MCP Task Handler that bridges MCP protocol with TaskRepository, TaskMessageRepository, and WorkspaceContextRepository
 #[derive(Clone)]
-pub struct McpTaskHandler<R, M> {
+pub struct McpTaskHandler<R, M, W> {
     repository: Arc<R>,
     message_repository: Arc<M>,
+    workspace_context_repository: Arc<W>,
     workspace_setup_service: WorkspaceSetupService,
 }
 
-impl<R, M> McpTaskHandler<R, M> {
+impl<R, M, W> McpTaskHandler<R, M, W> {
     /// Create new MCP task handler
-    pub fn new(repository: Arc<R>, message_repository: Arc<M>) -> Self {
+    pub fn new(
+        repository: Arc<R>, 
+        message_repository: Arc<M>, 
+        workspace_context_repository: Arc<W>
+    ) -> Self {
         Self { 
             repository, 
             message_repository,
+            workspace_context_repository: workspace_context_repository.clone(),
             workspace_setup_service: WorkspaceSetupService::new(),
         }
     }
@@ -46,7 +52,7 @@ impl<R, M> McpTaskHandler<R, M> {
 }
 
 #[async_trait]
-impl<R: TaskRepository + Send + Sync, M: TaskMessageRepository + Send + Sync> ProtocolHandler for McpTaskHandler<R, M> {
+impl<R: TaskRepository + Send + Sync, M: TaskMessageRepository + Send + Sync, W: WorkspaceContextRepository + Send + Sync> ProtocolHandler for McpTaskHandler<R, M, W> {
     async fn create_task(&self, params: CreateTaskParams) -> Result<Task> {
         let new_task = NewTask::new(
             params.code,
@@ -111,7 +117,38 @@ impl<R: TaskRepository + Send + Sync, M: TaskMessageRepository + Send + Sync> Pr
     }
 
     async fn claim_task(&self, params: ClaimTaskParams) -> Result<Task> {
-        self.repository.claim_task(params.task_id, &params.agent_name).await
+        // Validate agent name format at protocol layer
+        if params.agent_name.trim().is_empty() {
+            return Err(::task_core::TaskError::Validation("Agent name cannot be empty".to_string()));
+        }
+        
+        // Validate agent name format (kebab-case)
+        if !params.agent_name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
+            return Err(::task_core::TaskError::Validation(
+                "Agent name must be in kebab-case format (lowercase letters, numbers, and hyphens only)".to_string()
+            ));
+        }
+        
+        // Call repository with validated parameters
+        let claimed_task = self.repository.claim_task(params.task_id, &params.agent_name).await?;
+        
+        // Protocol layer validation: ensure claimed task is in InProgress state
+        if claimed_task.state != ::task_core::TaskState::InProgress {
+            return Err(::task_core::TaskError::Internal(
+                format!("CRITICAL: claim_task succeeded but task {} is in state {:?}, expected InProgress", 
+                        claimed_task.id, claimed_task.state)
+            ));
+        }
+        
+        // Ensure task ownership is correctly set
+        if claimed_task.owner_agent_name.as_deref() != Some(&params.agent_name) {
+            return Err(::task_core::TaskError::Internal(
+                format!("CRITICAL: claim_task succeeded but task {} owner is {:?}, expected Some('{}')", 
+                        claimed_task.id, claimed_task.owner_agent_name, params.agent_name)
+            ));
+        }
+        
+        Ok(claimed_task)
     }
 
     async fn release_task(&self, params: ReleaseTaskParams) -> Result<Task> {
@@ -258,17 +295,26 @@ impl<R: TaskRepository + Send + Sync, M: TaskMessageRepository + Send + Sync> Pr
     }
     
     async fn get_workspace_manifest(&self, params: GetWorkspaceManifestParams) -> Result<WorkspaceManifest> {
-        // Create a basic PRD for demonstration
-        let basic_prd = ::task_core::workspace_setup::PrdDocument::from_content(
-            "# Sample Project\n\nA basic project for demonstration.\n\n## Requirements\n\nBasic functionality required."
-        ).map_err(|e| ::task_core::TaskError::Validation(format!("Failed to create basic PRD: {}", e)))?;
+        // Load workspace context from repository using workspace_id
+        let workspace_context = self.workspace_context_repository
+            .get_by_id(&params.workspace_id)
+            .await?
+            .ok_or_else(|| ::task_core::TaskError::NotFound(format!("Workspace not found: {}", params.workspace_id)))?;
         
-        // Create empty agents list for now
-        let agents = vec![];
+        // Parse PRD from workspace context
+        let prd_content = workspace_context.prd_content
+            .ok_or_else(|| ::task_core::TaskError::Validation("Workspace has no PRD content".to_string()))?;
+            
+        let prd = ::task_core::workspace_setup::PrdDocument::from_content(&prd_content)
+            .map_err(|e| ::task_core::TaskError::Validation(format!("Failed to parse PRD: {}", e)))?;
+        
+        // Use registered agents from workspace context
+        let agents = workspace_context.registered_agents.clone();
+        
         let include_generated_files = params.include_generated_files.unwrap_or(true);
         
         let response = self.workspace_setup_service
-            .generate_workspace_manifest(&basic_prd, &agents, include_generated_files)
+            .generate_workspace_manifest(&prd, &agents, include_generated_files)
             .await
             .map_err(|e| ::task_core::TaskError::Protocol(format!("Workspace manifest generation error: {}", e)))?;
         
@@ -349,11 +395,38 @@ mod tests {
         }
     }
     
+    // Simple mock workspace context repository for testing
+    struct SimpleTestWorkspaceContextRepository;
+    
+    #[async_trait]
+    impl WorkspaceContextRepository for SimpleTestWorkspaceContextRepository {
+        async fn create(&self, _context: ::task_core::workspace_setup::WorkspaceContext) -> Result<::task_core::workspace_setup::WorkspaceContext> {
+            unimplemented!()
+        }
+        
+        async fn get_by_id(&self, _workspace_id: &str) -> Result<Option<::task_core::workspace_setup::WorkspaceContext>> {
+            Ok(None)
+        }
+        
+        async fn update(&self, _context: ::task_core::workspace_setup::WorkspaceContext) -> Result<::task_core::workspace_setup::WorkspaceContext> {
+            unimplemented!()
+        }
+        
+        async fn delete(&self, _workspace_id: &str) -> Result<()> {
+            Ok(())
+        }
+        
+        async fn health_check(&self) -> Result<()> {
+            Ok(())
+        }
+    }
+
     #[test]
     fn test_handler_creation() {
         let mock_repo = Arc::new(MockTestRepository::new());
         let mock_message_repo = Arc::new(SimpleTestMessageRepository);
-        let _handler = McpTaskHandler::new(mock_repo, mock_message_repo);
+        let mock_workspace_repo = Arc::new(SimpleTestWorkspaceContextRepository);
+        let _handler = McpTaskHandler::new(mock_repo, mock_message_repo, mock_workspace_repo);
         // Basic test that handler can be created
         assert!(true);
     }

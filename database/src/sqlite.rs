@@ -443,34 +443,57 @@ impl TaskRepository for SqliteTaskRepository {
     }
 
     async fn claim_task(&self, task_id: i32, agent_name: &str) -> Result<Task> {
-        // Start transaction for atomic claim
+        // Start transaction for atomic claim with better isolation
         let mut tx = self.pool.begin().await.map_err(sqlx_error_to_task_error)?;
         
-        // Check if task exists and is available
-        let current_task = sqlx::query_as::<_, (i32, String, String)>("SELECT id, owner_agent_name, state FROM tasks WHERE id = ?")
+        // Use atomic UPDATE with WHERE conditions to prevent race conditions
+        // This will only update if the task is in Created state and unowned/owned by same agent
+        let updated_rows = sqlx::query(
+            r#"
+            UPDATE tasks 
+            SET owner_agent_name = ?, state = ? 
+            WHERE id = ? 
+              AND state = 'Created' 
+              AND (owner_agent_name IS NULL OR owner_agent_name = '' OR owner_agent_name = ?)
+            "#
+        )
+        .bind(agent_name)
+        .bind(crate::common::state_to_string(TaskState::InProgress))
+        .bind(task_id)
+        .bind(agent_name) // Allow re-claiming by same agent
+        .execute(&mut *tx)
+        .await
+        .map_err(sqlx_error_to_task_error)?;
+        
+        // Check if the update actually affected any rows
+        if updated_rows.rows_affected() == 0 {
+            // Fetch current state to provide better error message
+            let current_task = sqlx::query_as::<_, (String, String)>(
+                "SELECT COALESCE(owner_agent_name, ''), state FROM tasks WHERE id = ?"
+            )
             .bind(task_id)
             .fetch_optional(&mut *tx)
             .await
             .map_err(sqlx_error_to_task_error)?;
             
-        let (_, current_owner, _current_state) = match current_task {
-            Some(task) => task,
-            None => return Err(TaskError::not_found_id(task_id)),
-        };
-        
-        // Check if already claimed
-        if !current_owner.is_empty() && current_owner != agent_name {
-            return Err(TaskError::AlreadyClaimed(task_id, current_owner));
+            if let Some((current_owner, current_state_str)) = current_task {
+                let current_state = crate::common::string_to_state(&current_state_str)?;
+                
+                // Task exists but couldn't be claimed
+                if !current_owner.is_empty() && current_owner != agent_name {
+                    return Err(TaskError::AlreadyClaimed(task_id, current_owner));
+                } else if current_state != TaskState::Created {
+                    return Err(TaskError::invalid_transition(current_state, TaskState::InProgress));
+                } else {
+                    // Should not happen, but handle gracefully
+                    return Err(TaskError::Conflict(format!("Failed to claim task {} due to concurrent modification", task_id)));
+                }
+            } else {
+                // Task doesn't exist
+                return Err(TaskError::not_found_id(task_id));
+            }
         }
         
-        // Update task owner
-        sqlx::query("UPDATE tasks SET owner_agent_name = ? WHERE id = ?")
-            .bind(agent_name)
-            .bind(task_id)
-            .execute(&mut *tx)
-            .await
-            .map_err(sqlx_error_to_task_error)?;
-            
         tx.commit().await.map_err(sqlx_error_to_task_error)?;
         
         // Return updated task
@@ -718,6 +741,34 @@ mod tests {
         assert_eq!(created_task.state, TaskState::Created);
         assert!(created_task.id > 0);
         assert!(created_task.done_at.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_claim_task_critical_fix() {
+        let repo = create_test_repository().await;
+        
+        // Create a test task
+        let new_task = NewTask::new(
+            "CLAIM-TEST-001".to_string(),
+            "Test Claim Fix".to_string(),
+            "Testing if claim_task sets state to InProgress".to_string(),
+            None, // Start unassigned
+        );
+        
+        let task = repo.create(new_task).await.unwrap();
+        assert_eq!(task.state, TaskState::Created);
+        assert!(task.owner_agent_name.is_none());
+        
+        // Claim the task
+        let claimed_task = repo.claim_task(task.id, "test-agent").await.unwrap();
+        
+        // CRITICAL FIX VERIFICATION: Task should now be in InProgress state
+        assert_eq!(claimed_task.state, TaskState::InProgress, 
+            "CRITICAL BUG: claim_task() must set state to InProgress");
+        assert_eq!(claimed_task.owner_agent_name, Some("test-agent".to_string()),
+            "CRITICAL BUG: claim_task() must set owner_agent_name");
+            
+        println!("🎉 SUCCESS: claim_task correctly sets state to InProgress!");
     }
 
     #[tokio::test]
