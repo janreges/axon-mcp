@@ -35,6 +35,12 @@ pub enum AiToolType {
     /// Claude Code by Anthropic - currently the only supported tool
     #[serde(rename = "claude-code")]
     ClaudeCode,
+    /// AutoGen framework by Microsoft (placeholder)
+    #[serde(rename = "autogen")]
+    AutoGen,
+    /// CrewAI framework (placeholder)
+    #[serde(rename = "crew-ai")]
+    CrewAi,
 }
 
 /// Project archetype classification for better agent generation
@@ -55,6 +61,8 @@ impl std::fmt::Display for AiToolType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AiToolType::ClaudeCode => write!(f, "claude-code"),
+            AiToolType::AutoGen => write!(f, "autogen"),
+            AiToolType::CrewAi => write!(f, "crew-ai"),
         }
     }
 }
@@ -917,6 +925,8 @@ impl WorkspaceSetupService {
         
         let file_name = match ai_tool_type {
             AiToolType::ClaudeCode => "CLAUDE.md".to_string(),
+            AiToolType::AutoGen => "autogen_config.py".to_string(),
+            AiToolType::CrewAi => "crew.py".to_string(),
         };
         
         let file_data = MainAiFileData {

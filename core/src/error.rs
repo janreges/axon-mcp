@@ -62,6 +62,14 @@ pub enum TaskError {
     #[error("Internal error: {0}")]
     Internal(String),
 
+    /// Unsupported AI tool type
+    #[error("Unsupported AI tool: {0}")]
+    UnsupportedAiTool(String),
+
+    /// Unsupported operation 
+    #[error("Unsupported operation: {0}")]
+    UnsupportedOperation(String),
+
     // MCP v2 Multi-Agent Errors
 
     /// Task is already claimed by another agent
@@ -173,6 +181,8 @@ impl TaskError {
             TaskError::Serialization(_) => 500, // Internal Server Error
             TaskError::Deserialization(_) => 500, // Internal Server Error
             TaskError::DuplicateKey(_) => 409, // Conflict
+            TaskError::UnsupportedAiTool(_) => 400, // Bad Request
+            TaskError::UnsupportedOperation(_) => 501, // Not Implemented
         }
     }
 }

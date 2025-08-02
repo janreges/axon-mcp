@@ -41,6 +41,8 @@ pub mod validation;
 pub mod circuit_breaker;
 pub mod mcp_v2_extensions;
 pub mod workspace_setup;
+pub mod prompt_templates;
+pub mod ai_tool_adapters;
 
 // Re-export commonly used types at the crate root for convenience
 pub use models::{
@@ -76,6 +78,10 @@ pub use workspace_setup::{
     AiToolType, PrdDocument, SetupInstructions, AgenticWorkflowDescription, 
     AgentRegistration, MainAiFileData, WorkspaceManifest, MainAiFileInstructions,
     WorkspaceContext, GeneratedFileMetadata,
+};
+pub use prompt_templates::{
+    EnhancedPromptBuilder, AgentContract, CapabilityDefinition, CoordinationRecipe,
+    generate_enhanced_setup_instructions,
 };
 
 /// Current version of the core crate
