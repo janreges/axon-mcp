@@ -50,7 +50,7 @@ pub use models::{
     WorkflowDefinition, SystemEvent, EventSeverity, WorkSession,
 };
 pub use error::{TaskError, Result};
-pub use repository::{TaskRepository, TaskMessageRepository, RepositoryStats};
+pub use repository::{TaskRepository, TaskMessageRepository, WorkspaceContextRepository, RepositoryStats};
 pub use protocol::{
     ProtocolHandler, HealthStatus,
     CreateTaskParams, UpdateTaskParams, SetStateParams,
@@ -75,6 +75,7 @@ pub use workspace_setup::{
     WorkspaceSetupService, WorkspaceSetupConfig, WorkspaceSetupError, WorkspaceSetupResult,
     AiToolType, PrdDocument, SetupInstructions, AgenticWorkflowDescription, 
     AgentRegistration, MainAiFileData, WorkspaceManifest, MainAiFileInstructions,
+    WorkspaceContext, GeneratedFileMetadata,
 };
 
 /// Current version of the core crate

@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use crate::{
     error::Result,
     models::{Task, TaskFilter, TaskState, NewTask, UpdateTask, TaskMessage},
+    workspace_setup::WorkspaceContext,
 };
 
 /// Repository trait for task persistence and retrieval operations
@@ -264,6 +265,68 @@ pub trait TaskMessageRepository: Send + Sync {
     /// * `Ok(Option<TaskMessage>)` - The message if found
     /// * `Err(TaskError::Database)` - If the database operation fails
     async fn get_message_by_id(&self, message_id: i32) -> Result<Option<TaskMessage>>;
+}
+
+/// Repository trait for workspace context persistence and retrieval
+/// 
+/// This trait defines the interface for WorkspaceContext data operations.
+/// WorkspaceContext stores the complete state of a workspace including PRD, 
+/// workflow data, registered agents, and generated file metadata.
+#[async_trait]
+pub trait WorkspaceContextRepository: Send + Sync {
+    /// Create a new WorkspaceContext in the repository
+    /// 
+    /// # Arguments
+    /// * `context` - The workspace context to create
+    /// 
+    /// # Returns
+    /// * `Ok(WorkspaceContext)` - The created context
+    /// * `Err(TaskError::DuplicateKey)` - If workspace_id already exists
+    /// * `Err(TaskError::Serialization)` - If context cannot be serialized
+    /// * `Err(TaskError::Database)` - If the database operation fails
+    async fn create(&self, context: WorkspaceContext) -> Result<WorkspaceContext>;
+
+    /// Get a WorkspaceContext by its workspace_id
+    /// 
+    /// # Arguments
+    /// * `workspace_id` - The workspace ID to find
+    /// 
+    /// # Returns
+    /// * `Ok(Some(WorkspaceContext))` - The context if found
+    /// * `Ok(None)` - If no context exists with that workspace_id
+    /// * `Err(TaskError::Deserialization)` - If stored context cannot be deserialized  
+    /// * `Err(TaskError::Database)` - If the database operation fails
+    async fn get_by_id(&self, workspace_id: &str) -> Result<Option<WorkspaceContext>>;
+
+    /// Update an existing WorkspaceContext in the repository
+    /// 
+    /// # Arguments
+    /// * `context` - The updated workspace context
+    /// 
+    /// # Returns
+    /// * `Ok(WorkspaceContext)` - The updated context
+    /// * `Err(TaskError::NotFound)` - If the workspace_id doesn't exist
+    /// * `Err(TaskError::Serialization)` - If context cannot be serialized
+    /// * `Err(TaskError::Database)` - If the database operation fails
+    async fn update(&self, context: WorkspaceContext) -> Result<WorkspaceContext>;
+
+    /// Delete a WorkspaceContext by its workspace_id
+    /// 
+    /// # Arguments
+    /// * `workspace_id` - The workspace ID to delete
+    /// 
+    /// # Returns
+    /// * `Ok(())` - Context deleted successfully
+    /// * `Err(TaskError::NotFound)` - If the workspace_id doesn't exist
+    /// * `Err(TaskError::Database)` - If the database operation fails
+    async fn delete(&self, workspace_id: &str) -> Result<()>;
+
+    /// Get repository health status for monitoring  
+    /// 
+    /// # Returns
+    /// * `Ok(())` - Repository is healthy and connected
+    /// * `Err(TaskError::Database)` - Repository is unhealthy
+    async fn health_check(&self) -> Result<()>;
 }
 
 

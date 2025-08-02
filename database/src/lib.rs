@@ -36,12 +36,15 @@
 
 mod common;
 mod sqlite;
+mod workspace_context_repository;
 
 pub use sqlite::SqliteTaskRepository;
+pub use workspace_context_repository::SqliteWorkspaceContextRepository;
 
 // Re-export commonly used types from task-core for convenience
 pub use task_core::{
     error::{Result, TaskError},
     models::{Task, TaskState, TaskFilter, NewTask, UpdateTask, TaskMessage},
-    repository::{TaskRepository, TaskMessageRepository, RepositoryStats},
+    repository::{TaskRepository, TaskMessageRepository, WorkspaceContextRepository, RepositoryStats},
+    WorkspaceContext, GeneratedFileMetadata,
 };
