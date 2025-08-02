@@ -6,7 +6,7 @@ mod telemetry;
 use anyhow::{Context, Result};
 use clap::Parser;
 use config::Config;
-use setup::{create_repository, initialize_app, ensure_database_directory_from_config};
+use setup::{create_repository, create_workspace_context_repository, initialize_app, ensure_database_directory_from_config};
 use stdio::StdioMcpServer;
 use telemetry::{init_telemetry, init_telemetry_with_writer, log_startup_info, log_config_validation};
 use tracing::{info, error};
@@ -121,8 +121,13 @@ async fn main() -> Result<()> {
             // For now, use the same repository for both tasks and messages
             let message_repository = repository.clone();
             
+            // Create workspace context repository
+            let workspace_context_repository = create_workspace_context_repository(&config)
+                .await
+                .context("Failed to create workspace context repository")?;
+            
             // Create STDIO server
-            let stdio_server = StdioMcpServer::new(repository, message_repository);
+            let stdio_server = StdioMcpServer::new(repository, message_repository, workspace_context_repository);
             
             // Run STDIO server (blocks until stdin is closed)
             stdio_server.serve()

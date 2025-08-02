@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "core",
-    "mcp-server", "database", "mcp-protocol", "mocks", "workspace-orchestrator",
+    "mcp-server", "database", "mcp-protocol", "mocks", "workspace-orchestrator", "tests",
 ]
 resolver = "2"
 
@@ -18,3 +18,11 @@ anyhow = "1.0"
 clap = { version = "4.0", features = ["derive", "env"] }
 handlebars = "4.3"
 reqwest = { version = "0.11", features = ["json"] }
+
+# Testing dependencies
+eventsource-client = "0.12"
+assert_cmd = "2.0"
+criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3.8"
+futures-util = "0.3"
+serde_json = "1.0"

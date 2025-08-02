@@ -118,11 +118,40 @@ struct TaskMessage {
 
 ### Technology Stack
 - **Framework**: Rust with MCP SDK (https://github.com/modelcontextprotocol/rust-sdk)
-- **Database**: SQLite with automatic path handling (~/db.sqlite default)
+- **Database**: SQLite ONLY - with automatic path handling (~/db.sqlite default)
 - **Transport**: Server-Sent Events (SSE) for MCP communication
 - **Serialization**: JSON for MCP protocol compliance
 - **Testing**: Comprehensive unit, integration, and contract tests
 - **Documentation**: Full API documentation with examples
+
+## 🚨 CRITICAL DATABASE REQUIREMENT 🚨
+
+**THIS PROJECT USES SQLite EXCLUSIVELY - NO EXCEPTIONS**
+
+This is a fundamental architectural decision that MUST be strictly enforced:
+
+- ✅ **ONLY SQLite** is permitted for ALL data persistence needs
+- ❌ **NEVER** suggest PostgreSQL, MySQL, MongoDB, or any other database
+- ✅ **ALL** features must use SQLite: task storage, workspace contexts, session management, messaging, etc.
+- ✅ **JSON blob storage** in SQLite is preferred for complex data structures to minimize schema complexity
+- ✅ **Single database file** approach: ~/db.sqlite handles all persistence needs
+- ❌ **NO** multi-database architectures or external database services
+
+**Why SQLite Only:**
+- **Simplicity**: Zero-configuration, single-file database
+- **Reliability**: ACID compliance, battle-tested, embedded database
+- **Performance**: Excellent for MCP server workloads and agent coordination
+- **Deployment**: No external dependencies, works anywhere Rust runs
+- **Development**: Easy setup, migration, and debugging
+
+**Implementation Guidelines:**
+- Use `sqlx` with SQLite backend for all database operations
+- Store complex objects as JSON blobs when appropriate
+- Use database migrations for schema evolution
+- Implement connection pooling for performance
+- All repositories must implement SQLite-based persistence
+
+This architectural constraint is non-negotiable and ensures system simplicity, reliability, and ease of deployment.
 
 ## Crate Architecture
 

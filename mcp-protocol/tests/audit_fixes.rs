@@ -6,7 +6,8 @@
 use std::sync::Arc;
 use mcp_protocol::{McpTaskHandler, McpServer, McpError};
 use mcp_protocol::serialization::*;
-use task_core::{Task, NewTask, TaskState, TaskRepository, TaskMessageRepository, TaskFilter, RepositoryStats, ProtocolHandler, TaskMessage};
+use task_core::{Task, NewTask, TaskState, TaskRepository, TaskMessageRepository, WorkspaceContextRepository, TaskFilter, RepositoryStats, ProtocolHandler, TaskMessage};
+use task_core::workspace_setup::WorkspaceContext;
 use task_core::error::{Result, TaskError};
 use async_trait::async_trait;
 use serde_json::json;
@@ -223,11 +224,39 @@ impl TaskMessageRepository for AuditTestMockRepository {
     }
 }
 
+/// Mock workspace context repository for testing
+#[derive(Clone)]
+struct MockWorkspaceContextRepository;
+
+#[async_trait]
+impl WorkspaceContextRepository for MockWorkspaceContextRepository {
+    async fn create(&self, context: WorkspaceContext) -> Result<WorkspaceContext> {
+        Ok(context)
+    }
+    
+    async fn get_by_id(&self, _workspace_id: &str) -> Result<Option<WorkspaceContext>> {
+        Ok(None)
+    }
+    
+    async fn update(&self, context: WorkspaceContext) -> Result<WorkspaceContext> {
+        Ok(context)
+    }
+    
+    async fn delete(&self, _workspace_id: &str) -> Result<()> {
+        Ok(())
+    }
+    
+    async fn health_check(&self) -> Result<()> {
+        Ok(())
+    }
+}
+
 /// K01: Test that list_tasks now implements pagination at the database level
 #[tokio::test]
 async fn test_k01_database_level_pagination() {
     let repository = Arc::new(AuditTestMockRepository::new());
-    let handler = McpTaskHandler::new(repository.clone(), repository);
+    let workspace_repo = Arc::new(MockWorkspaceContextRepository);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
     
     // Create 10 tasks
     for i in 1..=10 {
@@ -266,7 +295,8 @@ async fn test_k01_database_level_pagination() {
 #[tokio::test]
 async fn test_v01_routing_logic_deduplication() {
     let repository = Arc::new(AuditTestMockRepository::new());
-    let _server = McpServer::new(repository.clone(), repository);
+    let workspace_repo = Arc::new(MockWorkspaceContextRepository);
+    let _server = McpServer::new(repository.clone(), repository, workspace_repo);
     
     // The fact that we can create a server instance and it compiles
     // demonstrates that the routing logic deduplication was successful
@@ -295,7 +325,8 @@ async fn test_v03_json_rpc_compliance() {
 #[tokio::test]
 async fn test_m01_version_consistency() {
     let repository = Arc::new(AuditTestMockRepository::new());
-    let handler = McpTaskHandler::new(repository.clone(), repository);
+    let workspace_repo = Arc::new(MockWorkspaceContextRepository);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
     
     // Test health check returns the same version as the crate
     let health = handler.health_check().await.unwrap();
@@ -310,7 +341,8 @@ async fn test_m01_version_consistency() {
 #[tokio::test]
 async fn test_integrated_audit_fixes() {
     let repository = Arc::new(AuditTestMockRepository::new());
-    let handler = McpTaskHandler::new(repository.clone(), repository);
+    let workspace_repo = Arc::new(MockWorkspaceContextRepository);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
     
     // Create multiple tasks
     for i in 1..=5 {

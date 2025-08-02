@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use database::SqliteTaskRepository;
+use database::{SqliteTaskRepository, SqliteWorkspaceContextRepository};
 use mcp_protocol::McpServer;
 use std::sync::Arc;
 use tracing::info;
@@ -30,18 +30,41 @@ pub async fn create_repository(config: &Config) -> Result<Arc<SqliteTaskReposito
     Ok(Arc::new(repo))
 }
 
+/// Create a workspace context repository based on the complete configuration  
+pub async fn create_workspace_context_repository(config: &Config) -> Result<Arc<SqliteWorkspaceContextRepository>> {
+    info!("Creating workspace context repository");
+    
+    // Get validated database URL from config (already handles defaults and validation)
+    let database_url = config.database_url();
+    info!("Using database URL for workspace contexts: {}", database_url);
+    
+    // Create repository with the database URL
+    let repo = SqliteWorkspaceContextRepository::new(
+        Arc::new(sqlx::SqlitePool::connect(&database_url)
+            .await
+            .with_context(|| format!("Failed to connect to workspace context database at {}", database_url))?)
+    );
+    
+    info!("Workspace context repository created successfully");
+    Ok(Arc::new(repo))
+}
+
 /// Create and configure the MCP server
-pub fn create_server(repository: Arc<SqliteTaskRepository>, message_repository: Arc<SqliteTaskRepository>) -> Result<McpServer<SqliteTaskRepository, SqliteTaskRepository>> {
+pub fn create_server(
+    repository: Arc<SqliteTaskRepository>, 
+    message_repository: Arc<SqliteTaskRepository>,
+    workspace_context_repository: Arc<SqliteWorkspaceContextRepository>
+) -> Result<McpServer<SqliteTaskRepository, SqliteTaskRepository, SqliteWorkspaceContextRepository>> {
     info!("Creating MCP server");
     
-    let server = McpServer::new(repository, message_repository);
+    let server = McpServer::new(repository, message_repository, workspace_context_repository);
     
     info!("MCP server created successfully");
     Ok(server)
 }
 
 /// Initialize the complete application
-pub async fn initialize_app(config: &Config) -> Result<McpServer<SqliteTaskRepository, SqliteTaskRepository>> {
+pub async fn initialize_app(config: &Config) -> Result<McpServer<SqliteTaskRepository, SqliteTaskRepository, SqliteWorkspaceContextRepository>> {
     info!("Initializing application");
     
     // Create repository
@@ -53,8 +76,13 @@ pub async fn initialize_app(config: &Config) -> Result<McpServer<SqliteTaskRepos
     // In the future, these could be separate repositories
     let message_repository = repository.clone();
     
+    // Create workspace context repository
+    let workspace_context_repository = create_workspace_context_repository(config)
+        .await
+        .context("Failed to create workspace context repository")?;
+    
     // Create server
-    let server = create_server(repository, message_repository)
+    let server = create_server(repository, message_repository, workspace_context_repository)
         .context("Failed to create server")?;
     
     info!("Application initialized successfully");
@@ -200,7 +228,8 @@ mod tests {
 
         let repo = create_repository(&config).await.unwrap();
         let message_repo = repo.clone();
-        let server = create_server(repo, message_repo);
+        let workspace_context_repo = create_workspace_context_repository(&config).await.unwrap();
+        let server = create_server(repo, message_repo, workspace_context_repo);
         assert!(server.is_ok());
     }
 }

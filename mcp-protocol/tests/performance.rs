@@ -5,8 +5,9 @@
 use std::sync::Arc;
 use std::time::Instant;
 use mcp_protocol::*;
-use task_core::{TaskRepository, TaskMessageRepository, Task, NewTask, UpdateTask, TaskState, TaskFilter, RepositoryStats, TaskMessage};
-use task_core::error::{Result, TaskError};
+use task_core::{TaskRepository, TaskMessageRepository, WorkspaceContextRepository, Task, NewTask, UpdateTask, TaskState, TaskFilter, RepositoryStats, TaskMessage};
+use task_core::workspace_setup::WorkspaceContext;
+use task_core::error::Result;
 use async_trait::async_trait;
 use chrono::Utc;
 
@@ -307,6 +308,30 @@ impl TaskMessageRepository for FastMockRepository {
     }
 }
 
+/// Fast mock workspace context repository for performance testing
+#[async_trait]
+impl WorkspaceContextRepository for FastMockRepository {
+    async fn create(&self, context: WorkspaceContext) -> Result<WorkspaceContext> {
+        Ok(context)
+    }
+    
+    async fn get_by_id(&self, _workspace_id: &str) -> Result<Option<WorkspaceContext>> {
+        Ok(None)
+    }
+    
+    async fn update(&self, context: WorkspaceContext) -> Result<WorkspaceContext> {
+        Ok(context)
+    }
+    
+    async fn delete(&self, _workspace_id: &str) -> Result<()> {
+        Ok(())
+    }
+    
+    async fn health_check(&self) -> Result<()> {
+        Ok(())
+    }
+}
+
 async fn measure_operation<F, Fut, T>(operation: F) -> (T, std::time::Duration)
 where
     F: FnOnce() -> Fut,
@@ -321,7 +346,8 @@ where
 #[tokio::test]
 async fn test_create_task_performance() {
     let repository = Arc::new(FastMockRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository);
+    let workspace_repo = Arc::new(FastMockRepository);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
     
     let params = CreateTaskParams {
         code: "PERF-001".to_string(),
@@ -346,7 +372,8 @@ async fn test_create_task_performance() {
 #[tokio::test]
 async fn test_get_task_performance() {
     let repository = Arc::new(FastMockRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository);
+    let workspace_repo = Arc::new(FastMockRepository);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
     
     let params = GetTaskByIdParams { id: 1 };
     
@@ -360,7 +387,8 @@ async fn test_get_task_performance() {
 #[tokio::test]
 async fn test_list_tasks_performance() {
     let repository = Arc::new(FastMockRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository);
+    let workspace_repo = Arc::new(FastMockRepository);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
     
     let params = ListTasksParams::default();
     
@@ -374,7 +402,8 @@ async fn test_list_tasks_performance() {
 #[tokio::test]
 async fn test_update_task_performance() {
     let repository = Arc::new(FastMockRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository);
+    let workspace_repo = Arc::new(FastMockRepository);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
     
     let params = UpdateTaskParams {
         id: 1,  
@@ -402,7 +431,8 @@ async fn test_update_task_performance() {
 #[tokio::test]
 async fn test_state_transition_performance() {
     let repository = Arc::new(FastMockRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository);
+    let workspace_repo = Arc::new(FastMockRepository);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
     
     let params = SetStateParams {
         id: 1,
@@ -453,7 +483,8 @@ async fn test_serialization_performance() {
 #[tokio::test]
 async fn test_concurrent_operations_performance() {
     let repository = Arc::new(FastMockRepository);
-    let handler = Arc::new(McpTaskHandler::new(repository.clone(), repository));
+    let workspace_repo = Arc::new(FastMockRepository);
+    let handler = Arc::new(McpTaskHandler::new(repository.clone(), repository, workspace_repo));
     
     let start = Instant::now();
     
