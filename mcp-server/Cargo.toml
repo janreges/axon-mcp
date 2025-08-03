@@ -1,6 +1,6 @@
 [package]
 name = "mcp-server"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 # Library for testing and integration
@@ -29,13 +29,16 @@ tracing-subscriber = { workspace = true }
 
 # For reading .env files
 dotenv = "0.15"
-database = { version = "0.1.0", path = "../database" }
-mcp-protocol = { version = "0.1.0", path = "../mcp-protocol" }
+database = { version = "0.2.0", path = "../database" }
+mcp-protocol = { version = "0.2.0", path = "../mcp-protocol" }
 toml = "0.9.3"
 serde_json = "1.0.141"
 sqlx = "0.8.6"
 reqwest = { workspace = true }
 zip = { version = "4.3.0", features = ["deflate"] }
+dirs = "6.0.0"
+sha2 = "0.10.9"
+hex = "0.4.3"
 
 [dev-dependencies]
 futures-util = "0.3.31"

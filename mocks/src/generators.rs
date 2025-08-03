@@ -1,17 +1,17 @@
 //! Random test data generators using the fake crate
-//! 
+//!
 //! Provides realistic random data including:
 //! - Task codes with proper formatting
 //! - Agent names from a realistic pool
 //! - Task names and descriptions
 //! - Property-based testing strategies
 
-use fake::Fake;
-use fake::faker::lorem::en::{Sentence, Paragraph};
-use rand::Rng;
-use proptest::prelude::*;
 use chrono::Utc;
-use task_core::{Task, TaskState, TaskFilter};
+use fake::faker::lorem::en::{Paragraph, Sentence};
+use fake::Fake;
+use proptest::prelude::*;
+use rand::Rng;
+use task_core::{Task, TaskFilter, TaskState};
 
 /// Generate a realistic task code (e.g., "PROJ-123", "BUG-456")
 pub fn generate_task_code() -> String {
@@ -24,9 +24,15 @@ pub fn generate_task_code() -> String {
 /// Generate a realistic agent name
 pub fn generate_agent_name() -> String {
     let agents = [
-        "rust-architect", "database-engineer", "protocol-specialist", 
-        "integration-lead", "testing-expert", "documentation-specialist",
-        "project-finalizer", "security-auditor", "performance-optimizer"
+        "rust-architect",
+        "database-engineer",
+        "protocol-specialist",
+        "integration-lead",
+        "testing-expert",
+        "documentation-specialist",
+        "project-finalizer",
+        "security-auditor",
+        "performance-optimizer",
     ];
     agents[rand::thread_rng().gen_range(0..agents.len())].to_string()
 }
@@ -99,7 +105,7 @@ impl TaskGenerator {
         let id: u32 = (1..99999).fake();
         let number: u32 = (1..9999).fake();
         let agent = &self.agent_pool[rand::thread_rng().gen_range(0..self.agent_pool.len())];
-        
+
         Task::new(
             id as i32,
             format!("{}-{number:03}", self.code_prefix),
@@ -115,10 +121,7 @@ impl TaskGenerator {
 
 /// Proptest strategy for generating valid task codes
 pub fn task_code_strategy() -> impl Strategy<Value = String> {
-    prop::collection::vec(
-        "[A-Z]{3,8}-[0-9]{1,4}",
-        1..1
-    ).prop_map(|v| v[0].clone())
+    prop::collection::vec("[A-Z]{3,8}-[0-9]{1,4}", 1..1).prop_map(|v| v[0].clone())
 }
 
 /// Proptest strategy for generating valid task states
@@ -142,23 +145,24 @@ pub fn task_strategy() -> impl Strategy<Value = Task> {
         "[A-Za-z0-9 .,!?]{10,200}",
         "[a-z-]{5,20}",
         task_state_strategy(),
-    ).prop_map(|(id, code, name, description, owner, state)| {
-        let done_at = if state == TaskState::Done || state == TaskState::Archived {
-            Some(Utc::now())
-        } else {
-            None
-        };
-        Task::new(
-            id,
-            code,
-            name,
-            description,
-            Some(owner),
-            state,
-            Utc::now(),
-            done_at,
-        )
-    })
+    )
+        .prop_map(|(id, code, name, description, owner, state)| {
+            let done_at = if state == TaskState::Done || state == TaskState::Archived {
+                Some(Utc::now())
+            } else {
+                None
+            };
+            Task::new(
+                id,
+                code,
+                name,
+                description,
+                Some(owner),
+                state,
+                Utc::now(),
+                done_at,
+            )
+        })
 }
 
 /// Proptest strategy for generating task filters
@@ -166,14 +170,15 @@ pub fn task_filter_strategy() -> impl Strategy<Value = TaskFilter> {
     (
         proptest::option::of("[a-z-]{5,20}"),
         proptest::option::of(task_state_strategy()),
-    ).prop_map(|(owner, state)| TaskFilter {
-        owner,
-        state,
-        date_from: None,
-        date_to: None,
-        completed_after: None,
-        completed_before: None,
-        limit: None,
-        offset: None,
-    })
+    )
+        .prop_map(|(owner, state)| TaskFilter {
+            owner,
+            state,
+            date_from: None,
+            date_to: None,
+            completed_after: None,
+            completed_before: None,
+            limit: None,
+            offset: None,
+        })
 }

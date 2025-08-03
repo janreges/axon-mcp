@@ -1,9 +1,9 @@
+use chrono::{DateTime, Utc};
+use sqlx::{sqlite::SqliteRow, Row};
 use task_core::{
     error::{Result, TaskError},
-    models::{Task, TaskState, TaskFilter, TaskMessage},
+    models::{Task, TaskFilter, TaskMessage, TaskState},
 };
-use chrono::{DateTime, Utc};
-use sqlx::{Row, sqlite::SqliteRow};
 
 /// Convert TaskState enum to string for database storage
 pub fn state_to_string(state: TaskState) -> &'static str {
@@ -34,7 +34,9 @@ pub fn string_to_state(s: &str) -> Result<TaskState> {
         "PendingHandoff" => Ok(TaskState::PendingHandoff),
         "Quarantined" => Ok(TaskState::Quarantined),
         "WaitingForDependency" => Ok(TaskState::WaitingForDependency),
-        _ => Err(TaskError::Database(format!("Invalid task state in database: {s}"))),
+        _ => Err(TaskError::Database(format!(
+            "Invalid task state in database: {s}"
+        ))),
     }
 }
 
@@ -42,17 +44,18 @@ pub fn string_to_state(s: &str) -> Result<TaskState> {
 pub fn row_to_task(row: &SqliteRow) -> Result<Task> {
     let state_str: String = row.get("state");
     let state = string_to_state(&state_str)?;
-    
+
     let inserted_at: DateTime<Utc> = row.get("inserted_at");
     let done_at: Option<DateTime<Utc>> = row.get("done_at");
-    
+
     // Parse required_capabilities from JSON string
-    let required_capabilities: Vec<String> = row.try_get("required_capabilities")
+    let required_capabilities: Vec<String> = row
+        .try_get("required_capabilities")
         .ok()
         .and_then(|caps: Option<String>| caps)
         .and_then(|caps| serde_json::from_str(&caps).ok())
         .unwrap_or_default();
-    
+
     // Create task with MCP v2 fields
     Ok(Task {
         id: row.get("id"),
@@ -63,7 +66,7 @@ pub fn row_to_task(row: &SqliteRow) -> Result<Task> {
         state,
         inserted_at,
         done_at,
-        
+
         // MCP v2 fields with proper defaults
         workflow_definition_id: row.try_get("workflow_definition_id").ok().flatten(),
         workflow_cursor: row.try_get("workflow_cursor").ok().flatten(),
@@ -79,7 +82,7 @@ pub fn row_to_task(row: &SqliteRow) -> Result<Task> {
 /// Convert SQLite row to TaskMessage model
 pub fn row_to_task_message(row: &SqliteRow) -> Result<TaskMessage> {
     let created_at: DateTime<Utc> = row.get("created_at");
-    
+
     Ok(TaskMessage {
         id: row.get("id"),
         task_code: row.get("task_code"),
@@ -98,14 +101,15 @@ pub fn sqlx_error_to_task_error(err: sqlx::Error) -> TaskError {
         sqlx::Error::Database(db_err) => {
             let code = db_err.code().unwrap_or_default();
             let message = db_err.message();
-            
+
             // Handle SQLite constraint violations
             if code == "2067" || message.contains("UNIQUE constraint failed") {
                 // Extract the constraint name to determine which field failed
                 if message.contains("tasks.code") {
                     let parts: Vec<&str> = message.split('.').collect();
                     if let Some(last_part) = parts.last() {
-                        let code_value = last_part.trim_matches(|c: char| !c.is_alphanumeric() && c != '-' && c != '_');
+                        let code_value = last_part
+                            .trim_matches(|c: char| !c.is_alphanumeric() && c != '-' && c != '_');
                         return TaskError::DuplicateCode(code_value.to_string());
                     }
                 }
@@ -113,37 +117,31 @@ pub fn sqlx_error_to_task_error(err: sqlx::Error) -> TaskError {
             } else {
                 TaskError::Database(format!("Database constraint error: {message}"))
             }
-        },
+        }
         sqlx::Error::RowNotFound => {
             // This is handled at the application level, not an error
             TaskError::Database("Unexpected RowNotFound error".to_string())
-        },
-        sqlx::Error::PoolTimedOut => {
-            TaskError::Database("Connection pool timeout".to_string())
-        },
-        sqlx::Error::Io(io_err) => {
-            TaskError::Database(format!("Database I/O error: {io_err}"))
-        },
-        _ => {
-            TaskError::Database(format!("Database operation failed: {err}"))
         }
+        sqlx::Error::PoolTimedOut => TaskError::Database("Connection pool timeout".to_string()),
+        sqlx::Error::Io(io_err) => TaskError::Database(format!("Database I/O error: {io_err}")),
+        _ => TaskError::Database(format!("Database operation failed: {err}")),
     }
 }
 
 /// Build dynamic WHERE clause for task filtering using QueryBuilder with proper type binding
 #[allow(dead_code)] // Used in sqlite.rs but may not be detected by compiler
 pub fn build_filter_query(filter: &TaskFilter) -> sqlx::QueryBuilder<sqlx::Sqlite> {
-    let mut query_builder: sqlx::QueryBuilder<sqlx::Sqlite> = 
+    let mut query_builder: sqlx::QueryBuilder<sqlx::Sqlite> =
         sqlx::QueryBuilder::new("SELECT id, code, name, description, owner_agent_name, state, inserted_at, done_at, workflow_definition_id, workflow_cursor, priority_score, parent_task_id, failure_count, required_capabilities, estimated_effort, confidence_threshold FROM tasks");
-    
+
     let mut has_conditions = false;
-    
+
     if let Some(ref owner) = filter.owner {
         query_builder.push(" WHERE owner_agent_name = ");
         query_builder.push_bind(owner);
         has_conditions = true;
     }
-    
+
     if let Some(state) = filter.state {
         if has_conditions {
             query_builder.push(" AND ");
@@ -154,7 +152,7 @@ pub fn build_filter_query(filter: &TaskFilter) -> sqlx::QueryBuilder<sqlx::Sqlit
         query_builder.push("state = ");
         query_builder.push_bind(state_to_string(state));
     }
-    
+
     if let Some(date_from) = filter.date_from {
         if has_conditions {
             query_builder.push(" AND ");
@@ -165,7 +163,7 @@ pub fn build_filter_query(filter: &TaskFilter) -> sqlx::QueryBuilder<sqlx::Sqlit
         query_builder.push("inserted_at >= ");
         query_builder.push_bind(date_from.to_rfc3339());
     }
-    
+
     if let Some(date_to) = filter.date_to {
         if has_conditions {
             query_builder.push(" AND ");
@@ -175,37 +173,41 @@ pub fn build_filter_query(filter: &TaskFilter) -> sqlx::QueryBuilder<sqlx::Sqlit
         query_builder.push("inserted_at <= ");
         query_builder.push_bind(date_to.to_rfc3339());
     }
-    
+
     query_builder.push(" ORDER BY inserted_at DESC");
-    
+
     if let Some(limit) = filter.limit {
         query_builder.push(" LIMIT ");
         query_builder.push_bind(limit);
     }
-    
+
     if let Some(offset) = filter.offset {
         query_builder.push(" OFFSET ");
         query_builder.push_bind(offset);
     }
-    
+
     query_builder
 }
 
 /// SQLite-optimized work discovery query for MCP v2 multi-agent coordination
 /// This query leverages the composite index for optimal performance
-pub fn build_work_discovery_query(agent_capabilities: &[String], limit: Option<i32>) -> sqlx::QueryBuilder<sqlx::Sqlite> {
+pub fn build_work_discovery_query(
+    agent_capabilities: &[String],
+    limit: Option<i32>,
+) -> sqlx::QueryBuilder<sqlx::Sqlite> {
     let mut query_builder: sqlx::QueryBuilder<sqlx::Sqlite> = sqlx::QueryBuilder::new(
         r#"SELECT id, code, name, description, owner_agent_name, state, inserted_at, done_at,
                   workflow_definition_id, workflow_cursor, priority_score, parent_task_id,
                   failure_count, required_capabilities, estimated_effort, confidence_threshold
            FROM tasks 
-           WHERE state IN ('Created', 'InProgress', 'Review')"#
+           WHERE state IN ('Created', 'InProgress', 'Review')"#,
     );
-    
+
     // Add capability matching if specified
     if !agent_capabilities.is_empty() {
-        query_builder.push(" AND (required_capabilities IS NULL OR required_capabilities = '[]' OR ");
-        
+        query_builder
+            .push(" AND (required_capabilities IS NULL OR required_capabilities = '[]' OR ");
+
         // Check if agent has any of the required capabilities
         // This is a simplified check - in production, you might want more sophisticated matching
         for (i, capability) in agent_capabilities.iter().enumerate() {
@@ -217,55 +219,54 @@ pub fn build_work_discovery_query(agent_capabilities: &[String], limit: Option<i
         }
         query_builder.push(")");
     }
-    
+
     // Order by priority (uses the composite index for optimal performance)
     query_builder.push(" ORDER BY priority_score DESC, failure_count ASC, inserted_at ASC");
-    
+
     // Apply limit
     if let Some(limit) = limit {
         query_builder.push(" LIMIT ");
         query_builder.push_bind(limit);
     }
-    
+
     query_builder
 }
 
-
 /// Legacy function kept for backward compatibility with tests
 /// Build dynamic WHERE clause for task filtering (returns string and params)
-/// 
+///
 /// DEPRECATED: Use build_filter_query instead for proper type binding
 #[allow(dead_code)]
 pub fn build_filter_conditions(filter: &TaskFilter) -> (String, Vec<String>) {
     let mut conditions = Vec::new();
     let mut params = Vec::new();
-    
+
     if let Some(ref owner) = filter.owner {
         conditions.push("owner_agent_name = ?".to_string());
         params.push(owner.clone());
     }
-    
+
     if let Some(state) = filter.state {
         conditions.push("state = ?".to_string());
         params.push(state_to_string(state).to_string());
     }
-    
+
     if let Some(date_from) = filter.date_from {
         conditions.push("inserted_at >= ?".to_string());
         params.push(date_from.to_rfc3339());
     }
-    
+
     if let Some(date_to) = filter.date_to {
         conditions.push("inserted_at <= ?".to_string());
         params.push(date_to.to_rfc3339());
     }
-    
+
     let where_clause = if conditions.is_empty() {
         String::new()
     } else {
         format!("WHERE {}", conditions.join(" AND "))
     };
-    
+
     (where_clause, params)
 }
 
@@ -285,24 +286,45 @@ mod tests {
         assert_eq!(state_to_string(TaskState::Archived), "Archived");
 
         // Test MCP v2 state conversions
-        assert_eq!(state_to_string(TaskState::PendingDecomposition), "PendingDecomposition");
+        assert_eq!(
+            state_to_string(TaskState::PendingDecomposition),
+            "PendingDecomposition"
+        );
         assert_eq!(state_to_string(TaskState::PendingHandoff), "PendingHandoff");
         assert_eq!(state_to_string(TaskState::Quarantined), "Quarantined");
-        assert_eq!(state_to_string(TaskState::WaitingForDependency), "WaitingForDependency");
+        assert_eq!(
+            state_to_string(TaskState::WaitingForDependency),
+            "WaitingForDependency"
+        );
 
         // Test all MCP v1 reverse conversions
         assert_eq!(string_to_state("Created").unwrap(), TaskState::Created);
-        assert_eq!(string_to_state("InProgress").unwrap(), TaskState::InProgress);
+        assert_eq!(
+            string_to_state("InProgress").unwrap(),
+            TaskState::InProgress
+        );
         assert_eq!(string_to_state("Blocked").unwrap(), TaskState::Blocked);
         assert_eq!(string_to_state("Review").unwrap(), TaskState::Review);
         assert_eq!(string_to_state("Done").unwrap(), TaskState::Done);
         assert_eq!(string_to_state("Archived").unwrap(), TaskState::Archived);
 
         // Test all MCP v2 reverse conversions
-        assert_eq!(string_to_state("PendingDecomposition").unwrap(), TaskState::PendingDecomposition);
-        assert_eq!(string_to_state("PendingHandoff").unwrap(), TaskState::PendingHandoff);
-        assert_eq!(string_to_state("Quarantined").unwrap(), TaskState::Quarantined);
-        assert_eq!(string_to_state("WaitingForDependency").unwrap(), TaskState::WaitingForDependency);
+        assert_eq!(
+            string_to_state("PendingDecomposition").unwrap(),
+            TaskState::PendingDecomposition
+        );
+        assert_eq!(
+            string_to_state("PendingHandoff").unwrap(),
+            TaskState::PendingHandoff
+        );
+        assert_eq!(
+            string_to_state("Quarantined").unwrap(),
+            TaskState::Quarantined
+        );
+        assert_eq!(
+            string_to_state("WaitingForDependency").unwrap(),
+            TaskState::WaitingForDependency
+        );
 
         // Test invalid state
         assert!(string_to_state("Invalid").is_err());
@@ -358,7 +380,7 @@ mod tests {
     fn test_proper_type_binding() {
         use chrono::Utc;
         use sqlx::Execute;
-        
+
         // Test that the new query builder properly handles different types
         let filter = TaskFilter {
             owner: Some("test-agent".to_string()),
@@ -370,11 +392,11 @@ mod tests {
             limit: Some(10),
             offset: Some(5),
         };
-        
+
         // This should not panic or cause type errors when building
         let mut query_builder = build_filter_query(&filter);
         let query = query_builder.build();
-        
+
         // The query should contain the expected SQL structure
         let sql = query.sql();
         assert!(sql.contains("SELECT"));

@@ -7,7 +7,9 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
     [string]$Version = "latest",
-    [string]$InstallDir = "$env:LOCALAPPDATA\axon-mcp\bin"
+    [string]$InstallDir = "",
+    [switch]$ClaudeCodeProject,
+    [switch]$ClaudeCodeUser
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,6 +43,50 @@ function Write-Error {
     param([string]$Message)
     Write-Host "✗ " -ForegroundColor Red -NoNewline
     Write-Host " $Message" -ForegroundColor Red
+}
+
+function Write-ErrorAndExit {
+    param([string]$Message)
+    Write-Host "✗ " -ForegroundColor Red -NoNewline
+    Write-Host " $Message" -ForegroundColor Red
+    exit 1
+}
+
+function Prompt-YesNo {
+    param(
+        [string]$Message,
+        [ValidateSet('Y', 'N')][string]$Default = 'Y'
+    )
+    while ($true) {
+        $promptText = if ($Default -eq 'Y') { "$Message [Y/n]: " } else { "$Message [y/N]: " }
+        $response = Read-Host -Prompt $promptText
+        if ([string]::IsNullOrWhiteSpace($response)) {
+            if ($Default -eq 'Y') { return $true } else { return $false }
+        }
+        switch ($response.ToLower()) {
+            "y" { return $true }
+            "n" { return $false }
+            default { Write-Warning "Please answer 'y' or 'n'." }
+        }
+    }
+}
+
+function Find-ProjectRoot {
+    $currentDir = Get-Location
+    $rootFound = $null
+
+    while ($currentDir.Path -ne (Get-PSDrive -Name $currentDir.PSDrive.Name).Root -and $currentDir.Path -ne "") {
+        if (Test-Path (Join-Path $currentDir ".git") -PathType Container) {
+            $rootFound = $currentDir.Path
+            break
+        } elseif (Test-Path (Join-Path $currentDir ".claude") -PathType Container) {
+            $rootFound = $currentDir.Path
+            break
+        }
+        $currentDir = (Get-Item $currentDir).Parent
+    }
+
+    return $rootFound
 }
 
 function Test-Administrator {
@@ -96,9 +142,52 @@ function Install-Binary {
     Write-Host "==============================" -ForegroundColor Cyan
     Write-Host ""
     
+    # --- CLI Parsing and Installation Path Logic ---
+    $ProjectRoot = $null
+    $InstallMode = "auto" # 'auto', 'project', 'user'
+    $TargetInstallDir = ""
+    
+    # Determine installation mode based on CLI switches
+    if ($ClaudeCodeProject.IsPresent -and $ClaudeCodeUser.IsPresent) {
+        Write-ErrorAndExit "Cannot use -ClaudeCodeProject and -ClaudeCodeUser simultaneously."
+    } elseif ($ClaudeCodeProject.IsPresent) {
+        $InstallMode = "project"
+    } elseif ($ClaudeCodeUser.IsPresent) {
+        $InstallMode = "user"
+    }
+    
+    # Determine project root if not explicitly set by CLI
+    if ($InstallMode -eq "auto" -or $InstallMode -eq "project") {
+        Write-Info "Detecting project root..."
+        $ProjectRoot = Find-ProjectRoot
+        if ($ProjectRoot) {
+            Write-Success "Project root found: $ProjectRoot"
+            if ($InstallMode -eq "auto") {
+                $InstallMode = "project" # Default to project scope if detected and no override
+            }
+        } else {
+            Write-Warning "Project root not found. Installation will continue in user scope."
+            if ($InstallMode -eq "project") {
+                Write-ErrorAndExit "Argument -ClaudeCodeProject was provided, but project root was not found. Aborting."
+            }
+            $InstallMode = "user" # Fallback to user if -ClaudeCodeProject not specified
+        }
+    }
+    
+    # Set installation directory based on determined mode
+    if ($InstallMode -eq "project") {
+        $TargetInstallDir = Join-Path $ProjectRoot ".axon\bin"
+        Write-Info "Project-scoped installation to: $TargetInstallDir"
+    } elseif ($InstallMode -eq "user") {
+        $TargetInstallDir = if ($InstallDir) { $InstallDir } else { "$env:LOCALAPPDATA\axon-mcp\bin" }
+        Write-Info "User-scoped installation to: $TargetInstallDir"
+    } else {
+        Write-ErrorAndExit "Unknown installation mode: $InstallMode"
+    }
+    
     # WhatIf support
     if ($WhatIfPreference) {
-        Write-Host "WhatIf: Would install axon-mcp version $Version to $InstallDir" -ForegroundColor Yellow
+        Write-Host "WhatIf: Would install axon-mcp version $Version to $TargetInstallDir" -ForegroundColor Yellow
         return
     }
     
@@ -123,9 +212,13 @@ function Install-Binary {
     Write-Info "Download URL: $downloadUrl"
     
     # Create install directory
-    if (!(Test-Path $InstallDir)) {
-        Write-Info "Creating installation directory: $InstallDir"
-        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    if (!(Test-Path $TargetInstallDir -PathType Container)) {
+        Write-Info "Creating installation directory: $TargetInstallDir"
+        try {
+            New-Item -Path $TargetInstallDir -ItemType Directory -Force | Out-Null
+        } catch {
+            Write-ErrorAndExit "Failed to create directory $TargetInstallDir. Check permissions. Error: $($_.Exception.Message)"
+        }
     }
     
     # Download binary
@@ -177,8 +270,8 @@ function Install-Binary {
             }
             
             # Move atomically
-            $binaryPath = Join-Path $InstallDir "$BinaryName.exe"
-            $tempBinary = Join-Path $InstallDir "$BinaryName.tmp.exe"
+            $binaryPath = Join-Path $TargetInstallDir "$BinaryName.exe"
+            $tempBinary = Join-Path $TargetInstallDir "$BinaryName.tmp.exe"
             Move-Item -Path $extractedBinary.FullName -Destination $tempBinary -Force
             Move-Item -Path $tempBinary -Destination $binaryPath -Force
         } finally {
@@ -188,7 +281,7 @@ function Install-Binary {
         }
         
         # Verify binary exists
-        $binaryPath = Join-Path $InstallDir "$BinaryName.exe"
+        $binaryPath = Join-Path $TargetInstallDir "$BinaryName.exe"
         if (!(Test-Path $binaryPath)) {
             throw "Binary not found after extraction"
         }
@@ -205,11 +298,10 @@ function Install-Binary {
         }
     }
     
-    # Add to PATH if needed
-    Add-ToPath $InstallDir | Out-Null
-    
-    # Configure Claude Code
-    Configure-ClaudeCode -BinaryPath $binaryPath
+    # Add to PATH if needed (only for user installs)
+    if ($InstallMode -eq "user") {
+        Add-ToPath $TargetInstallDir | Out-Null
+    }
     
     # Health check
     Write-Info "Running health check..."
@@ -220,17 +312,84 @@ function Install-Binary {
         Write-Warning "Could not verify installation. Error: $_"
     }
     
+    # --- Post-Installation Automation ---
+    if ($InstallMode -eq "project") {
+        Write-Info "Running automation steps for project-scoped installation..."
+
+        # Add .axon/ to .gitignore
+        $GitignorePath = Join-Path $ProjectRoot ".gitignore"
+        if (Test-Path $GitignorePath -PathType Leaf) {
+            $gitignoreContent = Get-Content $GitignorePath -Raw
+            if (-not ($gitignoreContent -match "(?m)^\.axon/$")) { # (?m) for multiline match
+                if (Prompt-YesNo "Add '.axon/' to '$GitignorePath'?" "Y") {
+                    Add-Content -Path $GitignorePath -Value "`n.axon/"
+                    Write-Success "Added '.axon/' to '$GitignorePath'."
+                } else {
+                    Write-Info "Adding '.axon/' to .gitignore skipped."
+                }
+            } else {
+                Write-Info "'.axon/' is already in '$GitignorePath'."
+            }
+        } else {
+            Write-Info ".gitignore not found in '$ProjectRoot'. Skipping adding '.axon/'."
+        }
+
+        # claude mcp add
+        $ClaudeDir = Join-Path $ProjectRoot ".claude"
+        if (Test-Path $ClaudeDir -PathType Container) {
+            Write-Info "Detected '.claude/' folder in project root."
+            if (Prompt-YesNo "Run 'claude mcp add' for this project?" "Y") {
+                Write-Info "Running 'claude mcp add'..."
+                try {
+                    Push-Location $ProjectRoot
+                    claude mcp add axon-mcp -- $binaryPath | Out-Null
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Success "'claude mcp add' executed successfully."
+                    } else {
+                        Write-Warning "'claude mcp add' failed with code $LASTEXITCODE. Check output for details."
+                    }
+                } catch {
+                    Write-Warning "Error running 'claude mcp add': $($_.Exception.Message)"
+                } finally {
+                    Pop-Location
+                }
+            } else {
+                Write-Info "Running 'claude mcp add' skipped."
+            }
+        } else {
+            Write-Info "'.claude/' folder not found in project root. Skipping 'claude mcp add'."
+        }
+
+        Write-Info "To use '$BinaryName' in this project, we recommend adding '$TargetInstallDir' to your PATH, e.g. in your PowerShell profile (`$PROFILE):"
+        Write-Info "  `$env:Path += `";$TargetInstallDir`""
+        Write-Info "Or run the binary directly: '$TargetInstallDir\$BinaryName.exe'."
+        Write-Info "Or use alias: `Set-Alias -Name $BinaryName -Value '$TargetInstallDir\$BinaryName.exe'`"
+
+    } elseif ($InstallMode -eq "user") {
+        Write-Info "Running automation steps for user-scoped installation..."
+        Write-Info "Make sure '$TargetInstallDir' is in your PATH. You can add it to your PowerShell profile (`$PROFILE):"
+        Write-Info "  `$env:Path += `";$TargetInstallDir`""
+        Write-Info "Then run '. `$PROFILE' or restart terminal."
+    }
+    
     Write-Host ""
     Write-Success "Installation complete!"
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor Cyan
-    Write-Host "  1. Restart your terminal to ensure PATH is updated"
-    Write-Host "  2. Verify installation: " -NoNewline
-    Write-Host "$BinaryName --version" -ForegroundColor Yellow
-    Write-Host "  3. In Claude Code, verify connection with: " -NoNewline
-    Write-Host "/mcp" -ForegroundColor Yellow
+    if ($InstallMode -eq "project") {
+        Write-Host "  1. Use: " -NoNewline
+        Write-Host "$TargetInstallDir\$BinaryName.exe --version" -ForegroundColor Yellow
+        Write-Host "  2. In Claude Code, verify connection with: " -NoNewline
+        Write-Host "/mcp" -ForegroundColor Yellow
+    } else {
+        Write-Host "  1. Restart your terminal to ensure PATH is updated"
+        Write-Host "  2. Verify installation: " -NoNewline
+        Write-Host "$BinaryName --version" -ForegroundColor Yellow
+        Write-Host "  3. In Claude Code, verify connection with: " -NoNewline
+        Write-Host "/mcp" -ForegroundColor Yellow
+    }
     Write-Host ""
-    Write-Host "For updates, run: " -NoNewline
+    Write-Host "For updates, run: " -NoNewlines
     Write-Host "$BinaryName self-update" -ForegroundColor Yellow
     Write-Host ""
 }

@@ -1,12 +1,12 @@
 //! Standard test fixtures for consistent testing
-//! 
+//!
 //! Provides pre-built test data including:
 //! - Standard tasks in various states
 //! - Edge case scenarios
 //! - Bulk task generators
 
-use task_core::{Task, TaskState, NewTask, UpdateTask};
 use chrono::Utc;
+use task_core::{NewTask, Task, TaskState, UpdateTask};
 
 /// Create a basic test task with sensible defaults
 pub fn create_test_task() -> Task {
@@ -26,12 +26,12 @@ pub fn create_test_task() -> Task {
 pub fn create_test_task_with_state(state: TaskState) -> Task {
     let mut task = create_test_task();
     task.state = state;
-    
+
     // Set done_at if task is in Done state
     if state == TaskState::Done {
         task.done_at = Some(Utc::now());
     }
-    
+
     task
 }
 
@@ -53,7 +53,7 @@ pub fn create_test_tasks(count: usize) -> Vec<Task> {
                 _ => TaskState::Done,
             };
             let done_at = if i % 4 == 3 { Some(Utc::now()) } else { None };
-            
+
             Task::new(
                 i as i32,
                 format!("TEST-{i:03}"),
@@ -163,9 +163,5 @@ pub fn create_update_task() -> UpdateTask {
 
 /// Create UpdateTask with specific name
 pub fn create_update_task_with_name(name: &str) -> UpdateTask {
-    UpdateTask::with_basic_fields(
-        Some(name.to_string()),
-        None,
-        None,
-    )
+    UpdateTask::with_basic_fields(Some(name.to_string()), None, None)
 }

@@ -1,7 +1,5 @@
 use anyhow::{Context, Result};
-use tracing_subscriber::{
-    fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry,
-};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 
 use crate::config::{LogFormat, LoggingConfig};
 
@@ -237,7 +235,10 @@ mod tests {
             // Note: We can't actually test initialization in unit tests
             // because tracing can only be initialized once per process
             // This test mainly ensures the configuration parsing works
-            assert!(matches!(config.format, LogFormat::Pretty | LogFormat::Json | LogFormat::Compact));
+            assert!(matches!(
+                config.format,
+                LogFormat::Pretty | LogFormat::Json | LogFormat::Compact
+            ));
         }
     }
 }

@@ -1,5 +1,5 @@
 //! Enhanced Prompt Templates for 2025 AI Agent Best Practices
-//! 
+//!
 //! This module implements state-of-the-art prompt engineering techniques based on 2025
 //! research for multi-agent coordination. It follows principles of:
 //! - Clear task decomposition with structured contracts
@@ -8,9 +8,9 @@
 //! - Dynamic effort scaling with micro-iterations
 //! - Proper error handling and escalation paths
 
+use crate::workspace_setup::{AiToolType, ProjectArchetype, SuggestedAgent};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::workspace_setup::{AiToolType, SuggestedAgent, ProjectArchetype};
 
 /// Structured agent contract following 2025 best practices
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,7 +19,7 @@ pub struct AgentContract {
     pub role_name: String,
     /// Core mission statement
     pub mission: String,
-    /// Concrete success criteria 
+    /// Concrete success criteria
     pub success_criteria: Vec<String>,
     /// Expected deliverables with types and paths
     pub deliverables: Vec<Deliverable>,
@@ -112,6 +112,7 @@ pub struct ErrorHandlingRule {
 #[derive(Clone)]
 pub struct EnhancedPromptBuilder {
     /// Capability catalog
+    #[allow(dead_code)]
     capabilities: HashMap<String, CapabilityDefinition>,
     /// Coordination recipes
     coordination_recipes: HashMap<String, CoordinationRecipe>,
@@ -160,7 +161,7 @@ impl EnhancedPromptBuilder {
     ) -> String {
         let contract = self.create_agent_contract(agent, archetype);
         let coordination_recipe = self.get_coordination_recipe(archetype);
-        
+
         format!(
             r#"[AGENT_CONTRACT_START]
 {}
@@ -213,21 +214,31 @@ Ignore information outside your scope to maintain efficiency.
 
 Remember: You are part of a coordinated team. Always include clear context and next steps in your handoffs.
 "#,
-            serde_json::to_string_pretty(&contract).unwrap_or_else(|_| "Invalid contract".to_string()),
+            serde_json::to_string_pretty(&contract)
+                .unwrap_or_else(|_| "Invalid contract".to_string()),
             project_context = project_context,
             archetype = archetype,
             rolling_context_section = rolling_context
-                .map(|ctx| format!("[ROLLING_CONTEXT_START]\n{}\n[ROLLING_CONTEXT_END]\n", ctx))
-                .unwrap_or_else(|| String::new()),
+                .map(|ctx| format!("[ROLLING_CONTEXT_START]\n{ctx}\n[ROLLING_CONTEXT_END]\n"))
+                .unwrap_or_default(),
             agent_name = agent.name,
             mission = contract.mission,
-            success_criteria = contract.success_criteria.iter()
+            success_criteria = contract
+                .success_criteria
+                .iter()
                 .enumerate()
                 .map(|(i, criteria)| format!("{}. {}", i + 1, criteria))
                 .collect::<Vec<_>>()
                 .join("\n"),
-            deliverables = contract.deliverables.iter()
-                .map(|d| format!("- {} at {}: {}", d.deliverable_type, d.path, d.quality_requirements.join(", ")))
+            deliverables = contract
+                .deliverables
+                .iter()
+                .map(|d| format!(
+                    "- {} at {}: {}",
+                    d.deliverable_type,
+                    d.path,
+                    d.quality_requirements.join(", ")
+                ))
                 .collect::<Vec<_>>()
                 .join("\n"),
             coordination_instructions = self.format_coordination_instructions(&coordination_recipe),
@@ -239,8 +250,12 @@ Remember: You are part of a coordinated team. Always include clear context and n
     }
 
     /// Create structured agent contract from suggested agent
-    fn create_agent_contract(&self, agent: &SuggestedAgent, archetype: &ProjectArchetype) -> AgentContract {
-        let (mission, success_criteria, deliverables, tools_allowed) = 
+    fn create_agent_contract(
+        &self,
+        agent: &SuggestedAgent,
+        archetype: &ProjectArchetype,
+    ) -> AgentContract {
+        let (mission, success_criteria, deliverables, tools_allowed) =
             self.get_archetype_specific_contract(agent, archetype);
 
         AgentContract {
@@ -351,29 +366,34 @@ Remember: You are part of a coordinated team. Always include clear context and n
 
     /// Format coordination instructions
     fn format_coordination_instructions(&self, recipe: &CoordinationRecipe) -> String {
-        recipe.steps.iter()
-            .map(|step| format!(
-                "- **{}**: {} using `{}`\n  Success: {}\n  On failure: {}",
-                step.description,
-                step.description,
-                step.mcp_function,
-                step.success_criteria,
-                step.failure_action
-            ))
+        recipe
+            .steps
+            .iter()
+            .map(|step| {
+                format!(
+                    "- **{}**: {} using `{}`\n  Success: {}\n  On failure: {}",
+                    step.description,
+                    step.description,
+                    step.mcp_function,
+                    step.success_criteria,
+                    step.failure_action
+                )
+            })
             .collect::<Vec<_>>()
             .join("\n\n")
     }
 
     /// Format error handling instructions
     fn format_error_handling(&self, recipe: &CoordinationRecipe) -> String {
-        recipe.error_handling.iter()
-            .map(|rule| format!(
-                "- **{}**: {} (max {} retries, escalate to {})",
-                rule.condition,
-                rule.action,
-                rule.max_retries,
-                rule.escalation_target
-            ))
+        recipe
+            .error_handling
+            .iter()
+            .map(|rule| {
+                format!(
+                    "- **{}**: {} (max {} retries, escalate to {})",
+                    rule.condition, rule.action, rule.max_retries, rule.escalation_target
+                )
+            })
             .collect::<Vec<_>>()
             .join("\n")
     }
@@ -382,35 +402,76 @@ Remember: You are part of a coordinated team. Always include clear context and n
     fn default_capabilities() -> HashMap<String, CapabilityDefinition> {
         let mut capabilities = HashMap::new();
 
-        capabilities.insert("cli-development".to_string(), CapabilityDefinition {
-            name: "cli-development".to_string(),
-            inputs: vec!["cli_requirements.md".to_string(), "argument_specs.yaml".to_string()],
-            outputs: vec!["src/bin/**/*.rs".to_string(), "tests/cli/**/*.rs".to_string()],
-            quality: vec!["clippy==0".to_string(), "coverage>=90%".to_string(), "help_text_complete".to_string()],
-            depends_on: vec!["rust-build".to_string()],
-            suggested_tools: vec!["clap".to_string(), "structopt".to_string()],
-            patterns: vec!["subcommands".to_string(), "argument_groups".to_string()],
-        });
+        capabilities.insert(
+            "cli-development".to_string(),
+            CapabilityDefinition {
+                name: "cli-development".to_string(),
+                inputs: vec![
+                    "cli_requirements.md".to_string(),
+                    "argument_specs.yaml".to_string(),
+                ],
+                outputs: vec![
+                    "src/bin/**/*.rs".to_string(),
+                    "tests/cli/**/*.rs".to_string(),
+                ],
+                quality: vec![
+                    "clippy==0".to_string(),
+                    "coverage>=90%".to_string(),
+                    "help_text_complete".to_string(),
+                ],
+                depends_on: vec!["rust-build".to_string()],
+                suggested_tools: vec!["clap".to_string(), "structopt".to_string()],
+                patterns: vec!["subcommands".to_string(), "argument_groups".to_string()],
+            },
+        );
 
-        capabilities.insert("api-design".to_string(), CapabilityDefinition {
-            name: "api-design".to_string(),
-            inputs: vec!["api_requirements.md".to_string(), "data_models.yaml".to_string()],
-            outputs: vec!["openapi.yaml".to_string(), "src/api/**/*.rs".to_string()],
-            quality: vec!["openapi_valid".to_string(), "documented".to_string(), "tested".to_string()],
-            depends_on: vec!["data-modeling".to_string()],
-            suggested_tools: vec!["actix-web".to_string(), "warp".to_string(), "axum".to_string()],
-            patterns: vec!["rest".to_string(), "graphql".to_string(), "rpc".to_string()],
-        });
+        capabilities.insert(
+            "api-design".to_string(),
+            CapabilityDefinition {
+                name: "api-design".to_string(),
+                inputs: vec![
+                    "api_requirements.md".to_string(),
+                    "data_models.yaml".to_string(),
+                ],
+                outputs: vec!["openapi.yaml".to_string(), "src/api/**/*.rs".to_string()],
+                quality: vec![
+                    "openapi_valid".to_string(),
+                    "documented".to_string(),
+                    "tested".to_string(),
+                ],
+                depends_on: vec!["data-modeling".to_string()],
+                suggested_tools: vec![
+                    "actix-web".to_string(),
+                    "warp".to_string(),
+                    "axum".to_string(),
+                ],
+                patterns: vec!["rest".to_string(), "graphql".to_string(), "rpc".to_string()],
+            },
+        );
 
-        capabilities.insert("testing".to_string(), CapabilityDefinition {
-            name: "testing".to_string(),
-            inputs: vec!["src/**/*.rs".to_string(), "test_specs.md".to_string()],
-            outputs: vec!["tests/**/*.rs".to_string(), "coverage_report.html".to_string()],
-            quality: vec!["coverage>=85%".to_string(), "all_tests_pass".to_string()],
-            depends_on: vec![],
-            suggested_tools: vec!["cargo-test".to_string(), "proptest".to_string(), "mockall".to_string()],
-            patterns: vec!["unit_tests".to_string(), "integration_tests".to_string(), "property_tests".to_string()],
-        });
+        capabilities.insert(
+            "testing".to_string(),
+            CapabilityDefinition {
+                name: "testing".to_string(),
+                inputs: vec!["src/**/*.rs".to_string(), "test_specs.md".to_string()],
+                outputs: vec![
+                    "tests/**/*.rs".to_string(),
+                    "coverage_report.html".to_string(),
+                ],
+                quality: vec!["coverage>=85%".to_string(), "all_tests_pass".to_string()],
+                depends_on: vec![],
+                suggested_tools: vec![
+                    "cargo-test".to_string(),
+                    "proptest".to_string(),
+                    "mockall".to_string(),
+                ],
+                patterns: vec![
+                    "unit_tests".to_string(),
+                    "integration_tests".to_string(),
+                    "property_tests".to_string(),
+                ],
+            },
+        );
 
         capabilities
     }
@@ -483,29 +544,25 @@ Remember: You are part of a coordinated team. Always include clear context and n
     fn default_coordination_recipe(&self) -> CoordinationRecipe {
         CoordinationRecipe {
             name: "general-development".to_string(),
-            steps: vec![
-                CoordinationStep {
-                    id: "discover_work".to_string(),
-                    description: "Find available work matching capabilities".to_string(),
-                    mcp_function: "discover_work".to_string(),
-                    parameters: serde_json::json!({
-                        "agent_name": "{{agent_name}}",
-                        "capabilities": "{{capabilities}}",
-                        "max_tasks": 3
-                    }),
-                    success_criteria: "Relevant tasks identified".to_string(),
-                    failure_action: "Request assignment from coordinator".to_string(),
-                },
-            ],
+            steps: vec![CoordinationStep {
+                id: "discover_work".to_string(),
+                description: "Find available work matching capabilities".to_string(),
+                mcp_function: "discover_work".to_string(),
+                parameters: serde_json::json!({
+                    "agent_name": "{{agent_name}}",
+                    "capabilities": "{{capabilities}}",
+                    "max_tasks": 3
+                }),
+                success_criteria: "Relevant tasks identified".to_string(),
+                failure_action: "Request assignment from coordinator".to_string(),
+            }],
             timeouts: HashMap::new(),
-            error_handling: vec![
-                ErrorHandlingRule {
-                    condition: "General error".to_string(),
-                    action: "Log error and retry".to_string(),
-                    max_retries: 2,
-                    escalation_target: "human-supervisor".to_string(),
-                },
-            ],
+            error_handling: vec![ErrorHandlingRule {
+                condition: "General error".to_string(),
+                action: "Log error and retry".to_string(),
+                max_retries: 2,
+                escalation_target: "human-supervisor".to_string(),
+            }],
         }
     }
 }
@@ -607,8 +664,7 @@ axon analyze-messages --task-code TASK-001
 ```
 
 This enhanced setup ensures your AI agents follow 2025 best practices for effective multi-agent coordination.
-"#,
-        ai_tool_type = ai_tool_type
+"#
     )
 }
 
@@ -644,7 +700,7 @@ mod tests {
     #[test]
     fn test_capability_definitions() {
         let capabilities = EnhancedPromptBuilder::default_capabilities();
-        
+
         assert!(capabilities.contains_key("cli-development"));
         assert!(capabilities.contains_key("api-design"));
         assert!(capabilities.contains_key("testing"));
@@ -658,9 +714,9 @@ mod tests {
     #[test]
     fn test_coordination_recipes() {
         let recipes = EnhancedPromptBuilder::default_recipes();
-        
+
         assert!(recipes.contains_key("cli-development"));
-        
+
         let cli_recipe = &recipes["cli-development"];
         assert!(!cli_recipe.steps.is_empty());
         assert!(!cli_recipe.error_handling.is_empty());

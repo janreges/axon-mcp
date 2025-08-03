@@ -237,3 +237,89 @@ check-phase-ready:
 			exit 1; \
 		fi \
 	fi
+
+# =============================================================================
+# Development and Build Tasks
+# =============================================================================
+
+# Development targets for local testing and cross-platform builds
+.PHONY: dev-help install-targets check-cross test-cross build-cross lint fix-warnings pre-commit
+
+dev-help:
+	@echo ""
+	@echo "=== DEVELOPMENT TASKS ==="
+	@echo ""
+	@echo "🔧 Setup:"
+	@echo "  make install-targets  Install all Rust cross-compilation targets"
+	@echo ""
+	@echo "🧪 Testing:"
+	@echo "  make check-cross      Check compilation for all target platforms"
+	@echo "  make test-cross       Run cross-platform compatibility tests"
+	@echo "  make test             Run all tests"
+	@echo ""
+	@echo "🔨 Building:"
+	@echo "  make build-cross      Build for all target platforms"
+	@echo "  make build-release    Build release version"
+	@echo ""
+	@echo "🧹 Code Quality:"
+	@echo "  make lint             Run clippy lints"
+	@echo "  make fix-warnings     Fix automatically fixable warnings"
+	@echo "  make fmt              Format code"
+	@echo "  make pre-commit       Run all pre-commit checks"
+
+# Setup targets for cross-compilation
+install-targets:
+	@echo "📦 Installing Rust cross-compilation targets..."
+	rustup target add x86_64-unknown-linux-musl
+	rustup target add aarch64-unknown-linux-musl
+	rustup target add x86_64-pc-windows-msvc
+	rustup target add x86_64-apple-darwin
+	rustup target add aarch64-apple-darwin
+	@echo "✅ All targets installed!"
+
+# Cross-platform compilation check
+check-cross:
+	@echo "🌍 Cross-platform compilation check..."
+	@./scripts/test-cross-platform.sh
+
+# Comprehensive cross-platform testing
+test-cross: check-cross
+	@echo "✅ Cross-platform tests completed"
+
+# Run all tests
+test:
+	@echo "🧪 Running all tests..."
+	cargo test --workspace --all-features
+
+# Build release version
+build-release:
+	@echo "🚀 Building release version..."
+	cargo build --workspace --release
+
+# Build for all target platforms
+build-cross:
+	@echo "🌍 Building for all platforms..."
+	cargo build --target x86_64-unknown-linux-musl --bin axon-mcp --release
+	cargo build --target x86_64-pc-windows-msvc --bin axon-mcp --release
+	cargo build --target x86_64-apple-darwin --bin axon-mcp --release
+	cargo build --target aarch64-apple-darwin --bin axon-mcp --release
+
+# Lint code
+lint:
+	@echo "🔍 Running clippy lints..."
+	cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+# Fix automatically fixable warnings
+fix-warnings:
+	@echo "🔧 Fixing warnings..."
+	cargo fix --workspace --all-targets --all-features --allow-dirty
+	cargo clippy --workspace --all-targets --all-features --fix --allow-dirty
+
+# Format code
+fmt:
+	@echo "🎨 Formatting code..."
+	cargo fmt --all
+
+# Pre-commit checks - run this before committing!
+pre-commit: fmt lint check-cross test
+	@echo "✅ All pre-commit checks passed! Ready to commit."

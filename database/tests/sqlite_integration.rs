@@ -1,4 +1,6 @@
-use database::{SqliteTaskRepository, TaskRepository, NewTask, UpdateTask, TaskFilter, TaskState, TaskError};
+use database::{
+    NewTask, SqliteTaskRepository, TaskError, TaskFilter, TaskRepository, TaskState, UpdateTask,
+};
 use std::time::Duration;
 use tokio::time::Instant;
 
@@ -9,7 +11,7 @@ async fn create_test_repository() -> SqliteTaskRepository {
         .unwrap()
         .as_nanos();
     let thread_id = std::thread::current().id();
-    let db_name = format!(":memory:test_{}_{:?}", timestamp, thread_id);
+    let db_name = format!(":memory:test_{timestamp}_{thread_id:?}");
     let repo = SqliteTaskRepository::new(&db_name).await.unwrap();
     repo.migrate().await.unwrap();
     repo
@@ -18,10 +20,10 @@ async fn create_test_repository() -> SqliteTaskRepository {
 #[tokio::test]
 async fn test_repository_creation_and_health() {
     let repo = create_test_repository().await;
-    
+
     // Health check should pass
     assert!(repo.health_check().await.is_ok());
-    
+
     // Stats should work with empty database
     let stats = repo.get_stats().await.unwrap();
     assert_eq!(stats.total_tasks, 0);
@@ -32,29 +34,37 @@ async fn test_repository_creation_and_health() {
 #[tokio::test]
 async fn test_full_task_lifecycle() {
     let repo = create_test_repository().await;
-    
+
     // Create a new task
-    let new_task = NewTask::new("LIFECYCLE-001".to_string(), "Test Lifecycle".to_string(), "Complete task lifecycle test".to_string(), Some("test-agent".to_string()),  );
-    
+    let new_task = NewTask::new(
+        "LIFECYCLE-001".to_string(),
+        "Test Lifecycle".to_string(),
+        "Complete task lifecycle test".to_string(),
+        Some("test-agent".to_string()),
+    );
+
     let mut task = repo.create(new_task).await.unwrap();
     assert_eq!(task.state, TaskState::Created);
     assert!(task.done_at.is_none());
-    
+
     // Move through states
-    task = repo.set_state(task.id, TaskState::InProgress).await.unwrap();
+    task = repo
+        .set_state(task.id, TaskState::InProgress)
+        .await
+        .unwrap();
     assert_eq!(task.state, TaskState::InProgress);
-    
+
     task = repo.set_state(task.id, TaskState::Review).await.unwrap();
     assert_eq!(task.state, TaskState::Review);
-    
+
     task = repo.set_state(task.id, TaskState::Done).await.unwrap();
     assert_eq!(task.state, TaskState::Done);
     assert!(task.done_at.is_some());
-    
+
     // Archive the task
     task = repo.archive(task.id).await.unwrap();
     assert_eq!(task.state, TaskState::Archived);
-    
+
     // Verify we can still retrieve archived task
     let retrieved = repo.get_by_id(task.id).await.unwrap();
     assert!(retrieved.is_some());
@@ -64,11 +74,16 @@ async fn test_full_task_lifecycle() {
 #[tokio::test]
 async fn test_task_updates() {
     let repo = create_test_repository().await;
-    
-    let new_task = NewTask::new("UPDATE-001".to_string(), "Original Name".to_string(), "Original description".to_string(), Some("original-agent".to_string()),  );
-    
+
+    let new_task = NewTask::new(
+        "UPDATE-001".to_string(),
+        "Original Name".to_string(),
+        "Original description".to_string(),
+        Some("original-agent".to_string()),
+    );
+
     let task = repo.create(new_task).await.unwrap();
-    
+
     // Update all fields
     let updates = UpdateTask {
         name: Some("Updated Name".to_string()),
@@ -82,13 +97,16 @@ async fn test_task_updates() {
         workflow_definition_id: None,
         workflow_cursor: None,
     };
-    
+
     let updated_task = repo.update(task.id, updates).await.unwrap();
     assert_eq!(updated_task.name, "Updated Name");
     assert_eq!(updated_task.description, "Updated description");
-    assert_eq!(updated_task.owner_agent_name.as_deref(), Some("updated-agent"));
+    assert_eq!(
+        updated_task.owner_agent_name.as_deref(),
+        Some("updated-agent")
+    );
     assert_eq!(updated_task.code, "UPDATE-001"); // Code should not change
-    
+
     // Update partial fields
     let partial_updates = UpdateTask {
         name: Some("Partially Updated".to_string()),
@@ -102,25 +120,33 @@ async fn test_task_updates() {
         workflow_definition_id: None,
         workflow_cursor: None,
     };
-    
+
     let partially_updated = repo.update(task.id, partial_updates).await.unwrap();
     assert_eq!(partially_updated.name, "Partially Updated");
     assert_eq!(partially_updated.description, "Updated description"); // Should remain unchanged
-    assert_eq!(partially_updated.owner_agent_name.as_deref(), Some("updated-agent")); // Should remain unchanged
+    assert_eq!(
+        partially_updated.owner_agent_name.as_deref(),
+        Some("updated-agent")
+    ); // Should remain unchanged
 }
 
 #[tokio::test]
 async fn test_task_assignment() {
     let repo = create_test_repository().await;
-    
-    let new_task = NewTask::new("ASSIGN-001".to_string(), "Assignment Test".to_string(), "Test task assignment".to_string(), Some("original-agent".to_string()),  );
-    
+
+    let new_task = NewTask::new(
+        "ASSIGN-001".to_string(),
+        "Assignment Test".to_string(),
+        "Test task assignment".to_string(),
+        Some("original-agent".to_string()),
+    );
+
     let task = repo.create(new_task).await.unwrap();
-    
+
     // Assign to new agent
     let assigned_task = repo.assign(task.id, "new-agent").await.unwrap();
     assert_eq!(assigned_task.owner_agent_name.as_deref(), Some("new-agent"));
-    
+
     // Verify assignment persisted
     let retrieved = repo.get_by_id(task.id).await.unwrap().unwrap();
     assert_eq!(retrieved.owner_agent_name.as_deref(), Some("new-agent"));
@@ -129,21 +155,26 @@ async fn test_task_assignment() {
 #[tokio::test]
 async fn test_task_retrieval() {
     let repo = create_test_repository().await;
-    
-    let new_task = NewTask::new("RETRIEVE-001".to_string(), "Retrieval Test".to_string(), "Test task retrieval".to_string(), Some("test-agent".to_string()),  );
-    
+
+    let new_task = NewTask::new(
+        "RETRIEVE-001".to_string(),
+        "Retrieval Test".to_string(),
+        "Test task retrieval".to_string(),
+        Some("test-agent".to_string()),
+    );
+
     let created_task = repo.create(new_task).await.unwrap();
-    
+
     // Test get by ID
     let by_id = repo.get_by_id(created_task.id).await.unwrap();
     assert!(by_id.is_some());
     assert_eq!(by_id.unwrap().code, "RETRIEVE-001");
-    
+
     // Test get by code
     let by_code = repo.get_by_code("RETRIEVE-001").await.unwrap();
     assert!(by_code.is_some());
     assert_eq!(by_code.unwrap().id, created_task.id);
-    
+
     // Test non-existent lookups
     assert!(repo.get_by_id(99999).await.unwrap().is_none());
     assert!(repo.get_by_code("NON-EXISTENT").await.unwrap().is_none());
@@ -152,56 +183,88 @@ async fn test_task_retrieval() {
 #[tokio::test]
 async fn test_task_filtering() {
     let repo = create_test_repository().await;
-    
+
     // Create multiple tasks with different owners and states
     let tasks = vec![
-        NewTask::new("FILTER-001".to_string(), "Agent 1 Task 1".to_string(), "Task for agent 1".to_string(), Some("agent-1".to_string())),
-        NewTask::new("FILTER-002".to_string(), "Agent 1 Task 2".to_string(), "Another task for agent 1".to_string(), Some("agent-1".to_string())),
-        NewTask::new("FILTER-003".to_string(), "Agent 2 Task".to_string(), "Task for agent 2".to_string(), Some("agent-2".to_string())),
+        NewTask::new(
+            "FILTER-001".to_string(),
+            "Agent 1 Task 1".to_string(),
+            "Task for agent 1".to_string(),
+            Some("agent-1".to_string()),
+        ),
+        NewTask::new(
+            "FILTER-002".to_string(),
+            "Agent 1 Task 2".to_string(),
+            "Another task for agent 1".to_string(),
+            Some("agent-1".to_string()),
+        ),
+        NewTask::new(
+            "FILTER-003".to_string(),
+            "Agent 2 Task".to_string(),
+            "Task for agent 2".to_string(),
+            Some("agent-2".to_string()),
+        ),
     ];
-    
+
     let mut created_tasks = Vec::new();
     for task in tasks {
         created_tasks.push(repo.create(task).await.unwrap());
     }
-    
+
     // Move one task to InProgress
-    repo.set_state(created_tasks[0].id, TaskState::InProgress).await.unwrap();
-    
+    repo.set_state(created_tasks[0].id, TaskState::InProgress)
+        .await
+        .unwrap();
+
     // Test filtering by owner
-    let agent1_tasks = repo.list(TaskFilter {
-        owner: Some("agent-1".to_string()),
-        ..Default::default()
-    }).await.unwrap();
+    let agent1_tasks = repo
+        .list(TaskFilter {
+            owner: Some("agent-1".to_string()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
     assert_eq!(agent1_tasks.len(), 2);
-    
-    let agent2_tasks = repo.list(TaskFilter {
-        owner: Some("agent-2".to_string()),
-        ..Default::default()
-    }).await.unwrap();
+
+    let agent2_tasks = repo
+        .list(TaskFilter {
+            owner: Some("agent-2".to_string()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
     assert_eq!(agent2_tasks.len(), 1);
-    
+
     // Test filtering by state
-    let created_tasks_filter = repo.list(TaskFilter {
-        state: Some(TaskState::Created),
-        ..Default::default()
-    }).await.unwrap();
+    let created_tasks_filter = repo
+        .list(TaskFilter {
+            state: Some(TaskState::Created),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
     assert_eq!(created_tasks_filter.len(), 2);
-    
-    let in_progress_tasks = repo.list(TaskFilter {
-        state: Some(TaskState::InProgress),
-        ..Default::default()
-    }).await.unwrap();
+
+    let in_progress_tasks = repo
+        .list(TaskFilter {
+            state: Some(TaskState::InProgress),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
     assert_eq!(in_progress_tasks.len(), 1);
-    
+
     // Test combined filters
-    let agent1_created = repo.list(TaskFilter {
-        owner: Some("agent-1".to_string()),
-        state: Some(TaskState::Created),
-        ..Default::default()
-    }).await.unwrap();
+    let agent1_created = repo
+        .list(TaskFilter {
+            owner: Some("agent-1".to_string()),
+            state: Some(TaskState::Created),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
     assert_eq!(agent1_created.len(), 1);
-    
+
     // Test listing all
     let all_tasks = repo.list(TaskFilter::default()).await.unwrap();
     assert_eq!(all_tasks.len(), 3);
@@ -210,39 +273,56 @@ async fn test_task_filtering() {
 #[tokio::test]
 async fn test_error_conditions() {
     let repo = create_test_repository().await;
-    
+
     // Test empty field validation
-    let invalid_task = NewTask::new("".to_string(), // Empty code
-        "Valid Name".to_string(), "Valid description".to_string(), Some("valid-agent".to_string()),  );
-    
+    let invalid_task = NewTask::new(
+        "".to_string(), // Empty code
+        "Valid Name".to_string(),
+        "Valid description".to_string(),
+        Some("valid-agent".to_string()),
+    );
+
     let result = repo.create(invalid_task).await;
     assert!(result.is_err());
     match result.unwrap_err() {
         TaskError::Validation(msg) => assert!(msg.contains("code")),
-        other => panic!("Expected validation error, got: {:?}", other),
+        other => panic!("Expected validation error, got: {other:?}"),
     }
-    
+
     // Test duplicate code error
-    let task1 = NewTask::new("DUPLICATE".to_string(), "First Task".to_string(), "First task".to_string(), Some("agent-1".to_string()),  );
-    
+    let task1 = NewTask::new(
+        "DUPLICATE".to_string(),
+        "First Task".to_string(),
+        "First task".to_string(),
+        Some("agent-1".to_string()),
+    );
+
     repo.create(task1.clone()).await.unwrap();
-    
+
     let result = repo.create(task1).await;
     assert!(result.is_err());
     match result.unwrap_err() {
         TaskError::DuplicateCode(_) => {}
-        other => panic!("Expected duplicate code error, got: {:?}", other),
+        other => panic!("Expected duplicate code error, got: {other:?}"),
     }
-    
+
     // Test not found errors
     assert!(repo.update(99999, UpdateTask::default()).await.is_err());
     assert!(repo.set_state(99999, TaskState::InProgress).await.is_err());
     assert!(repo.assign(99999, "new-agent").await.is_err());
     assert!(repo.archive(99999).await.is_err());
-    
+
     // Test invalid state transitions
-    let task = repo.create(NewTask::new("STATE-TEST".to_string(), "State Test".to_string(), "Test invalid transitions".to_string(), Some("test-agent".to_string()))).await.unwrap();
-    
+    let task = repo
+        .create(NewTask::new(
+            "STATE-TEST".to_string(),
+            "State Test".to_string(),
+            "Test invalid transitions".to_string(),
+            Some("test-agent".to_string()),
+        ))
+        .await
+        .unwrap();
+
     // Invalid transition: Created -> Archived (must go through Done first)
     let result = repo.set_state(task.id, TaskState::Archived).await;
     assert!(result.is_err());
@@ -251,75 +331,100 @@ async fn test_error_conditions() {
             assert_eq!(from, TaskState::Created);
             assert_eq!(to, TaskState::Archived);
         }
-        other => panic!("Expected invalid state transition error, got: {:?}", other),
+        other => panic!("Expected invalid state transition error, got: {other:?}"),
     }
 }
 
 #[tokio::test]
 async fn test_performance_requirements() {
     let repo = create_test_repository().await;
-    
+
     // Create operation should complete in <100ms
     let start = Instant::now();
-    let task = repo.create(NewTask::new("PERF-001".to_string(), "Performance Test".to_string(), "Test performance requirements".to_string(), Some("perf-agent".to_string()))).await.unwrap();
+    let task = repo
+        .create(NewTask::new(
+            "PERF-001".to_string(),
+            "Performance Test".to_string(),
+            "Test performance requirements".to_string(),
+            Some("perf-agent".to_string()),
+        ))
+        .await
+        .unwrap();
     let create_duration = start.elapsed();
-    assert!(create_duration < Duration::from_millis(100), "Create took {:?}", create_duration);
-    
+    assert!(
+        create_duration < Duration::from_millis(100),
+        "Create took {create_duration:?}"
+    );
+
     // Read operations should complete in <100ms
     let start = Instant::now();
     repo.get_by_id(task.id).await.unwrap();
     let read_duration = start.elapsed();
-    assert!(read_duration < Duration::from_millis(100), "Read took {:?}", read_duration);
-    
+    assert!(
+        read_duration < Duration::from_millis(100),
+        "Read took {read_duration:?}"
+    );
+
     // Update operations should complete in <100ms
     let start = Instant::now();
-    repo.update(task.id, UpdateTask {
-        name: Some("Updated Name".to_string()),
-        ..Default::default()
-    }).await.unwrap();
+    repo.update(
+        task.id,
+        UpdateTask {
+            name: Some("Updated Name".to_string()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
     let update_duration = start.elapsed();
-    assert!(update_duration < Duration::from_millis(100), "Update took {:?}", update_duration);
-    
+    assert!(
+        update_duration < Duration::from_millis(100),
+        "Update took {update_duration:?}"
+    );
+
     // List operations should complete in <100ms
     let start = Instant::now();
     repo.list(TaskFilter::default()).await.unwrap();
     let list_duration = start.elapsed();
-    assert!(list_duration < Duration::from_millis(100), "List took {:?}", list_duration);
+    assert!(
+        list_duration < Duration::from_millis(100),
+        "List took {list_duration:?}"
+    );
 }
 
 #[tokio::test]
 async fn test_concurrent_operations() {
     let repo = create_test_repository().await;
-    
+
     // Create multiple tasks concurrently
     let mut handles = Vec::new();
-    
+
     for i in 0..10 {
         let repo_clone = repo.clone();
         let handle = tokio::spawn(async move {
             let task = NewTask::new(
-                format!("CONCURRENT-{:03}", i),
-                format!("Concurrent Task {}", i),
-                format!("Task created concurrently {}", i),
+                format!("CONCURRENT-{i:03}"),
+                format!("Concurrent Task {i}"),
+                format!("Task created concurrently {i}"),
                 Some("concurrent-agent".to_string()),
             );
             repo_clone.create(task).await
         });
         handles.push(handle);
     }
-    
+
     // Wait for all tasks to complete
     let mut results = Vec::new();
     for handle in handles {
         results.push(handle.await.unwrap());
     }
-    
+
     // All operations should succeed
     assert_eq!(results.len(), 10);
     for result in results {
         assert!(result.is_ok());
     }
-    
+
     // Verify all tasks were created
     let all_tasks = repo.list(TaskFilter::default()).await.unwrap();
     assert_eq!(all_tasks.len(), 10);
@@ -328,20 +433,40 @@ async fn test_concurrent_operations() {
 #[tokio::test]
 async fn test_repository_stats() {
     let repo = create_test_repository().await;
-    
+
     // Create tasks with different states and owners
-    let task1 = repo.create(NewTask::new("STATS-001".to_string(), "Stats Test 1".to_string(), "First stats test task".to_string(), Some("agent-1".to_string()))).await.unwrap();
-    
-    let task2 = repo.create(NewTask::new("STATS-002".to_string(), "Stats Test 2".to_string(), "Second stats test task".to_string(), Some("agent-2".to_string()))).await.unwrap();
-    
+    let task1 = repo
+        .create(NewTask::new(
+            "STATS-001".to_string(),
+            "Stats Test 1".to_string(),
+            "First stats test task".to_string(),
+            Some("agent-1".to_string()),
+        ))
+        .await
+        .unwrap();
+
+    let task2 = repo
+        .create(NewTask::new(
+            "STATS-002".to_string(),
+            "Stats Test 2".to_string(),
+            "Second stats test task".to_string(),
+            Some("agent-2".to_string()),
+        ))
+        .await
+        .unwrap();
+
     // Move tasks to different states
-    repo.set_state(task1.id, TaskState::InProgress).await.unwrap();
-    repo.set_state(task2.id, TaskState::InProgress).await.unwrap();
+    repo.set_state(task1.id, TaskState::InProgress)
+        .await
+        .unwrap();
+    repo.set_state(task2.id, TaskState::InProgress)
+        .await
+        .unwrap();
     repo.set_state(task2.id, TaskState::Done).await.unwrap();
-    
+
     // Get stats
     let stats = repo.get_stats().await.unwrap();
-    
+
     assert_eq!(stats.total_tasks, 2);
     assert_eq!(stats.tasks_by_state.get(&TaskState::InProgress), Some(&1));
     assert_eq!(stats.tasks_by_state.get(&TaskState::Done), Some(&1));

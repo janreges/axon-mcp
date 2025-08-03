@@ -11,17 +11,17 @@ pub enum TaskCode {
 }
 
 /// Core task representation in the MCP Task Management System.
-/// 
+///
 /// A task represents a unit of work that can be tracked through its lifecycle,
 /// assigned to agents, and managed via the MCP protocol. Each task has a unique
 /// numeric ID and human-readable code for easy reference.
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```rust
 /// use task_core::models::{Task, TaskState};
 /// use chrono::Utc;
-/// 
+///
 /// let task = Task {
 ///     id: 42,
 ///     code: "FEAT-001".to_string(),
@@ -40,7 +40,7 @@ pub enum TaskCode {
 ///     estimated_effort: Some(120), // 2 hours
 ///     confidence_threshold: 0.8,
 /// };
-/// 
+///
 /// // Check if task can transition to InProgress
 /// assert!(task.can_transition_to(TaskState::InProgress));
 /// ```
@@ -62,7 +62,7 @@ pub struct Task {
     pub inserted_at: DateTime<Utc>,
     /// Completion timestamp
     pub done_at: Option<DateTime<Utc>>,
-    
+
     // MCP v2 Extensions
     /// Workflow definition ID for structured task execution
     pub workflow_definition_id: Option<i32>,
@@ -83,26 +83,26 @@ pub struct Task {
 }
 
 /// Task lifecycle states defining the progression of work.
-/// 
+///
 /// Tasks move through a defined state machine with validated transitions.
 /// The typical flow is: Created → InProgress → Review → Done → Archived,
 /// with Blocked as a temporary state that can occur during InProgress.
-/// 
+///
 /// # State Transitions
-/// 
+///
 /// - `Created` → `InProgress`
 /// - `InProgress` → `Blocked`, `Review`, `Done`  
 /// - `Blocked` → `InProgress`
 /// - `Review` → `InProgress`, `Done`
 /// - `Done` → `Archived` (via archive_task only)
 /// - `Archived` → (no transitions allowed)
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```rust
 /// use task_core::models::{Task, TaskState};
 /// use chrono::Utc;
-/// 
+///
 /// let task = Task::new(
 ///     1,
 ///     "TEST-01".to_string(),
@@ -113,7 +113,7 @@ pub struct Task {
 ///     Utc::now(),
 ///     None,
 /// );
-/// 
+///
 /// // Check valid transitions
 /// if task.can_transition_to(TaskState::InProgress) {
 ///     // Safe to move to InProgress
@@ -154,7 +154,7 @@ pub struct NewTask {
     pub description: String,
     /// Assigned agent identifier (None for unassigned tasks)
     pub owner_agent_name: Option<String>,
-    
+
     // MCP v2 Extensions
     /// Workflow definition ID for structured task execution
     pub workflow_definition_id: Option<i32>,
@@ -213,7 +213,7 @@ pub struct UpdateTask {
     pub description: Option<String>,
     /// Optional new owner agent
     pub owner_agent_name: Option<String>,
-    
+
     // MCP v2 Extensions
     /// Optional workflow definition ID
     pub workflow_definition_id: Option<Option<i32>>,
@@ -236,7 +236,7 @@ impl UpdateTask {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Create UpdateTask with name, description, and owner (common pattern)
     pub fn with_basic_fields(
         name: Option<String>,
@@ -260,25 +260,25 @@ impl UpdateTask {
 pub struct TaskFilter {
     /// Filter by owner agent name
     pub owner: Option<String>,
-    
+
     /// Filter by task state
     pub state: Option<TaskState>,
-    
+
     /// Filter tasks created on or after this date
     pub date_from: Option<DateTime<Utc>>,
-    
+
     /// Filter tasks created on or before this date
     pub date_to: Option<DateTime<Utc>>,
-    
+
     /// Filter tasks completed on or after this date
     pub completed_after: Option<DateTime<Utc>>,
-    
+
     /// Filter tasks completed on or before this date
     pub completed_before: Option<DateTime<Utc>>,
-    
+
     /// Maximum number of tasks to return (for pagination)
     pub limit: Option<u32>,
-    
+
     /// Number of tasks to skip (for pagination)
     pub offset: Option<u32>,
 }
@@ -338,7 +338,7 @@ pub struct TaskMessage {
 // Note: MessageType is now a String for project flexibility
 // Projects can define their own message types like:
 // - "handoff" - předávací protokoly mezi agenty
-// - "comment" - obecné komentáře  
+// - "comment" - obecné komentáře
 // - "question" - otázky vyžadující odpověď
 // - "blocker" - blokující problémy
 // - "solution" - řešení a návrhy
@@ -567,6 +567,7 @@ pub struct HandoffPackage {
 
 impl Task {
     /// Create a new Task with default MCP v2 values (for backward compatibility)
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: i32,
         code: String,
@@ -600,38 +601,38 @@ impl Task {
     /// Check if the task can transition to the given state
     pub fn can_transition_to(&self, new_state: TaskState) -> bool {
         use TaskState::*;
-        
+
         match (self.state, new_state) {
             // Can't transition to the same state
             (current, new) if current == new => false,
-            
+
             // Valid transitions from Created
             (Created, InProgress) => true,
             (Created, PendingDecomposition) => true,
             (Created, WaitingForDependency) => true,
-            
+
             // Valid transitions from InProgress
             (InProgress, Blocked | Review | Done | PendingHandoff) => true,
-            
+
             // Valid transitions from Blocked
             (Blocked, InProgress) => true,
-            
+
             // Valid transitions from Review
             (Review, InProgress | Done) => true,
-            
+
             // Valid transitions from Done
             (Done, Archived) => true,
-            
+
             // New MCP v2 transitions
             (PendingDecomposition, Created) => true, // After decomposition
-            (PendingHandoff, InProgress) => true, // When handoff accepted
-            (_, Quarantined) => true, // Any state can be quarantined
-            (Quarantined, Created) => true, // Reset after human review
+            (PendingHandoff, InProgress) => true,    // When handoff accepted
+            (_, Quarantined) => true,                // Any state can be quarantined
+            (Quarantined, Created) => true,          // Reset after human review
             (WaitingForDependency, Created) => true, // When dependencies met
-            
+
             // No valid transitions from Archived
             (Archived, _) => false,
-            
+
             // All other transitions are invalid
             _ => false,
         }
@@ -642,7 +643,7 @@ impl std::fmt::Display for TaskState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TaskState::Created => write!(f, "Created"),
-            TaskState::InProgress => write!(f, "InProgress"), 
+            TaskState::InProgress => write!(f, "InProgress"),
             TaskState::Blocked => write!(f, "Blocked"),
             TaskState::Review => write!(f, "Review"),
             TaskState::Done => write!(f, "Done"),

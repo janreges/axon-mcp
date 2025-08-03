@@ -33,55 +33,82 @@
 //! TaskValidator::validate_new_task(&new_task).unwrap();
 //! ```
 
-pub mod models;
-pub mod error;
-pub mod repository;
-pub mod protocol;
-pub mod validation;
-pub mod circuit_breaker;
-pub mod mcp_v2_extensions;
-pub mod workspace_setup;
-pub mod prompt_templates;
 pub mod ai_tool_adapters;
+pub mod circuit_breaker;
+pub mod error;
+pub mod mcp_v2_extensions;
+pub mod models;
+pub mod prompt_templates;
+pub mod protocol;
+pub mod repository;
+pub mod validation;
+pub mod workspace_setup;
 
 // Re-export commonly used types at the crate root for convenience
-pub use models::{
-    Task, TaskState, TaskFilter, NewTask, UpdateTask,
-    // MCP v2 New Entity Types
-    KnowledgeObject, TaskMessage, AgentProfile, AgentStatus,
-    WorkflowDefinition, SystemEvent, EventSeverity, WorkSession,
-};
-pub use error::{TaskError, Result};
-pub use repository::{TaskRepository, TaskMessageRepository, WorkspaceContextRepository, RepositoryStats};
-pub use protocol::{
-    ProtocolHandler, HealthStatus,
-    CreateTaskParams, UpdateTaskParams, SetStateParams,
-    GetTaskByIdParams, GetTaskByCodeParams, ListTasksParams,
-    AssignTaskParams, ArchiveTaskParams,
-    // MCP v2 Advanced Multi-Agent Types
-    DiscoverWorkParams, ClaimTaskParams, ReleaseTaskParams,
-    StartWorkSessionParams, EndWorkSessionParams, WorkSessionInfo,
-    // Task Messaging Types
-    CreateTaskMessageParams, GetTaskMessagesParams,
-    // Workspace Setup Types
-    GetSetupInstructionsParams, GetAgenticWorkflowDescriptionParams, RegisterAgentParams,
-    GetInstructionsForMainAiFileParams, CreateMainAiFileParams, GetWorkspaceManifestParams,
-};
-pub use validation::TaskValidator;
-pub use circuit_breaker::{CircuitBreaker, FailureType, CircuitState, CircuitBreakerAction};
+pub use circuit_breaker::{CircuitBreaker, CircuitBreakerAction, CircuitState, FailureType};
+pub use error::{Result, TaskError};
 pub use mcp_v2_extensions::{
-    DiscoverWorkResponse, PrerequisiteAction, WorkDiscoveryConfig, ClaimResult,
-    CapabilityMatcher, PriorityCalculator, SimpleWorkSession, AgentWorkload, SimpleKnowledgeEntry,
+    AgentWorkload, CapabilityMatcher, ClaimResult, DiscoverWorkResponse, PrerequisiteAction,
+    PriorityCalculator, SimpleKnowledgeEntry, SimpleWorkSession, WorkDiscoveryConfig,
 };
-pub use workspace_setup::{
-    WorkspaceSetupService, WorkspaceSetupConfig, WorkspaceSetupError, WorkspaceSetupResult,
-    AiToolType, PrdDocument, SetupInstructions, AgenticWorkflowDescription, 
-    AgentRegistration, MainAiFileData, WorkspaceManifest, MainAiFileInstructions,
-    WorkspaceContext, GeneratedFileMetadata,
+pub use models::{
+    AgentProfile,
+    AgentStatus,
+    EventSeverity,
+    // MCP v2 New Entity Types
+    KnowledgeObject,
+    NewTask,
+    SystemEvent,
+    Task,
+    TaskFilter,
+    TaskMessage,
+    TaskState,
+    UpdateTask,
+    WorkSession,
+    WorkflowDefinition,
 };
 pub use prompt_templates::{
-    EnhancedPromptBuilder, AgentContract, CapabilityDefinition, CoordinationRecipe,
-    generate_enhanced_setup_instructions,
+    generate_enhanced_setup_instructions, AgentContract, CapabilityDefinition, CoordinationRecipe,
+    EnhancedPromptBuilder,
+};
+pub use protocol::{
+    ArchiveTaskParams,
+    AssignTaskParams,
+    ClaimTaskParams,
+    CreateMainAiFileParams,
+    // Task Messaging Types
+    CreateTaskMessageParams,
+    CreateTaskParams,
+    // MCP v2 Advanced Multi-Agent Types
+    DiscoverWorkParams,
+    EndWorkSessionParams,
+    GetAgenticWorkflowDescriptionParams,
+    GetInstructionsForMainAiFileParams,
+    // Workspace Setup Types
+    GetSetupInstructionsParams,
+    GetTaskByCodeParams,
+    GetTaskByIdParams,
+    GetTaskMessagesParams,
+    GetWorkspaceManifestParams,
+    HealthStatus,
+    ListTasksParams,
+    ProtocolHandler,
+    RegisterAgentParams,
+    ReleaseTaskParams,
+    SetStateParams,
+    StartWorkSessionParams,
+    UpdateTaskParams,
+    WorkSessionInfo,
+};
+pub use repository::{
+    RepositoryStats, TaskMessageRepository, TaskRepository, WorkspaceContextRepository,
+};
+pub use validation::TaskValidator;
+pub use workspace_setup::{
+    AgentRegistration, AgenticWorkflowDescription, AiToolType, GeneratedFileMetadata,
+    MainAiFileData, MainAiFileInstructions, PrdDocument, SetupInstructions, WorkspaceContext,
+    WorkspaceManifest, WorkspaceSetupConfig, WorkspaceSetupError, WorkspaceSetupResult,
+    WorkspaceSetupService,
 };
 
 /// Current version of the core crate
@@ -95,6 +122,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(clippy::const_is_empty)]
     fn test_crate_constants() {
         assert!(!VERSION.is_empty());
         assert_eq!(CRATE_NAME, "task-core");
@@ -102,12 +130,12 @@ mod tests {
 
     #[test]
     fn test_re_exports() {
-        use crate::{TaskState, TaskError};
-        
+        use crate::{TaskError, TaskState};
+
         // Test that re-exports work
         let state = TaskState::Created;
-        assert_eq!(format!("{}", state), "Created");
-        
+        assert_eq!(format!("{state}"), "Created");
+
         let error = TaskError::not_found_id(1);
         assert!(error.is_not_found());
     }

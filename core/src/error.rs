@@ -1,28 +1,28 @@
-use thiserror::Error;
 use crate::models::TaskState;
+use thiserror::Error;
 
 /// Result type alias for task operations
 pub type Result<T> = std::result::Result<T, TaskError>;
 
 /// Comprehensive error types for the MCP Task Management System.
-/// 
+///
 /// These errors cover all possible failure modes in task operations,
 /// from validation failures to database errors. Each error type maps
 /// to appropriate HTTP status codes for API responses.
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```rust
 /// use task_core::error::{TaskError, Result};
 /// use task_core::models::TaskState;
-/// 
+///
 /// // Create specific error types
 /// let not_found = TaskError::not_found_id(42);
 /// let invalid_transition = TaskError::invalid_transition(
-///     TaskState::Created, 
+///     TaskState::Created,
 ///     TaskState::Done
 /// );
-/// 
+///
 /// // Check error categories
 /// assert!(not_found.is_not_found());
 /// assert_eq!(not_found.status_code(), 404);
@@ -66,12 +66,11 @@ pub enum TaskError {
     #[error("Unsupported AI tool: {0}")]
     UnsupportedAiTool(String),
 
-    /// Unsupported operation 
+    /// Unsupported operation
     #[error("Unsupported operation: {0}")]
     UnsupportedOperation(String),
 
     // MCP v2 Multi-Agent Errors
-
     /// Task is already claimed by another agent
     #[error("Task {0} is already claimed by {1}")]
     AlreadyClaimed(i32, String),
@@ -95,7 +94,7 @@ pub enum TaskError {
     /// Agent validation failed
     #[error("Unknown agent: {0}")]
     UnknownAgent(String),
-    
+
     /// Conflict error (e.g., optimistic locking failure)
     #[error("Conflict: {0}")]
     Conflict(String),
@@ -172,15 +171,15 @@ impl TaskError {
             TaskError::Internal(_) => 500,
             // MCP v2 Multi-Agent Errors
             TaskError::AlreadyClaimed(_, _) => 409, // Conflict
-            TaskError::NotOwned(_, _) => 403, // Forbidden
+            TaskError::NotOwned(_, _) => 403,       // Forbidden
             TaskError::InsufficientCapabilities(_, _) => 422, // Unprocessable Entity
-            TaskError::SessionNotFound(_) => 404, // Not Found
+            TaskError::SessionNotFound(_) => 404,   // Not Found
             TaskError::CircuitBreakerOpen(_) => 503, // Service Unavailable
-            TaskError::UnknownAgent(_) => 400, // Bad Request
-            TaskError::Conflict(_) => 409, // Conflict
-            TaskError::Serialization(_) => 500, // Internal Server Error
-            TaskError::Deserialization(_) => 500, // Internal Server Error
-            TaskError::DuplicateKey(_) => 409, // Conflict
+            TaskError::UnknownAgent(_) => 400,      // Bad Request
+            TaskError::Conflict(_) => 409,          // Conflict
+            TaskError::Serialization(_) => 500,     // Internal Server Error
+            TaskError::Deserialization(_) => 500,   // Internal Server Error
+            TaskError::DuplicateKey(_) => 409,      // Conflict
             TaskError::UnsupportedAiTool(_) => 400, // Bad Request
             TaskError::UnsupportedOperation(_) => 501, // Not Implemented
         }
@@ -194,32 +193,44 @@ mod tests {
     #[test]
     fn test_error_creation() {
         let error = TaskError::not_found_id(42);
-        assert_eq!(error, TaskError::NotFound("Task with ID 42 not found".to_string()));
+        assert_eq!(
+            error,
+            TaskError::NotFound("Task with ID 42 not found".to_string())
+        );
         assert!(error.is_not_found());
         assert_eq!(error.status_code(), 404);
 
         let error = TaskError::not_found_code("ARCH-01");
-        assert_eq!(error, TaskError::NotFound("Task with code 'ARCH-01' not found".to_string()));
-        
+        assert_eq!(
+            error,
+            TaskError::NotFound("Task with code 'ARCH-01' not found".to_string())
+        );
+
         let error = TaskError::invalid_code_format("invalid-code");
         assert!(error.is_validation());
         assert_eq!(error.status_code(), 400);
 
         let error = TaskError::invalid_transition(TaskState::Created, TaskState::Done);
-        assert_eq!(error, TaskError::InvalidStateTransition(TaskState::Created, TaskState::Done));
+        assert_eq!(
+            error,
+            TaskError::InvalidStateTransition(TaskState::Created, TaskState::Done)
+        );
         assert_eq!(error.status_code(), 422);
     }
 
     #[test]
     fn test_error_display() {
         let error = TaskError::NotFound("Task not found".to_string());
-        assert_eq!(format!("{}", error), "Task not found: Task not found");
+        assert_eq!(format!("{error}"), "Task not found: Task not found");
 
         let error = TaskError::InvalidStateTransition(TaskState::Created, TaskState::Done);
-        assert_eq!(format!("{}", error), "Invalid state transition from Created to Done");
+        assert_eq!(
+            format!("{error}"),
+            "Invalid state transition from Created to Done"
+        );
 
         let error = TaskError::Validation("Invalid input".to_string());
-        assert_eq!(format!("{}", error), "Validation error: Invalid input");
+        assert_eq!(format!("{error}"), "Validation error: Invalid input");
     }
 
     #[test]

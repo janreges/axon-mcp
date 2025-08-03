@@ -1,59 +1,57 @@
+use async_trait::async_trait;
 /// AI Tool Adapter Pattern for Multi-Tool Support
-/// 
+///
 /// This module provides an extensible adapter pattern for supporting different AI tools
 /// in Axon workspace setup automation. Currently supports Claude Code with planned
 /// support for AutoGen and CrewAI.
-
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use async_trait::async_trait;
 
-use crate::workspace_setup::{
-    AiToolType, PrdDocument, AgenticWorkflowDescription, 
-    SetupInstructions, MainAiFileInstructions, MainAiFileData,
-    WorkspaceManifest, AgentRegistration,
-};
+use crate::error::{Result, TaskError};
 use crate::prompt_templates::EnhancedPromptBuilder;
-use crate::error::{TaskError, Result};
+use crate::workspace_setup::{
+    AgentRegistration, AgenticWorkflowDescription, AiToolType, MainAiFileData,
+    MainAiFileInstructions, PrdDocument, SetupInstructions, WorkspaceManifest,
+};
 
 /// Trait defining the interface that all AI tool adapters must implement
 #[async_trait]
 pub trait AiToolAdapter: Send + Sync {
     /// Get the AI tool type this adapter supports
     fn tool_type(&self) -> AiToolType;
-    
+
     /// Get setup instructions specific to this AI tool
     async fn get_setup_instructions(&self) -> Result<SetupInstructions>;
-    
+
     /// Get instructions for creating the main coordination file
     async fn get_main_file_instructions(&self) -> Result<MainAiFileInstructions>;
-    
+
     /// Create the main coordination file with tool-specific content
     async fn create_main_file(
-        &self, 
-        content: &str, 
+        &self,
+        content: &str,
         project_name: Option<&str>,
-        overwrite_existing: bool
+        overwrite_existing: bool,
     ) -> Result<MainAiFileData>;
-    
+
     /// Generate agent definition files for this tool
     async fn generate_agent_files(
         &self,
         agents: &[AgentRegistration],
-        output_dir: &str
+        output_dir: &str,
     ) -> Result<Vec<String>>;
-    
+
     /// Create tool-specific workspace structure (directories, config files)
     async fn create_workspace_structure(&self, output_dir: &str) -> Result<()>;
-    
+
     /// Generate workspace manifest with tool-specific metadata
     async fn generate_manifest(
         &self,
         prd: &PrdDocument,
         workflow: &AgenticWorkflowDescription,
-        include_generated_files: bool
+        include_generated_files: bool,
     ) -> Result<WorkspaceManifest>;
-    
+
     /// Validate that a workspace is properly configured for this tool
     async fn validate_workspace(&self, workspace_dir: &str) -> Result<ValidationResult>;
 }
@@ -102,19 +100,19 @@ impl AiToolAdapterRegistry {
         let mut registry = Self {
             adapters: HashMap::new(),
         };
-        
+
         // Register built-in adapters
         registry.register(Box::new(ClaudeCodeAdapter::new()));
-        
+
         registry
     }
-    
+
     /// Register a new adapter for an AI tool type
     pub fn register(&mut self, adapter: Box<dyn AiToolAdapter>) {
         let tool_type = adapter.tool_type();
         self.adapters.insert(tool_type, adapter);
     }
-    
+
     /// Get an adapter for a specific AI tool type
     pub fn get_adapter(&self, tool_type: AiToolType) -> Result<&dyn AiToolAdapter> {
         self.adapters
@@ -122,12 +120,12 @@ impl AiToolAdapterRegistry {
             .map(|adapter| adapter.as_ref())
             .ok_or_else(|| TaskError::UnsupportedAiTool(tool_type.to_string()))
     }
-    
+
     /// Get list of supported AI tool types
     pub fn supported_tools(&self) -> Vec<AiToolType> {
         self.adapters.keys().cloned().collect()
     }
-    
+
     /// Check if a tool type is supported
     pub fn is_supported(&self, tool_type: AiToolType) -> bool {
         self.adapters.contains_key(&tool_type)
@@ -172,6 +170,12 @@ impl Default for ClaudeCodeConfig {
     }
 }
 
+impl Default for ClaudeCodeAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ClaudeCodeAdapter {
     /// Create a new Claude Code adapter with default configuration
     pub fn new() -> Self {
@@ -180,10 +184,10 @@ impl ClaudeCodeAdapter {
             prompt_builder: EnhancedPromptBuilder::new(),
         }
     }
-    
+
     /// Create a new Claude Code adapter with custom configuration
     pub fn with_config(config: ClaudeCodeConfig) -> Self {
-        Self { 
+        Self {
             config,
             prompt_builder: EnhancedPromptBuilder::new(),
         }
@@ -195,10 +199,10 @@ impl AiToolAdapter for ClaudeCodeAdapter {
     fn tool_type(&self) -> AiToolType {
         AiToolType::ClaudeCode
     }
-    
+
     async fn get_setup_instructions(&self) -> Result<SetupInstructions> {
-        use crate::workspace_setup::{SetupStep, RequiredMcpFunction, ManifestTemplate};
-        
+        use crate::workspace_setup::{ManifestTemplate, RequiredMcpFunction, SetupStep};
+
         Ok(SetupInstructions {
             schema_version: "2.0".to_string(), // Updated for 2025 enhancements
             ai_tool_type: AiToolType::ClaudeCode,
@@ -323,11 +327,11 @@ impl AiToolAdapter for ClaudeCodeAdapter {
             },
         })
     }
-    
+
     async fn get_main_file_instructions(&self) -> Result<MainAiFileInstructions> {
         use crate::workspace_setup::SectionTemplate;
         use std::collections::HashMap;
-        
+
         Ok(MainAiFileInstructions {
             ai_tool_type: AiToolType::ClaudeCode,
             file_name: self.config.main_file_name.clone(),
@@ -340,8 +344,14 @@ impl AiToolAdapter for ClaudeCodeAdapter {
                     required: true,
                     placeholders: {
                         let mut map = HashMap::new();
-                        map.insert("project_name".to_string(), "Name of the project from PRD".to_string());
-                        map.insert("project_description".to_string(), "Brief project description".to_string());
+                        map.insert(
+                            "project_name".to_string(),
+                            "Name of the project from PRD".to_string(),
+                        );
+                        map.insert(
+                            "project_description".to_string(),
+                            "Brief project description".to_string(),
+                        );
                         map
                     },
                 },
@@ -353,7 +363,10 @@ impl AiToolAdapter for ClaudeCodeAdapter {
                     required: true,
                     placeholders: {
                         let mut map = HashMap::new();
-                        map.insert("coordination_instructions".to_string(), "Instructions for agent coordination through Axon MCP".to_string());
+                        map.insert(
+                            "coordination_instructions".to_string(),
+                            "Instructions for agent coordination through Axon MCP".to_string(),
+                        );
                         map
                     },
                 },
@@ -372,15 +385,15 @@ impl AiToolAdapter for ClaudeCodeAdapter {
             },
         })
     }
-    
+
     async fn create_main_file(
         &self,
         content: &str,
         project_name: Option<&str>,
-        _overwrite_existing: bool
+        _overwrite_existing: bool,
     ) -> Result<MainAiFileData> {
         use crate::workspace_setup::FileSection;
-        
+
         // Parse content into sections (simplified implementation)
         let sections = vec![
             FileSection {
@@ -394,7 +407,7 @@ impl AiToolAdapter for ClaudeCodeAdapter {
                 order: 2,
             },
         ];
-        
+
         Ok(MainAiFileData {
             ai_tool_type: AiToolType::ClaudeCode,
             file_name: self.config.main_file_name.clone(),
@@ -402,14 +415,14 @@ impl AiToolAdapter for ClaudeCodeAdapter {
             sections,
         })
     }
-    
+
     async fn generate_agent_files(
         &self,
         agents: &[AgentRegistration],
-        output_dir: &str
+        output_dir: &str,
     ) -> Result<Vec<String>> {
         let mut generated_files = Vec::new();
-        
+
         for agent in agents {
             // Generate enhanced prompt for this agent using 2025 best practices
             let enhanced_prompt = self.prompt_builder.generate_agent_prompt(
@@ -422,9 +435,9 @@ impl AiToolAdapter for ClaudeCodeAdapter {
                 },
                 &crate::workspace_setup::ProjectArchetype::Generic, // TODO: Determine from PRD
                 "Project context from PRD analysis",
-                None
+                None,
             );
-            
+
             // Create enhanced agent file content
             let _file_content = format!(
                 r#"# Agent: {agent_name}
@@ -455,70 +468,78 @@ The contract defines clear expectations, coordination protocols, and escalation 
                 capabilities = agent.capabilities.join(", "),
                 dependencies = agent.dependencies.join(", "),
             );
-            
-            let file_path = format!("{}/{}/{}.md", output_dir, self.config.agents_dir, agent.name);
-            
+
+            let file_path = format!(
+                "{}/{}/{}.md",
+                output_dir, self.config.agents_dir, agent.name
+            );
+
             // In a real implementation, we would write the file here
             // For now, we just track the file path and content would be written by the caller
             generated_files.push(file_path);
         }
-        
+
         Ok(generated_files)
     }
-    
+
     async fn create_workspace_structure(&self, _output_dir: &str) -> Result<()> {
         // This would create the actual directory structure
         // For now, we'll just return success as the CLI handles directory creation
         Ok(())
     }
-    
+
     async fn generate_manifest(
         &self,
         prd: &PrdDocument,
         workflow: &AgenticWorkflowDescription,
-        include_generated_files: bool
+        include_generated_files: bool,
     ) -> Result<WorkspaceManifest> {
-        use crate::workspace_setup::{ProjectMetadata, GeneratedFile};
+        use crate::workspace_setup::{GeneratedFile, ProjectMetadata};
         use chrono::Utc;
-        
-        let agents = workflow.suggested_agents.iter().map(|agent| {
-            // Generate enhanced prompt for each agent
-            let enhanced_prompt = self.prompt_builder.generate_agent_prompt(
-                agent,
-                &crate::workspace_setup::ProjectArchetype::Generic, // TODO: Pass actual archetype
-                &format!("Project: {}", prd.title),
-                None
-            );
-            
-            AgentRegistration {
-                name: agent.name.clone(),
-                description: agent.description.clone(),
-                prompt: enhanced_prompt,  // Use enhanced prompt instead of basic template
-                capabilities: agent.required_capabilities.clone(),
-                ai_tool_type: AiToolType::ClaudeCode,
-                dependencies: agent.depends_on.clone(),
-            }
-        }).collect();
-        
+
+        let agents = workflow
+            .suggested_agents
+            .iter()
+            .map(|agent| {
+                // Generate enhanced prompt for each agent
+                let enhanced_prompt = self.prompt_builder.generate_agent_prompt(
+                    agent,
+                    &crate::workspace_setup::ProjectArchetype::Generic, // TODO: Pass actual archetype
+                    &format!("Project: {}", prd.title),
+                    None,
+                );
+
+                AgentRegistration {
+                    name: agent.name.clone(),
+                    description: agent.description.clone(),
+                    prompt: enhanced_prompt, // Use enhanced prompt instead of basic template
+                    capabilities: agent.required_capabilities.clone(),
+                    ai_tool_type: AiToolType::ClaudeCode,
+                    dependencies: agent.depends_on.clone(),
+                }
+            })
+            .collect();
+
         let generated_files = if include_generated_files {
-            vec![
-                GeneratedFile {
-                    path: self.config.main_file_name.clone(),
-                    file_type: "coordination".to_string(),
-                    description: "Main coordination file for Claude Code".to_string(),
-                    critical: true,
-                },
-            ]
+            vec![GeneratedFile {
+                path: self.config.main_file_name.clone(),
+                file_type: "coordination".to_string(),
+                description: "Main coordination file for Claude Code".to_string(),
+                critical: true,
+            }]
         } else {
             vec![]
         };
-        
+
         Ok(WorkspaceManifest {
             schema_version: "1.0".to_string(),
             ai_tool_type: AiToolType::ClaudeCode,
             project: ProjectMetadata {
                 name: prd.title.clone(),
-                description: prd.overview.clone().unwrap_or_else(|| "No description available".to_string()),
+                description: prd
+                    .overview
+                    .clone()
+                    .unwrap_or_else(|| "No description available".to_string()),
                 complexity_score: 5, // Default complexity
                 primary_domain: "software-development".to_string(),
                 technologies: prd.technical_requirements.clone(),
@@ -531,22 +552,28 @@ The contract defines clear expectations, coordination protocols, and escalation 
             axon_version: "0.1.0".to_string(),
         })
     }
-    
+
     async fn validate_workspace(&self, workspace_dir: &str) -> Result<ValidationResult> {
         let mut issues = Vec::new();
         let mut recommendations = Vec::new();
-        
+
         // Check if main file exists
         let main_file_path = format!("{}/{}", workspace_dir, self.config.main_file_name);
         if !std::path::Path::new(&main_file_path).exists() {
             issues.push(ValidationIssue {
                 severity: ValidationSeverity::Critical,
-                description: format!("Main coordination file {} is missing", self.config.main_file_name),
+                description: format!(
+                    "Main coordination file {} is missing",
+                    self.config.main_file_name
+                ),
                 location: Some(main_file_path),
             });
-            recommendations.push(format!("Create {} with project coordination instructions", self.config.main_file_name));
+            recommendations.push(format!(
+                "Create {} with project coordination instructions",
+                self.config.main_file_name
+            ));
         }
-        
+
         // Check if agents directory exists
         let agents_dir_path = format!("{}/{}", workspace_dir, self.config.agents_dir);
         if !std::path::Path::new(&agents_dir_path).exists() {
@@ -555,13 +582,16 @@ The contract defines clear expectations, coordination protocols, and escalation 
                 description: "Agents directory is missing".to_string(),
                 location: Some(agents_dir_path),
             });
-            recommendations.push(format!("Create {} directory with agent definition files", self.config.agents_dir));
+            recommendations.push(format!(
+                "Create {} directory with agent definition files",
+                self.config.agents_dir
+            ));
         }
-        
-        let is_valid = issues.iter().all(|issue| {
-            !matches!(issue.severity, ValidationSeverity::Critical)
-        });
-        
+
+        let is_valid = issues
+            .iter()
+            .all(|issue| !matches!(issue.severity, ValidationSeverity::Critical));
+
         Ok(ValidationResult {
             is_valid,
             issues,
@@ -578,33 +608,61 @@ impl AiToolAdapter for AutoGenAdapter {
     fn tool_type(&self) -> AiToolType {
         AiToolType::AutoGen
     }
-    
+
     async fn get_setup_instructions(&self) -> Result<SetupInstructions> {
-        Err(TaskError::UnsupportedOperation("AutoGen adapter not yet implemented".to_string()))
+        Err(TaskError::UnsupportedOperation(
+            "AutoGen adapter not yet implemented".to_string(),
+        ))
     }
-    
+
     async fn get_main_file_instructions(&self) -> Result<MainAiFileInstructions> {
-        Err(TaskError::UnsupportedOperation("AutoGen adapter not yet implemented".to_string()))
+        Err(TaskError::UnsupportedOperation(
+            "AutoGen adapter not yet implemented".to_string(),
+        ))
     }
-    
-    async fn create_main_file(&self, _content: &str, _project_name: Option<&str>, _overwrite_existing: bool) -> Result<MainAiFileData> {
-        Err(TaskError::UnsupportedOperation("AutoGen adapter not yet implemented".to_string()))
+
+    async fn create_main_file(
+        &self,
+        _content: &str,
+        _project_name: Option<&str>,
+        _overwrite_existing: bool,
+    ) -> Result<MainAiFileData> {
+        Err(TaskError::UnsupportedOperation(
+            "AutoGen adapter not yet implemented".to_string(),
+        ))
     }
-    
-    async fn generate_agent_files(&self, _agents: &[AgentRegistration], _output_dir: &str) -> Result<Vec<String>> {
-        Err(TaskError::UnsupportedOperation("AutoGen adapter not yet implemented".to_string()))
+
+    async fn generate_agent_files(
+        &self,
+        _agents: &[AgentRegistration],
+        _output_dir: &str,
+    ) -> Result<Vec<String>> {
+        Err(TaskError::UnsupportedOperation(
+            "AutoGen adapter not yet implemented".to_string(),
+        ))
     }
-    
+
     async fn create_workspace_structure(&self, _output_dir: &str) -> Result<()> {
-        Err(TaskError::UnsupportedOperation("AutoGen adapter not yet implemented".to_string()))
+        Err(TaskError::UnsupportedOperation(
+            "AutoGen adapter not yet implemented".to_string(),
+        ))
     }
-    
-    async fn generate_manifest(&self, _prd: &PrdDocument, _workflow: &AgenticWorkflowDescription, _include_generated_files: bool) -> Result<WorkspaceManifest> {
-        Err(TaskError::UnsupportedOperation("AutoGen adapter not yet implemented".to_string()))
+
+    async fn generate_manifest(
+        &self,
+        _prd: &PrdDocument,
+        _workflow: &AgenticWorkflowDescription,
+        _include_generated_files: bool,
+    ) -> Result<WorkspaceManifest> {
+        Err(TaskError::UnsupportedOperation(
+            "AutoGen adapter not yet implemented".to_string(),
+        ))
     }
-    
+
     async fn validate_workspace(&self, _workspace_dir: &str) -> Result<ValidationResult> {
-        Err(TaskError::UnsupportedOperation("AutoGen adapter not yet implemented".to_string()))
+        Err(TaskError::UnsupportedOperation(
+            "AutoGen adapter not yet implemented".to_string(),
+        ))
     }
 }
 
@@ -616,85 +674,111 @@ impl AiToolAdapter for CrewAiAdapter {
     fn tool_type(&self) -> AiToolType {
         AiToolType::CrewAi
     }
-    
+
     async fn get_setup_instructions(&self) -> Result<SetupInstructions> {
-        Err(TaskError::UnsupportedOperation("CrewAI adapter not yet implemented".to_string()))
+        Err(TaskError::UnsupportedOperation(
+            "CrewAI adapter not yet implemented".to_string(),
+        ))
     }
-    
+
     async fn get_main_file_instructions(&self) -> Result<MainAiFileInstructions> {
-        Err(TaskError::UnsupportedOperation("CrewAI adapter not yet implemented".to_string()))
+        Err(TaskError::UnsupportedOperation(
+            "CrewAI adapter not yet implemented".to_string(),
+        ))
     }
-    
-    async fn create_main_file(&self, _content: &str, _project_name: Option<&str>, _overwrite_existing: bool) -> Result<MainAiFileData> {
-        Err(TaskError::UnsupportedOperation("CrewAI adapter not yet implemented".to_string()))
+
+    async fn create_main_file(
+        &self,
+        _content: &str,
+        _project_name: Option<&str>,
+        _overwrite_existing: bool,
+    ) -> Result<MainAiFileData> {
+        Err(TaskError::UnsupportedOperation(
+            "CrewAI adapter not yet implemented".to_string(),
+        ))
     }
-    
-    async fn generate_agent_files(&self, _agents: &[AgentRegistration], _output_dir: &str) -> Result<Vec<String>> {
-        Err(TaskError::UnsupportedOperation("CrewAI adapter not yet implemented".to_string()))
+
+    async fn generate_agent_files(
+        &self,
+        _agents: &[AgentRegistration],
+        _output_dir: &str,
+    ) -> Result<Vec<String>> {
+        Err(TaskError::UnsupportedOperation(
+            "CrewAI adapter not yet implemented".to_string(),
+        ))
     }
-    
+
     async fn create_workspace_structure(&self, _output_dir: &str) -> Result<()> {
-        Err(TaskError::UnsupportedOperation("CrewAI adapter not yet implemented".to_string()))
+        Err(TaskError::UnsupportedOperation(
+            "CrewAI adapter not yet implemented".to_string(),
+        ))
     }
-    
-    async fn generate_manifest(&self, _prd: &PrdDocument, _workflow: &AgenticWorkflowDescription, _include_generated_files: bool) -> Result<WorkspaceManifest> {
-        Err(TaskError::UnsupportedOperation("CrewAI adapter not yet implemented".to_string()))
+
+    async fn generate_manifest(
+        &self,
+        _prd: &PrdDocument,
+        _workflow: &AgenticWorkflowDescription,
+        _include_generated_files: bool,
+    ) -> Result<WorkspaceManifest> {
+        Err(TaskError::UnsupportedOperation(
+            "CrewAI adapter not yet implemented".to_string(),
+        ))
     }
-    
+
     async fn validate_workspace(&self, _workspace_dir: &str) -> Result<ValidationResult> {
-        Err(TaskError::UnsupportedOperation("CrewAI adapter not yet implemented".to_string()))
+        Err(TaskError::UnsupportedOperation(
+            "CrewAI adapter not yet implemented".to_string(),
+        ))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_adapter_registry() {
         let registry = AiToolAdapterRegistry::new();
-        
+
         // Test supported tools
         assert!(registry.is_supported(AiToolType::ClaudeCode));
         assert!(!registry.is_supported(AiToolType::AutoGen));
         assert!(!registry.is_supported(AiToolType::CrewAi));
-        
+
         // Test getting adapters
         assert!(registry.get_adapter(AiToolType::ClaudeCode).is_ok());
         assert!(registry.get_adapter(AiToolType::AutoGen).is_err());
     }
-    
+
     #[tokio::test]
     async fn test_claude_code_adapter() {
         let adapter = ClaudeCodeAdapter::new();
-        
+
         assert_eq!(adapter.tool_type(), AiToolType::ClaudeCode);
-        
+
         // Test setup instructions
         let instructions = adapter.get_setup_instructions().await.unwrap();
         assert_eq!(instructions.ai_tool_type, AiToolType::ClaudeCode);
         assert!(!instructions.setup_steps.is_empty());
-        
+
         // Test main file instructions
         let main_instructions = adapter.get_main_file_instructions().await.unwrap();
         assert_eq!(main_instructions.file_name, "CLAUDE.md");
         assert!(!main_instructions.structure_template.is_empty());
     }
-    
+
     #[test]
     fn test_validation_result() {
         let result = ValidationResult {
             is_valid: false,
-            issues: vec![
-                ValidationIssue {
-                    severity: ValidationSeverity::Critical,
-                    description: "Critical issue".to_string(),
-                    location: Some("file.md".to_string()),
-                }
-            ],
+            issues: vec![ValidationIssue {
+                severity: ValidationSeverity::Critical,
+                description: "Critical issue".to_string(),
+                location: Some("file.md".to_string()),
+            }],
             recommendations: vec!["Fix the critical issue".to_string()],
         };
-        
+
         assert!(!result.is_valid);
         assert_eq!(result.issues.len(), 1);
         assert_eq!(result.recommendations.len(), 1);

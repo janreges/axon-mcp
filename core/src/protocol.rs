@@ -1,12 +1,12 @@
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use crate::{
     error::Result,
-    models::{Task, TaskFilter, TaskState, NewTask, UpdateTask, TaskMessage},
+    models::{NewTask, Task, TaskFilter, TaskMessage, TaskState, UpdateTask},
 };
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 /// Protocol handler trait for MCP operations
-/// 
+///
 /// This trait defines the interface for all MCP protocol operations.
 /// Implementations must handle MCP message routing and parameter validation.
 #[async_trait]
@@ -56,42 +56,60 @@ pub trait ProtocolHandler: Send + Sync {
     async fn end_work_session(&self, params: EndWorkSessionParams) -> Result<()>;
 
     // Task Communication & Messaging
-    
+
     /// Create a task message (comments, questions, handoff protocols, etc.)
     async fn create_task_message(&self, params: CreateTaskMessageParams) -> Result<TaskMessage>;
-    
+
     /// Get task messages with optional filtering
     async fn get_task_messages(&self, params: GetTaskMessagesParams) -> Result<Vec<TaskMessage>>;
 
     // Workspace Setup & Automation Functions
-    
+
     /// Get setup instructions for AI workspace automation
-    async fn get_setup_instructions(&self, params: GetSetupInstructionsParams) -> Result<crate::workspace_setup::SetupInstructions>;
-    
+    async fn get_setup_instructions(
+        &self,
+        params: GetSetupInstructionsParams,
+    ) -> Result<crate::workspace_setup::SetupInstructions>;
+
     /// Get agentic workflow description based on PRD analysis
-    async fn get_agentic_workflow_description(&self, params: GetAgenticWorkflowDescriptionParams) -> Result<crate::workspace_setup::AgenticWorkflowDescription>;
-    
+    async fn get_agentic_workflow_description(
+        &self,
+        params: GetAgenticWorkflowDescriptionParams,
+    ) -> Result<crate::workspace_setup::AgenticWorkflowDescription>;
+
     /// Register an AI agent for the workspace
-    async fn register_agent(&self, params: RegisterAgentParams) -> Result<crate::workspace_setup::AgentRegistration>;
-    
+    async fn register_agent(
+        &self,
+        params: RegisterAgentParams,
+    ) -> Result<crate::workspace_setup::AgentRegistration>;
+
     /// Get instructions for creating main AI file (CLAUDE.md, etc.)
-    async fn get_instructions_for_main_ai_file(&self, params: GetInstructionsForMainAiFileParams) -> Result<crate::workspace_setup::MainAiFileInstructions>;
-    
+    async fn get_instructions_for_main_ai_file(
+        &self,
+        params: GetInstructionsForMainAiFileParams,
+    ) -> Result<crate::workspace_setup::MainAiFileInstructions>;
+
     /// Create the main AI coordination file
-    async fn create_main_ai_file(&self, params: CreateMainAiFileParams) -> Result<crate::workspace_setup::MainAiFileData>;
-    
+    async fn create_main_ai_file(
+        &self,
+        params: CreateMainAiFileParams,
+    ) -> Result<crate::workspace_setup::MainAiFileData>;
+
     /// Get complete workspace manifest
-    async fn get_workspace_manifest(&self, params: GetWorkspaceManifestParams) -> Result<crate::workspace_setup::WorkspaceManifest>;
+    async fn get_workspace_manifest(
+        &self,
+        params: GetWorkspaceManifestParams,
+    ) -> Result<crate::workspace_setup::WorkspaceManifest>;
 }
 
 /// MCP parameters for creating a new task
-/// 
+///
 /// This is a wrapper around the core NewTask model that provides MCP-specific
 /// serialization and validation while reusing the domain model.
 pub type CreateTaskParams = NewTask;
 
 /// MCP parameters for updating a task
-/// 
+///
 /// Contains the task ID and the update data. The update data reuses
 /// the core UpdateTask model to avoid duplication.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -196,11 +214,13 @@ impl ListTasksParams {
     /// Convert MCP parameters to internal TaskFilter
     pub fn to_task_filter(&self) -> Result<TaskFilter> {
         use chrono::{DateTime, Utc};
-        
+
         let parse_datetime = |s: &str| -> Result<DateTime<Utc>> {
             DateTime::parse_from_rfc3339(s)
                 .map(|dt| dt.with_timezone(&Utc))
-                .map_err(|e| crate::error::TaskError::Validation(format!("Invalid datetime format: {e}")))
+                .map_err(|e| {
+                    crate::error::TaskError::Validation(format!("Invalid datetime format: {e}"))
+                })
         };
 
         let created_after = match &self.created_after {
@@ -326,7 +346,7 @@ pub struct GetAgenticWorkflowDescriptionParams {
 }
 
 /// MCP parameters for registering an agent
-#[derive(Debug, Clone, Serialize, Deserialize)]  
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisterAgentParams {
     pub workspace_id: String,
     pub name: String,
@@ -404,13 +424,19 @@ mod tests {
 
         assert_eq!(params.id, 42);
         assert_eq!(params.name(), &Some("Updated Task".to_string()));
-        assert_eq!(params.description(), &Some("Updated description".to_string()));
+        assert_eq!(
+            params.description(),
+            &Some("Updated description".to_string())
+        );
         assert_eq!(params.owner_agent_name(), &Some("new-owner".to_string()));
         assert_eq!(params.update_data(), &update_data);
 
         let extracted = params.into_update_data();
         assert_eq!(extracted.name, Some("Updated Task".to_string()));
-        assert_eq!(extracted.description, Some("Updated description".to_string()));
+        assert_eq!(
+            extracted.description,
+            Some("Updated description".to_string())
+        );
         assert_eq!(extracted.owner_agent_name, Some("new-owner".to_string()));
     }
 

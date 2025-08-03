@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Circuit breaker for managing task failures in MCP v2 multi-agent system
-/// 
+///
 /// This implementation is optimized for local AI agents with different failure patterns
 /// compared to human workers or distributed systems.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,7 +19,7 @@ pub struct CircuitBreaker {
 }
 
 /// Types of failures that can occur with AI agents
-/// 
+///
 /// Different failure types have different implications:
 /// - Capability mismatches should immediately reassign, not count against circuit breaker
 /// - Context overflow requires task simplification
@@ -55,15 +55,15 @@ pub enum CircuitState {
 impl Default for CircuitBreaker {
     fn default() -> Self {
         let mut failure_thresholds = HashMap::new();
-        
+
         // Set different thresholds for different failure types
-        failure_thresholds.insert(FailureType::CapabilityMismatch, 1);  // Immediate reassignment
-        failure_thresholds.insert(FailureType::ContextOverflow, 2);     // 2 attempts before simplification
-        failure_thresholds.insert(FailureType::LogicError, 3);          // 3 attempts before quarantine
-        failure_thresholds.insert(FailureType::Environmental, 5);       // 5 retries for transient issues
+        failure_thresholds.insert(FailureType::CapabilityMismatch, 1); // Immediate reassignment
+        failure_thresholds.insert(FailureType::ContextOverflow, 2); // 2 attempts before simplification
+        failure_thresholds.insert(FailureType::LogicError, 3); // 3 attempts before quarantine
+        failure_thresholds.insert(FailureType::Environmental, 5); // 5 retries for transient issues
         failure_thresholds.insert(FailureType::InvalidRequirements, 1); // Immediate human review
-        failure_thresholds.insert(FailureType::InconsistentOutput, 2);  // 2 attempts before investigation
-        
+        failure_thresholds.insert(FailureType::InconsistentOutput, 2); // 2 attempts before investigation
+
         Self {
             failure_thresholds,
             failure_counts: HashMap::new(),
@@ -83,32 +83,36 @@ impl CircuitBreaker {
             last_failure: None,
         }
     }
-    
+
     /// Record a failure and update circuit breaker state
     pub fn record_failure(&mut self, failure_type: FailureType) -> CircuitBreakerAction {
         self.last_failure = Some(chrono::Utc::now());
-        
+
         // Increment failure count for this type
         let count = self.failure_counts.entry(failure_type).or_insert(0);
         *count += 1;
-        
+
         // Store count value to avoid borrow checker issues
         let current_count = *count;
-        
+
         // Check if threshold exceeded for this failure type
-        let threshold = self.failure_thresholds.get(&failure_type).copied().unwrap_or(3);
-        
+        let threshold = self
+            .failure_thresholds
+            .get(&failure_type)
+            .copied()
+            .unwrap_or(3);
+
         if current_count >= threshold {
             self.state = CircuitState::Open;
             self.determine_action(failure_type)
         } else {
-            CircuitBreakerAction::Retry { 
+            CircuitBreakerAction::Retry {
                 delay_seconds: self.calculate_backoff(failure_type, current_count),
                 suggestion: self.get_retry_suggestion(failure_type),
             }
         }
     }
-    
+
     /// Record a successful task completion
     pub fn record_success(&mut self) {
         // Reset failure counts on success
@@ -116,7 +120,7 @@ impl CircuitBreaker {
         self.state = CircuitState::Closed;
         self.last_failure = None;
     }
-    
+
     /// Check if task can be attempted
     pub fn can_attempt(&self) -> bool {
         match self.state {
@@ -125,17 +129,17 @@ impl CircuitBreaker {
             CircuitState::HalfOpen => true,
         }
     }
-    
+
     /// Get current state
     pub fn state(&self) -> CircuitState {
         self.state
     }
-    
+
     /// Get failure counts
     pub fn failure_counts(&self) -> &HashMap<FailureType, i32> {
         &self.failure_counts
     }
-    
+
     /// Try to reset circuit breaker (requires manual intervention for some failure types)
     pub fn try_reset(&mut self, authorized_by: &str) -> Result<(), TaskError> {
         match self.state {
@@ -143,7 +147,7 @@ impl CircuitBreaker {
                 // Check if enough time has passed for automatic reset
                 if let Some(last_failure) = self.last_failure {
                     let elapsed = chrono::Utc::now() - last_failure;
-                    
+
                     // Allow automatic reset after 1 hour for environmental issues
                     if elapsed.num_hours() >= 1 && self.is_transient_failure_only() {
                         self.state = CircuitState::HalfOpen;
@@ -152,7 +156,8 @@ impl CircuitBreaker {
                         // Require manual authorization for non-transient failures
                         if authorized_by.is_empty() {
                             Err(TaskError::CircuitBreakerOpen(
-                                "Manual authorization required to reset circuit breaker".to_string()
+                                "Manual authorization required to reset circuit breaker"
+                                    .to_string(),
                             ))
                         } else {
                             self.state = CircuitState::HalfOpen;
@@ -168,37 +173,43 @@ impl CircuitBreaker {
             _ => Ok(()),
         }
     }
-    
+
     /// Calculate exponential backoff delay
     fn calculate_backoff(&self, failure_type: FailureType, attempt: i32) -> u64 {
         match failure_type {
-            FailureType::CapabilityMismatch => 0,  // Immediate reassignment
-            FailureType::ContextOverflow => 30,    // 30 seconds to allow for cleanup
+            FailureType::CapabilityMismatch => 0, // Immediate reassignment
+            FailureType::ContextOverflow => 30,   // 30 seconds to allow for cleanup
             FailureType::LogicError => 60 * attempt as u64, // 1, 2, 3 minutes
             FailureType::Environmental => (2_u64.pow(attempt as u32 - 1)) * 60, // Exponential backoff
             FailureType::InvalidRequirements => 0, // Immediate human review
             FailureType::InconsistentOutput => 120, // 2 minutes for investigation
         }
     }
-    
+
     /// Get retry suggestion based on failure type
     fn get_retry_suggestion(&self, failure_type: FailureType) -> String {
         match failure_type {
-            FailureType::CapabilityMismatch => 
-                "Reassign to agent with matching capabilities".to_string(),
-            FailureType::ContextOverflow => 
-                "Reduce task complexity or break into smaller subtasks".to_string(),
-            FailureType::LogicError => 
-                "Review task requirements and provide additional context".to_string(),
-            FailureType::Environmental => 
-                "Check external dependencies and network connectivity".to_string(),
-            FailureType::InvalidRequirements => 
-                "Task requirements need human review and clarification".to_string(),
-            FailureType::InconsistentOutput => 
-                "Agent may need reinitialization or different approach".to_string(),
+            FailureType::CapabilityMismatch => {
+                "Reassign to agent with matching capabilities".to_string()
+            }
+            FailureType::ContextOverflow => {
+                "Reduce task complexity or break into smaller subtasks".to_string()
+            }
+            FailureType::LogicError => {
+                "Review task requirements and provide additional context".to_string()
+            }
+            FailureType::Environmental => {
+                "Check external dependencies and network connectivity".to_string()
+            }
+            FailureType::InvalidRequirements => {
+                "Task requirements need human review and clarification".to_string()
+            }
+            FailureType::InconsistentOutput => {
+                "Agent may need reinitialization or different approach".to_string()
+            }
         }
     }
-    
+
     /// Determine action based on failure type and circuit breaker state
     fn determine_action(&self, failure_type: FailureType) -> CircuitBreakerAction {
         match failure_type {
@@ -215,19 +226,22 @@ impl CircuitBreaker {
                 escalation_level: "manager".to_string(),
             },
             _ => CircuitBreakerAction::Quarantine {
-                reason: format!("Too many {} failures", self.format_failure_type(failure_type)),
+                reason: format!(
+                    "Too many {} failures",
+                    self.format_failure_type(failure_type)
+                ),
                 retry_after: chrono::Utc::now() + chrono::Duration::hours(1),
             },
         }
     }
-    
+
     /// Check if only transient failures have occurred
     fn is_transient_failure_only(&self) -> bool {
-        self.failure_counts.keys().all(|&failure_type| {
-            matches!(failure_type, FailureType::Environmental)
-        })
+        self.failure_counts
+            .keys()
+            .all(|&failure_type| matches!(failure_type, FailureType::Environmental))
     }
-    
+
     /// Format failure type for display
     fn format_failure_type(&self, failure_type: FailureType) -> &'static str {
         match failure_type {
@@ -255,10 +269,7 @@ pub enum CircuitBreakerAction {
         required_capabilities: Vec<String>,
     },
     /// Simplify or break down the task
-    Simplify {
-        reason: String,
-        suggestion: String,
-    },
+    Simplify { reason: String, suggestion: String },
     /// Quarantine task for later review
     Quarantine {
         reason: String,
@@ -278,7 +289,7 @@ mod tests {
     #[test]
     fn test_circuit_breaker_default_thresholds() {
         let cb = CircuitBreaker::default();
-        
+
         // Should start in closed state
         assert_eq!(cb.state(), CircuitState::Closed);
         assert!(cb.can_attempt());
@@ -287,13 +298,13 @@ mod tests {
     #[test]
     fn test_capability_mismatch_immediate_reassignment() {
         let mut cb = CircuitBreaker::default();
-        
+
         let action = cb.record_failure(FailureType::CapabilityMismatch);
-        
+
         // Should trigger immediate reassignment
         assert_eq!(cb.state(), CircuitState::Open);
         match action {
-            CircuitBreakerAction::Reassign { .. } => {},
+            CircuitBreakerAction::Reassign { .. } => {}
             _ => panic!("Expected reassignment action"),
         }
     }
@@ -301,26 +312,26 @@ mod tests {
     #[test]
     fn test_logic_error_progressive_failures() {
         let mut cb = CircuitBreaker::default();
-        
+
         // First two failures should retry
         let action1 = cb.record_failure(FailureType::LogicError);
         match action1 {
-            CircuitBreakerAction::Retry { .. } => {},
+            CircuitBreakerAction::Retry { .. } => {}
             _ => panic!("Expected retry action"),
         }
         assert_eq!(cb.state(), CircuitState::Closed);
-        
+
         let action2 = cb.record_failure(FailureType::LogicError);
         match action2 {
-            CircuitBreakerAction::Retry { .. } => {},
+            CircuitBreakerAction::Retry { .. } => {}
             _ => panic!("Expected retry action"),
         }
         assert_eq!(cb.state(), CircuitState::Closed);
-        
+
         // Third failure should open circuit
         let action3 = cb.record_failure(FailureType::LogicError);
         match action3 {
-            CircuitBreakerAction::Quarantine { .. } => {},
+            CircuitBreakerAction::Quarantine { .. } => {}
             _ => panic!("Expected quarantine action"),
         }
         assert_eq!(cb.state(), CircuitState::Open);
@@ -329,16 +340,16 @@ mod tests {
     #[test]
     fn test_success_resets_failures() {
         let mut cb = CircuitBreaker::default();
-        
+
         // Record some failures
         cb.record_failure(FailureType::LogicError);
         cb.record_failure(FailureType::LogicError);
-        
+
         assert!(!cb.failure_counts.is_empty());
-        
+
         // Success should reset everything
         cb.record_success();
-        
+
         assert!(cb.failure_counts.is_empty());
         assert_eq!(cb.state(), CircuitState::Closed);
     }
@@ -346,14 +357,14 @@ mod tests {
     #[test]
     fn test_environmental_failures_allow_automatic_reset() {
         let mut cb = CircuitBreaker::default();
-        
+
         // Trigger environmental failures to open circuit
         for _ in 0..5 {
             cb.record_failure(FailureType::Environmental);
         }
-        
+
         assert_eq!(cb.state(), CircuitState::Open);
-        
+
         // Should allow automatic reset for transient failures
         assert!(cb.is_transient_failure_only());
     }

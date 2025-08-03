@@ -53,6 +53,49 @@ fatal() {
     exit 1
 }
 
+# Interactive prompt with yes/no
+prompt_yes_no() {
+    local prompt_message="$1"
+    local default_answer="${2:-Y}" # Default to 'Y' if not specified
+    while true; do
+        if [[ "$default_answer" == "Y" || "$default_answer" == "y" ]]; then
+            read -rp "$prompt_message [Y/n]: " yn
+        else
+            read -rp "$prompt_message [y/N]: " yn
+        fi
+        case "$yn" in
+            [Yy]* ) return 0;; # Yes
+            [Nn]* ) return 1;; # No
+            "" )
+                if [[ "$default_answer" == "Y" || "$default_answer" == "y" ]]; then
+                    return 0
+                else
+                    return 1
+                fi;;
+            * ) warning "Please answer 'y' or 'n'.";;
+        esac
+    done
+}
+
+# Function to find project root (Git or .claude marker)
+find_project_root() {
+    local current_dir="$PWD"
+    local root_found=""
+
+    while [[ "$current_dir" != "/" && "$current_dir" != "" ]]; do
+        if [[ -d "$current_dir/.git" ]]; then
+            root_found="$current_dir"
+            break
+        elif [[ -d "$current_dir/.claude" ]]; then
+            root_found="$current_dir"
+            break
+        fi
+        current_dir=$(dirname "$current_dir")
+    done
+
+    echo "$root_found"
+}
+
 # Detect OS and architecture
 detect_platform() {
     OS="$(uname -s)"
@@ -138,9 +181,9 @@ get_install_dir() {
     echo "$INSTALL_DIR_DEFAULT"
 }
 
-# Download and extract binary
-download_binary() {
-    INSTALL_DIR="$(get_install_dir)"
+# Download and extract binary to specified directory
+download_binary_to_dir() {
+    local target_install_dir="$1"
     BINARY_NAME="${MCP_NAME}-${PLATFORM}"
     
     if [ "$VERSION" = "latest" ]; then
@@ -172,25 +215,21 @@ download_binary() {
     fi
     
     # Create install directory if it doesn't exist
-    mkdir -p "$INSTALL_DIR"
+    info "Creating installation directory: $target_install_dir"
+    if ! mkdir -p "$target_install_dir"; then
+        fatal "Failed to create directory $target_install_dir. Check permissions or run with sudo if necessary."
+    fi
     
     # Install binary atomically
-    info "Installing to $INSTALL_DIR/$MCP_NAME"
-    if ! mv "$TMP_DIR/$MCP_NAME" "$INSTALL_DIR/$MCP_NAME.tmp"; then
-        fatal "Failed to install binary. Do you have write permissions to $INSTALL_DIR?"
+    info "Installing binary '$MCP_NAME' to '$target_install_dir'..."
+    if ! cp "$TMP_DIR/$MCP_NAME" "$target_install_dir/$MCP_NAME"; then
+        fatal "Failed to copy binary. Check permissions."
     fi
+    success "Binary '$MCP_NAME' successfully copied to '$target_install_dir'."
     
-    # Set permissions before final move
-    chmod +x "$INSTALL_DIR/$MCP_NAME.tmp"
-    
-    # Atomic rename
-    if ! mv -f "$INSTALL_DIR/$MCP_NAME.tmp" "$INSTALL_DIR/$MCP_NAME"; then
-        fatal "Failed to finalize installation"
-    fi
-    
-    # Verify executable permissions
-    if [ ! -x "$INSTALL_DIR/$MCP_NAME" ]; then
-        chmod +x "$INSTALL_DIR/$MCP_NAME" || fatal "Failed to set executable permissions"
+    # Ensure executable permissions
+    if ! chmod +x "$target_install_dir/$MCP_NAME"; then
+        warning "Failed to set executable permissions for '$target_install_dir/$MCP_NAME'."
     fi
     
     success "Binary installed successfully!"
@@ -276,11 +315,46 @@ configure_claude() {
     echo "${BLUE}{"
     echo "  \"mcpServers\": {"
     echo "    \"$MCP_NAME\": {"
-    echo "      \"command\": [\"$BINARY_PATH\"]"
+    echo "      \"command\": [\"$BINARY_PATH\"],"
+    echo "      \"env\": {"
+    echo "        \"AXON_MCP_SCOPE\": \"project\""
+    echo "      }"
     echo "    }"
     echo "  }"
     echo "}${RESET}"
     echo ""
+    echo "${YELLOW}Database Configuration:${RESET}"
+    echo "• Project scope: Database stored in ${BOLD}.axon/axon-mcp.sqlite${RESET} within your project"
+    echo "• User scope: Database stored in user data directory with project isolation"
+    echo "• To force user-scope, set ${BOLD}AXON_MCP_SCOPE=user${RESET} in env config"
+    echo ""
+    
+    # Add .axon to .gitignore if in a git repository and using project scope
+    setup_gitignore_for_project_scope
+}
+
+# Setup .gitignore for project scope
+setup_gitignore_for_project_scope() {
+    # Check if we're in a git repository
+    if [ -d ".git" ] || git rev-parse --git-dir >/dev/null 2>&1; then
+        GITIGNORE_FILE=".gitignore"
+        
+        # Check if .axon is already in .gitignore
+        if [ -f "$GITIGNORE_FILE" ] && grep -q "^\.axon/" "$GITIGNORE_FILE"; then
+            return 0  # Already configured
+        fi
+        
+        info "Adding .axon/ to .gitignore for project scope database"
+        
+        # Add .axon entry to .gitignore
+        {
+            echo ""
+            echo "# Axon MCP project database"
+            echo ".axon/"
+        } >> "$GITIGNORE_FILE"
+        
+        success "Added .axon/ to .gitignore"
+    fi
 }
 
 # Health check
@@ -309,31 +383,138 @@ main() {
     echo "==================="
     echo ""
     
+    # --- CLI Parsing and Installation Path Logic ---
+    PROJECT_ROOT=""
+    INSTALL_MODE="auto" # 'auto', 'project', 'user'
+    INSTALL_DIR=""
+    
+    # Parse CLI arguments
+    for arg in "$@"; do
+        case $arg in
+            --claude-code-project)
+                INSTALL_MODE="project"
+                shift # Remove argument from processing
+                ;;
+            --claude-code-user)
+                INSTALL_MODE="user"
+                shift # Remove argument from processing
+                ;;
+            *)
+                # Unknown argument, let's not fail for now, but could be added
+                ;;
+        esac
+    done
+    
+    # Determine project root if not explicitly set by CLI
+    if [[ "$INSTALL_MODE" == "auto" || "$INSTALL_MODE" == "project" ]]; then
+        info "Detecting project root..."
+        PROJECT_ROOT=$(find_project_root)
+        if [[ -n "$PROJECT_ROOT" ]]; then
+            success "Project root found: $PROJECT_ROOT"
+            if [[ "$INSTALL_MODE" == "auto" ]]; then
+                INSTALL_MODE="project" # Default to project scope if detected and no override
+            fi
+        else
+            warning "Project root not found. Installation will continue in user scope."
+            if [[ "$INSTALL_MODE" == "project" ]]; then
+                fatal "Argument --claude-code-project was provided, but project root was not found. Aborting."
+            fi
+            INSTALL_MODE="user" # Fallback to user if --claude-code-project not specified
+        fi
+    fi
+    
+    # Set installation directory based on determined mode
+    if [[ "$INSTALL_MODE" == "project" ]]; then
+        INSTALL_DIR="$PROJECT_ROOT/.axon/bin"
+        info "Project-scoped installation to: $INSTALL_DIR"
+    elif [[ "$INSTALL_MODE" == "user" ]]; then
+        # Use existing get_install_dir logic
+        INSTALL_DIR="$(get_install_dir)"
+        info "User-scoped installation to: $INSTALL_DIR"
+    else
+        fatal "Unknown installation mode: $INSTALL_MODE"
+    fi
+    
     # Check requirements
     check_requirements
     
     # Detect platform
     detect_platform
     
-    # Download and install
-    download_binary
+    # Download and install with custom directory
+    download_binary_to_dir "$INSTALL_DIR"
     
-    # Configure PATH
-    configure_path
-    
-    # Configure Claude Code
-    configure_claude
+    # Configure PATH (only for user installs)
+    if [[ "$INSTALL_MODE" == "user" ]]; then
+        configure_path
+    fi
     
     # Run health check
     health_check
+    
+    # --- Post-Installation Automation ---
+    if [[ "$INSTALL_MODE" == "project" ]]; then
+        info "Running automation steps for project-scoped installation..."
+
+        # Add .axon/ to .gitignore
+        GITIGNORE_PATH="$PROJECT_ROOT/.gitignore"
+        if [[ -f "$GITIGNORE_PATH" ]]; then
+            if ! grep -q "^\.axon/$" "$GITIGNORE_PATH"; then
+                if prompt_yes_no "Add '.axon/' to '$GITIGNORE_PATH'?" "Y"; then
+                    echo ".axon/" >> "$GITIGNORE_PATH"
+                    success "Added '.axon/' to '$GITIGNORE_PATH'."
+                else
+                    info "Adding '.axon/' to .gitignore skipped."
+                fi
+            else
+                info "'.axon/' is already in '$GITIGNORE_PATH'."
+            fi
+        else
+            info ".gitignore not found in '$PROJECT_ROOT'. Skipping adding '.axon/'."
+        fi
+
+        # claude mcp add
+        CLAUDE_DIR="$PROJECT_ROOT/.claude"
+        if [[ -d "$CLAUDE_DIR" ]]; then
+            info "Detected '.claude/' folder in project root."
+            if prompt_yes_no "Run 'claude mcp add' for this project?" "Y"; then
+                info "Running 'claude mcp add'..."
+                # Execute claude mcp add from the project root
+                (cd "$PROJECT_ROOT" && claude mcp add axon-mcp -- "$INSTALL_DIR/$MCP_NAME") 2>/dev/null
+                if [[ $? -eq 0 ]]; then
+                    success "'claude mcp add' executed successfully."
+                else
+                    warning "'claude mcp add' failed. Check output for details or run manually."
+                fi
+            else
+                info "Running 'claude mcp add' skipped."
+            fi
+        else
+            info "'.claude/' folder not found in project root. Skipping 'claude mcp add'."
+        fi
+
+        info "To use '$MCP_NAME' in this project, we recommend adding '$INSTALL_DIR' to your PATH, e.g. 'export PATH=\"\$PATH:$INSTALL_DIR\"' or run the binary directly: '$INSTALL_DIR/$MCP_NAME'."
+        info "Or you can use alias: 'alias $MCP_NAME=\"$INSTALL_DIR/$MCP_NAME\"'."
+
+    elif [[ "$INSTALL_MODE" == "user" ]]; then
+        info "Running automation steps for user-scoped installation..."
+        info "Make sure '$INSTALL_DIR' is in your PATH. You can add it to ~/.bashrc, ~/.zshrc or ~/.profile:"
+        info "  export PATH=\"\$PATH:$INSTALL_DIR\""
+        info "Then run 'source ~/.bashrc' (or appropriate file) or restart terminal."
+    fi
     
     echo ""
     success "Installation complete!"
     echo ""
     echo "Next steps:"
-    echo "  1. Restart your shell or run: ${BOLD}source ~/.bashrc${RESET} (or appropriate config file)"
-    echo "  2. Verify installation: ${BOLD}${MCP_NAME} --version${RESET}"
-    echo "  3. In Claude Code, verify connection with: ${BOLD}/mcp${RESET}"
+    if [[ "$INSTALL_MODE" == "project" ]]; then
+        echo "  1. Use: ${BOLD}$INSTALL_DIR/$MCP_NAME --version${RESET}"
+        echo "  2. In Claude Code, verify connection with: ${BOLD}/mcp${RESET}"
+    else
+        echo "  1. Restart your shell or run: ${BOLD}source ~/.bashrc${RESET} (or appropriate config file)"
+        echo "  2. Verify installation: ${BOLD}${MCP_NAME} --version${RESET}"
+        echo "  3. In Claude Code, verify connection with: ${BOLD}/mcp${RESET}"
+    fi
     echo ""
     echo "For updates, run: ${BOLD}${MCP_NAME} self-update${RESET}"
     echo ""

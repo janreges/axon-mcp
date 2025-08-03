@@ -141,7 +141,7 @@ struct TaskMessage {
 
 ### Technology Stack
 - **Framework**: Rust with MCP SDK (https://github.com/modelcontextprotocol/rust-sdk)
-- **Database**: SQLite ONLY - with automatic path handling (~/axon-mcp.sqlite default)
+- **Database**: SQLite ONLY - with scope-based path resolution (project: `.axon/axon-mcp.sqlite`, user: `{user-data}/axon-mcp/dbs/{project-hash}.sqlite`)
 - **Transport**: Server-Sent Events (SSE) for MCP communication
 - **Serialization**: JSON for MCP protocol compliance
 - **Testing**: Comprehensive unit, integration, and contract tests
@@ -157,7 +157,10 @@ This is a fundamental architectural decision that MUST be strictly enforced:
 - ❌ **NEVER** suggest PostgreSQL, MySQL, MongoDB, or any other database
 - ✅ **ALL** features must use SQLite: task storage, workspace contexts, session management, messaging, etc.
 - ✅ **JSON blob storage** in SQLite is preferred for complex data structures to minimize schema complexity
-- ✅ **Single database file** approach: ~/axon-mcp.sqlite handles all persistence needs
+- ✅ **Scope-based database isolation**: Dynamic path resolution based on installation scope:
+  - **Project scope**: Database stored in `.axon/axon-mcp.sqlite` within project root
+  - **User scope**: Database stored in user data directory with project-specific hash for isolation
+  - **Override**: Explicit `AXON_MCP_DB` environment variable can override automatic path resolution
 - ❌ **NO** multi-database architectures or external database services
 
 **Why SQLite Only:**
@@ -175,6 +178,104 @@ This is a fundamental architectural decision that MUST be strictly enforced:
 - All repositories must implement SQLite-based persistence
 
 This architectural constraint is non-negotiable and ensures system simplicity, reliability, and ease of deployment.
+
+## Database Path Architecture
+
+**🔄 SCOPE-BASED DATABASE ISOLATION**
+
+The system implements sophisticated database path resolution to prevent conflicts when developing multiple projects in parallel:
+
+### Installation Scopes
+
+**Project Scope** (Default for project-specific installations):
+- Database location: `{project-root}/.axon/axon-mcp.sqlite`
+- Automatically detected when axon-mcp runs within a project (Git repo, Cargo.toml, etc.)
+- Each project gets its own isolated database
+- Database files are automatically added to `.gitignore`
+
+**User Scope** (Default for global installations):
+- Database location: `{user-data-dir}/axon-mcp/dbs/{project-hash}.sqlite`
+- Uses system user data directory (e.g., `~/.local/share` on Linux, `~/Library/Application Support` on macOS)
+- Project-specific hash prevents conflicts between multiple projects
+- Ideal for globally installed axon-mcp serving multiple projects
+
+### Scope Detection Logic
+
+The system uses a hierarchical approach to determine the appropriate scope:
+
+1. **Environment Override** (Highest Priority):
+   - `AXON_MCP_SCOPE=project` → Forces project scope
+   - `AXON_MCP_SCOPE=user` → Forces user scope
+   - `AXON_MCP_DB=/custom/path.sqlite` → Explicit database path override
+
+2. **Executable Context Detection**:
+   - If axon-mcp executable is within a detected project root → Project scope
+   - Otherwise → User scope
+
+3. **Project Marker Detection**:
+   - Searches upward for markers: `.git`, `Cargo.toml`, `package.json`, `.axon-mcp.toml`, etc.
+   - If found → Project scope, using the marker's directory as project root
+
+### Legacy Database Migration
+
+Automatic migration from legacy `~/axon-mcp.sqlite` to new locations:
+- Only applies to user-scope installations
+- Safely copies (doesn't move) legacy database to new location
+- Creates migration marker to prevent repeated attempts
+- Preserves original file as backup
+- Logs migration details for user awareness
+
+### Security & Permissions
+
+- **Directory permissions**: `0o700` (owner-only access) on Unix systems
+- **File permissions**: `0o600` (owner read/write only) on Unix systems  
+- **Windows**: Relies on NTFS default permissions
+- **WAL mode**: Enabled for better concurrency and crash recovery
+- **Atomic operations**: File creation uses secure, race-condition-resistant patterns
+
+### Configuration Examples
+
+**MCP Configuration for Project Scope**:
+```json
+{
+  "mcpServers": {
+    "axon-mcp": {
+      "command": ["/path/to/axon-mcp"],
+      "env": {
+        "AXON_MCP_SCOPE": "project"
+      }
+    }
+  }
+}
+```
+
+**MCP Configuration for User Scope**:
+```json
+{
+  "mcpServers": {
+    "axon-mcp": {
+      "command": ["/path/to/axon-mcp"],
+      "env": {
+        "AXON_MCP_SCOPE": "user"
+      }
+    }
+  }
+}
+```
+
+**Custom Database Path**:
+```json
+{
+  "mcpServers": {
+    "axon-mcp": {
+      "command": ["/path/to/axon-mcp"],
+      "env": {
+        "AXON_MCP_DB": "/custom/database/path.sqlite"
+      }
+    }
+  }
+}
+```
 
 ## Crate Architecture
 
@@ -319,7 +420,7 @@ The project is fully implemented and functional:
 
 ## Key Technical Features
 
-- **SQLite Database**: Automatic path handling (~/axon-mcp.sqlite default)
+- **SQLite Database**: Scope-based path resolution with automatic project isolation
 - **MCP v2 Protocol**: Latest specification with backward compatibility
 - **Multi-Agent Coordination**: Task discovery, claiming, work sessions
 - **Inter-Agent Messaging**: Targeted communication with threading support
@@ -416,4 +517,4 @@ get_task_messages(GetTaskMessagesParams {
    curl http://localhost:3000/health
    ```
 
-The server will automatically create a SQLite database at `~/axon-mcp.sqlite` and start listening on `http://localhost:3000` with MCP endpoints available.
+The server will automatically create a SQLite database using scope-based path resolution (project-specific `.axon/axon-mcp.sqlite` or user-global with project isolation) and start listening on `http://localhost:3000` with MCP endpoints available.

@@ -1,4 +1,4 @@
-use mcp_server::config::{Config, DatabaseConfig, LoggingConfig, LogFormat, ServerConfig};
+use mcp_server::config::{Config, DatabaseConfig, LogFormat, LoggingConfig, ServerConfig};
 use mcp_server::setup::{create_repository, ensure_database_directory};
 use std::env;
 use tempfile::TempDir;
@@ -27,7 +27,11 @@ async fn test_server_startup_with_sqlite() {
     };
 
     let repo = create_repository(&config).await;
-    assert!(repo.is_ok(), "Failed to create repository: {:?}", repo.err());
+    assert!(
+        repo.is_ok(),
+        "Failed to create repository: {:?}",
+        repo.err()
+    );
 }
 
 #[test]
@@ -47,8 +51,11 @@ fn test_environment_overrides() {
     env::set_var("LOG_LEVEL", "debug");
 
     let config = Config::default().merge_with_env().unwrap();
-    
-    assert_eq!(config.database.url, Some("sqlite://test_env.db".to_string()));
+
+    assert_eq!(
+        config.database.url,
+        Some("sqlite://test_env.db".to_string())
+    );
     assert_eq!(config.server.listen_addr, "0.0.0.0");
     assert_eq!(config.logging.level, "debug");
 
@@ -62,9 +69,11 @@ fn test_environment_overrides() {
 fn test_default_database_path_creation() {
     let config = Config::default();
     let url = config.database_url();
-    
+
+    println!("Generated URL: {}", url); // Debug output
     assert!(url.starts_with("sqlite://"));
-    assert!(url.contains("db.sqlite"));
+    // URL now uses dynamic path resolution - in user scope it uses hash
+    assert!(url.contains(".sqlite"));
 }
 
 #[test]
@@ -81,26 +90,26 @@ fn test_database_directory_creation() {
 #[test]
 fn test_config_validation_errors() {
     let mut config = Config::default();
-    
+
     // Test invalid log level
     config.logging.level = "invalid".to_string();
     assert!(config.validate().is_err());
-    
+
     // Test invalid database URL
     config.logging.level = "info".to_string();
     config.database.url = Some("postgres://invalid".to_string());
     assert!(config.validate().is_err());
-    
+
     // Test invalid port
     config.database.url = None;
     config.server.port = 0;
     assert!(config.validate().is_err());
-    
+
     // Test invalid workers
     config.server.port = 3000;
     config.server.workers = 0;
     assert!(config.validate().is_err());
-    
+
     // Test invalid max_connections
     config.server.workers = 4;
     config.database.max_connections = 0;
@@ -125,7 +134,7 @@ fn test_server_address_formatting() {
             format: LogFormat::Json,
         },
     };
-    
+
     assert_eq!(config.server_address(), "0.0.0.0:8080");
 }
 
@@ -154,7 +163,7 @@ async fn test_repository_creation_with_migrations() {
 
     let repo = create_repository(&config).await;
     assert!(repo.is_ok());
-    
+
     // Verify the database file was created
     assert!(db_path.exists());
 }
@@ -185,7 +194,7 @@ async fn test_multiple_repository_instances() {
     // Create multiple repository instances
     let repo1 = create_repository(&config).await;
     let repo2 = create_repository(&config).await;
-    
+
     assert!(repo1.is_ok());
     assert!(repo2.is_ok());
 }

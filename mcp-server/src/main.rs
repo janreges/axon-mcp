@@ -1,16 +1,21 @@
 mod config;
+mod self_update;
 mod setup;
 mod stdio;
 mod telemetry;
-mod self_update;
 
 use anyhow::{Context, Result};
 use clap::Parser;
 use config::Config;
-use setup::{create_repository, create_workspace_context_repository, initialize_app, ensure_database_directory_from_config};
+use setup::{
+    create_repository, create_workspace_context_repository, ensure_database_directory_from_config,
+    initialize_app,
+};
 use stdio::StdioMcpServer;
-use telemetry::{init_telemetry, init_telemetry_with_writer, log_startup_info, log_config_validation};
-use tracing::{info, error};
+use telemetry::{
+    init_telemetry, init_telemetry_with_writer, log_config_validation, log_startup_info,
+};
+use tracing::{error, info};
 
 #[derive(Parser)]
 #[command(name = "axon-mcp")]
@@ -20,27 +25,27 @@ struct Cli {
     /// Configuration file path
     #[arg(short, long, env = "CONFIG_FILE")]
     config: Option<String>,
-    
+
     /// Database URL override
     #[arg(long, env = "DATABASE_URL")]
     database_url: Option<String>,
-    
+
     /// Listen address override
     #[arg(long, env = "LISTEN_ADDR")]
     listen_addr: Option<String>,
-    
+
     /// Log level override
     #[arg(long, env = "LOG_LEVEL")]
     log_level: Option<String>,
-    
+
     /// Transport mode: 'http' for web server (default) or 'stdio' for stdin/stdout
     #[arg(long, default_value = "http")]
     transport: String,
-    
+
     /// Check for updates and install if available
     #[arg(long = "self-update")]
     self_update: bool,
-    
+
     /// Show version information
     #[arg(short = 'V', long = "version")]
     version: bool,
@@ -81,23 +86,23 @@ fn load_config(cli: &Cli) -> Result<Config> {
 async fn main() -> Result<()> {
     // Load .env file
     dotenv::dotenv().ok();
-    
+
     // Parse CLI arguments
     let cli = Cli::parse();
-    
+
     // Handle special commands first
     if cli.version {
         self_update::print_version();
         return Ok(());
     }
-    
+
     if cli.self_update {
         return self_update::self_update(env!("CARGO_PKG_VERSION")).await;
     }
-    
+
     // Load configuration
     let config = load_config(&cli).context("Failed to load configuration")?;
-    
+
     // Initialize telemetry/logging system - use stderr for STDIO mode
     match cli.transport.as_str() {
         "stdio" => {
@@ -105,23 +110,22 @@ async fn main() -> Result<()> {
                 .context("Failed to initialize telemetry")?;
         }
         _ => {
-            init_telemetry(&config.logging)
-                .context("Failed to initialize telemetry")?;
+            init_telemetry(&config.logging).context("Failed to initialize telemetry")?;
         }
     }
-    
+
     // Log configuration validation
     log_config_validation(&config);
-    
+
     // Validate configuration (will exit if invalid)
     if let Err(e) = config.validate() {
         error!(error = %e, "Configuration validation failed");
         std::process::exit(1);
     }
-    
+
     // Log startup information
     log_startup_info(&config);
-    
+
     // Ensure database directory exists
     ensure_database_directory_from_config(&config)
         .context("Failed to create database directory")?;
@@ -131,55 +135,60 @@ async fn main() -> Result<()> {
         "stdio" => {
             // For STDIO mode, log startup to stderr only
             eprintln!("Starting MCP server in STDIO mode");
-            
+
             // Create repository only (no HTTP server needed)
             let repository = create_repository(&config)
                 .await
                 .context("Failed to create repository")?;
-                
+
             // For now, use the same repository for both tasks and messages
             let message_repository = repository.clone();
-            
+
             // Create workspace context repository
-            let workspace_context_repository = create_workspace_context_repository(&config)
-                .await
-                .context("Failed to create workspace context repository")?;
-            
+            let workspace_context_repository =
+                create_workspace_context_repository(&config)
+                    .await
+                    .context("Failed to create workspace context repository")?;
+
             // Create STDIO server
-            let stdio_server = StdioMcpServer::new(repository, message_repository, workspace_context_repository);
-            
+            let stdio_server =
+                StdioMcpServer::new(repository, message_repository, workspace_context_repository);
+
             // Run STDIO server (blocks until stdin is closed)
-            stdio_server.serve()
+            stdio_server
+                .serve()
                 .await
                 .context("STDIO MCP server error")?;
-            
+
             eprintln!("STDIO MCP server shut down cleanly");
             Ok(())
         }
         "http" => {
             info!("Starting MCP server in HTTP mode");
-            
+
             // Initialize application (repository and HTTP server)
             let server = initialize_app(&config)
                 .await
                 .context("Failed to initialize application")?;
-            
+
             // Create server address
             let addr = config.server_address();
             info!("Starting MCP server on {}", addr);
-            
+
             // Setup graceful shutdown handling
             let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
-            
+
             // Spawn a task to handle shutdown signals
             tokio::spawn(async move {
                 #[cfg(unix)]
                 {
-                    let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                        .expect("Failed to register SIGTERM handler");
-                    let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
-                        .expect("Failed to register SIGINT handler");
-                    
+                    let mut sigterm =
+                        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                            .expect("Failed to register SIGTERM handler");
+                    let mut sigint =
+                        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+                            .expect("Failed to register SIGINT handler");
+
                     tokio::select! {
                         _ = sigterm.recv() => {
                             info!("Received SIGTERM, initiating graceful shutdown");
@@ -189,7 +198,7 @@ async fn main() -> Result<()> {
                         }
                     }
                 }
-                
+
                 #[cfg(windows)]
                 {
                     tokio::signal::ctrl_c()
@@ -197,10 +206,10 @@ async fn main() -> Result<()> {
                         .expect("Failed to listen for ctrl+c");
                     info!("Received Ctrl+C, initiating graceful shutdown");
                 }
-                
+
                 let _ = shutdown_tx.send(());
             });
-            
+
             // Start the server with graceful shutdown
             tokio::select! {
                 result = server.serve(&addr) => {
@@ -223,7 +232,10 @@ async fn main() -> Result<()> {
             }
         }
         _ => {
-            error!("Invalid transport mode: {}. Use 'http' or 'stdio'", cli.transport);
+            error!(
+                "Invalid transport mode: {}. Use 'http' or 'stdio'",
+                cli.transport
+            );
             std::process::exit(1);
         }
     }

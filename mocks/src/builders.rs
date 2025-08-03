@@ -1,12 +1,12 @@
 //! Builder pattern implementations for easy test data construction
-//! 
+//!
 //! Provides fluent builders for:
 //! - Task construction with sensible defaults
 //! - NewTask and UpdateTask variants
 //! - Filter construction for query testing
 
-use task_core::{Task, TaskState, NewTask, UpdateTask, TaskFilter};
 use chrono::{DateTime, Utc};
+use task_core::{NewTask, Task, TaskFilter, TaskState, UpdateTask};
 
 /// Builder for constructing Task instances in tests
 pub struct TaskBuilder {

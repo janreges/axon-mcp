@@ -1,9 +1,9 @@
-use crate::{Task, TaskError, Result};
+use crate::{Result, Task, TaskError};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 /// MCP v2 Extensions for Multi-Agent Coordination
-/// 
+///
 /// This module provides the core business logic for MCP v2 features optimized
 /// for local SQLite-based deployments with 8-20 AI agents.
 /// Work discovery response for agents
@@ -62,14 +62,14 @@ pub enum ClaimResult {
     /// Task already claimed by another agent
     AlreadyClaimed { task_id: i32, claimed_by: String },
     /// Agent lacks required capabilities
-    InsufficientCapabilities { 
-        task_id: i32, 
+    InsufficientCapabilities {
+        task_id: i32,
         required: Vec<String>,
         agent_has: Vec<String>,
     },
     /// Task is quarantined due to too many failures
-    Quarantined { 
-        task_id: i32, 
+    Quarantined {
+        task_id: i32,
         reason: String,
         retry_after: DateTime<Utc>,
     },
@@ -116,7 +116,7 @@ impl CapabilityMatcher {
             if agent_capabilities.contains(requirement) {
                 matched_count += 1;
                 score += self.exact_match_weight;
-                
+
                 // Bonus for specialization
                 if agent_specializations.contains(requirement) {
                     score += self.specialization_bonus;
@@ -144,10 +144,11 @@ impl CapabilityMatcher {
         }
 
         // For local AI agents, require at least 50% capability match
-        let match_count = task_requirements.iter()
+        let match_count = task_requirements
+            .iter()
             .filter(|req| agent_capabilities.contains(req))
             .count();
-        
+
         let match_ratio = match_count as f64 / task_requirements.len() as f64;
         match_ratio >= 0.5
     }
@@ -268,9 +269,10 @@ impl AgentWorkload {
     /// Add task to agent's workload
     pub fn add_task(&mut self, task_id: i32) -> Result<()> {
         if !self.can_accept_work() {
-            return Err(TaskError::Internal(
-                format!("Agent {} is at capacity", self.agent_name)
-            ));
+            return Err(TaskError::Internal(format!(
+                "Agent {} is at capacity",
+                self.agent_name
+            )));
         }
 
         self.active_tasks.push(task_id);
@@ -314,11 +316,11 @@ pub struct SimpleKnowledgeEntry {
 
 impl SimpleKnowledgeEntry {
     pub fn new(
-        key: String, 
-        value: serde_json::Value, 
+        key: String,
+        value: serde_json::Value,
         created_by: String,
         tags: Vec<String>,
-        confidence: Option<f64>
+        confidence: Option<f64>,
     ) -> Self {
         Self {
             key,
@@ -354,14 +356,18 @@ mod tests {
     #[test]
     fn test_capability_matcher() {
         let matcher = CapabilityMatcher::default();
-        
+
         let task_reqs = vec!["rust".to_string(), "database".to_string()];
-        let agent_caps = vec!["rust".to_string(), "database".to_string(), "testing".to_string()];
+        let agent_caps = vec![
+            "rust".to_string(),
+            "database".to_string(),
+            "testing".to_string(),
+        ];
         let agent_specs = vec!["rust".to_string()];
-        
+
         let score = matcher.calculate_match_score(&task_reqs, &agent_caps, &agent_specs);
         assert!(score > 1.0); // Should get bonus for specialization
-        
+
         assert!(matcher.meets_requirements(&task_reqs, &agent_caps));
     }
 
@@ -369,7 +375,7 @@ mod tests {
     fn test_priority_calculator() {
         let config = WorkDiscoveryConfig::default();
         let calc = PriorityCalculator::new(config);
-        
+
         let mut task = Task {
             id: 1,
             code: "TEST-01".to_string(),
@@ -388,10 +394,10 @@ mod tests {
             estimated_effort: None,
             confidence_threshold: 0.8,
         };
-        
+
         let priority = calc.calculate_effective_priority(&task);
         assert!(priority > 5.0); // Should get age bonus
-        
+
         task.failure_count = 3;
         assert!(!calc.should_consider_task(&task)); // Too many failures
     }
@@ -400,10 +406,10 @@ mod tests {
     fn test_work_session() {
         let mut session = SimpleWorkSession::new(1, "test-agent".to_string());
         assert!(session.is_active);
-        
+
         session.update_activity();
         assert!(!session.has_timed_out(60)); // Within 1 hour
-        
+
         session.end_session();
         assert!(!session.is_active);
     }
@@ -412,13 +418,13 @@ mod tests {
     fn test_agent_workload() {
         let mut workload = AgentWorkload::new("test-agent".to_string(), 3);
         assert!(workload.can_accept_work());
-        
+
         workload.add_task(1).unwrap();
         workload.add_task(2).unwrap();
         workload.add_task(3).unwrap();
-        
+
         assert!(!workload.can_accept_work()); // At capacity
-        
+
         workload.remove_task(1);
         assert!(workload.can_accept_work());
     }
@@ -430,9 +436,9 @@ mod tests {
             serde_json::json!({"info": "test"}),
             "test-agent".to_string(),
             vec!["testing".to_string()],
-            Some(0.9)
+            Some(0.9),
         );
-        
+
         assert!(entry.is_relevant_to(&["testing".to_string()]));
         assert!(!entry.is_relevant_to(&["other".to_string()]));
         assert!(entry.is_recent(24)); // Within 24 hours

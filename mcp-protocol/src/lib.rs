@@ -1,24 +1,24 @@
 //! MCP Protocol Implementation
-//! 
+//!
 //! This crate provides the Model Context Protocol (MCP) server implementation
 //! using Server-Sent Events (SSE) transport for task management operations.
-//! 
+//!
 //! # Overview
-//! 
+//!
 //! The mcp-protocol crate implements the bridge between core business logic
 //! and MCP clients using Server-Sent Events (SSE) transport. It provides:
-//! 
+//!
 //! - JSON-RPC 2.0 compliant protocol handling
 //! - SSE transport layer for real-time communication
 //! - Error mapping from core errors to MCP error codes
 //! - Task serialization for MCP responses
-//! 
+//!
 //! # Usage
-//! 
+//!
 //! ```no_run
 //! use mcp_protocol::{McpServer, McpTaskHandler};
 //! use std::sync::Arc;
-//! 
+//!
 //! async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
 //!     // In real usage, you would use database::SqliteTaskRepository
 //!     // let repository = Arc::new(database::SqliteTaskRepository::new("tasks.db").await?);
@@ -82,9 +82,7 @@ pub use server::McpServer;
 
 // Re-export core types for external consumers
 pub use task_core::{
-    Task, TaskState, NewTask, UpdateTask, TaskFilter,
-    TaskRepository, ProtocolHandler, HealthStatus,
-    CreateTaskParams, UpdateTaskParams, SetStateParams,
-    GetTaskByIdParams, GetTaskByCodeParams, ListTasksParams,
-    AssignTaskParams, ArchiveTaskParams,
+    ArchiveTaskParams, AssignTaskParams, CreateTaskParams, GetTaskByCodeParams, GetTaskByIdParams,
+    HealthStatus, ListTasksParams, NewTask, ProtocolHandler, SetStateParams, Task, TaskFilter,
+    TaskRepository, TaskState, UpdateTask, UpdateTaskParams,
 };

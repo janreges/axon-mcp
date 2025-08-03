@@ -1,23 +1,27 @@
 //! MCP v2 Server with Multiple Transport Support
-//! 
+//!
 //! Implements the MCP server supporting both modern Streamable HTTP transport (2025-06-18)
 //! and legacy Server-Sent Events for backward compatibility.
 
-use std::{sync::Arc, net::SocketAddr};
 use axum::{
     extract::State,
-    http::{StatusCode, HeaderMap, header},
+    http::{header, HeaderMap, StatusCode},
     response::Sse,
     routing::{get, post},
     Json, Router,
 };
 use serde_json::{json, Value};
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::mpsc;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::info;
 
 use crate::{error::McpError, handler::McpTaskHandler, serialization::*};
-use ::task_core::{TaskRepository, TaskMessageRepository, WorkspaceContextRepository, ProtocolHandler, DiscoverWorkParams, ClaimTaskParams, ReleaseTaskParams, StartWorkSessionParams, EndWorkSessionParams, CreateTaskMessageParams, GetTaskMessagesParams};
+use ::task_core::{
+    ClaimTaskParams, CreateTaskMessageParams, DiscoverWorkParams, EndWorkSessionParams,
+    GetTaskMessagesParams, ProtocolHandler, ReleaseTaskParams, StartWorkSessionParams,
+    TaskMessageRepository, TaskRepository, WorkspaceContextRepository,
+};
 
 /// MCP Protocol Version as required by 2025-06-18 specification
 const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
@@ -33,62 +37,79 @@ pub struct McpServer<R, M, W> {
     handler: McpTaskHandler<R, M, W>,
 }
 
-impl<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRepository + Send + Sync + 'static, W: WorkspaceContextRepository + Send + Sync + 'static> McpServer<R, M, W> {
+impl<
+        R: TaskRepository + Send + Sync + 'static,
+        M: TaskMessageRepository + Send + Sync + 'static,
+        W: WorkspaceContextRepository + Send + Sync + 'static,
+    > McpServer<R, M, W>
+{
     /// Create new MCP server for local usage (no authentication)
-    pub fn new(repository: Arc<R>, message_repository: Arc<M>, workspace_context_repository: Arc<W>) -> Self {
+    pub fn new(
+        repository: Arc<R>,
+        message_repository: Arc<M>,
+        workspace_context_repository: Arc<W>,
+    ) -> Self {
         Self {
-            handler: McpTaskHandler::new(repository, message_repository, workspace_context_repository),
+            handler: McpTaskHandler::new(
+                repository,
+                message_repository,
+                workspace_context_repository,
+            ),
         }
     }
-    
+
     /// Start the MCP server for local PC usage
     pub async fn serve(self, addr: &str) -> Result<(), Box<dyn std::error::Error>> {
         let app = self.create_router();
-        
-        let socket_addr: SocketAddr = addr.parse()
+
+        let socket_addr: SocketAddr = addr
+            .parse()
             .map_err(|e| format!("Invalid address '{addr}': {e}"))?;
-        
+
         info!("Starting MCP server on {}", socket_addr);
-        
+
         let listener = tokio::net::TcpListener::bind(socket_addr).await?;
         axum::serve(listener, app).await?;
-        
+
         Ok(())
     }
-    
+
     /// Create the router with all endpoints
     fn create_router(self) -> Router {
         let state = Arc::new(McpServerState {
             handler: self.handler,
         });
-        
+
         Router::new()
             .route("/mcp", post(rpc_handler)) // MCP 2025-06-18 Streamable HTTP transport
             .route("/mcp/v1", get(sse_handler)) // Legacy SSE support (deprecated)
-            .route("/mcp/v1/rpc", post(rpc_handler)) // Legacy RPC support (deprecated)  
+            .route("/mcp/v1/rpc", post(rpc_handler)) // Legacy RPC support (deprecated)
             .route("/health", get(health_handler))
             .with_state(state)
     }
-    
 }
 
 /// Execute MCP method - shared logic for both server instances and handlers
-async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepository + Send + Sync, W: WorkspaceContextRepository + Send + Sync>(
-    handler: &McpTaskHandler<R, M, W>, 
-    method: &str, 
-    params: Value, 
-    id: Option<Value>
+async fn execute_mcp_method<
+    R: TaskRepository + Send + Sync,
+    M: TaskMessageRepository + Send + Sync,
+    W: WorkspaceContextRepository + Send + Sync,
+>(
+    handler: &McpTaskHandler<R, M, W>,
+    method: &str,
+    params: Value,
+    id: Option<Value>,
 ) -> Value {
     match method {
         "create_task" => {
             let params: CreateTaskParams = match deserialize_mcp_params(params) {
                 Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+                Err(e) => return e.to_json_rpc_error(id),
             };
             match handler.create_task(params).await {
                 Ok(task) => match serialize_task_for_mcp(&task) {
                     Ok(value) => create_success_response(id, value),
-                    Err(e) => McpError::from(e).to_json_rpc_error(id),
+                    Err(e) => e.to_json_rpc_error(id),
                 },
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
             }
@@ -96,12 +117,12 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
         "update_task" => {
             let params: UpdateTaskParams = match deserialize_mcp_params(params) {
                 Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+                Err(e) => return e.to_json_rpc_error(id),
             };
             match handler.update_task(params).await {
                 Ok(task) => match serialize_task_for_mcp(&task) {
                     Ok(value) => create_success_response(id, value),
-                    Err(e) => McpError::from(e).to_json_rpc_error(id),
+                    Err(e) => e.to_json_rpc_error(id),
                 },
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
             }
@@ -109,12 +130,12 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
         "set_task_state" => {
             let params: SetStateParams = match deserialize_mcp_params(params) {
                 Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+                Err(e) => return e.to_json_rpc_error(id),
             };
             match handler.set_task_state(params).await {
                 Ok(task) => match serialize_task_for_mcp(&task) {
                     Ok(value) => create_success_response(id, value),
-                    Err(e) => McpError::from(e).to_json_rpc_error(id),
+                    Err(e) => e.to_json_rpc_error(id),
                 },
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
             }
@@ -122,12 +143,12 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
         "get_task_by_id" => {
             let params: GetTaskByIdParams = match deserialize_mcp_params(params) {
                 Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+                Err(e) => return e.to_json_rpc_error(id),
             };
             match handler.get_task_by_id(params).await {
                 Ok(Some(task)) => match serialize_task_for_mcp(&task) {
                     Ok(value) => create_success_response(id, value),
-                    Err(e) => McpError::from(e).to_json_rpc_error(id),
+                    Err(e) => e.to_json_rpc_error(id),
                 },
                 Ok(None) => create_success_response(id, Value::Null),
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
@@ -136,12 +157,12 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
         "get_task_by_code" => {
             let params: GetTaskByCodeParams = match deserialize_mcp_params(params) {
                 Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+                Err(e) => return e.to_json_rpc_error(id),
             };
             match handler.get_task_by_code(params).await {
                 Ok(Some(task)) => match serialize_task_for_mcp(&task) {
                     Ok(value) => create_success_response(id, value),
-                    Err(e) => McpError::from(e).to_json_rpc_error(id),
+                    Err(e) => e.to_json_rpc_error(id),
                 },
                 Ok(None) => create_success_response(id, Value::Null),
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
@@ -150,30 +171,29 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
         "list_tasks" => {
             let params: ListTasksParams = match deserialize_mcp_params(params) {
                 Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+                Err(e) => return e.to_json_rpc_error(id),
             };
             match handler.list_tasks(params).await {
                 Ok(tasks) => {
-                    let task_values: Result<Vec<_>, _> = tasks.iter()
-                        .map(serialize_task_for_mcp)
-                        .collect();
+                    let task_values: Result<Vec<_>, _> =
+                        tasks.iter().map(serialize_task_for_mcp).collect();
                     match task_values {
                         Ok(values) => create_success_response(id, Value::Array(values)),
-                        Err(e) => McpError::from(e).to_json_rpc_error(id),
+                        Err(e) => e.to_json_rpc_error(id),
                     }
-                },
+                }
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
             }
         }
         "assign_task" => {
             let params: AssignTaskParams = match deserialize_mcp_params(params) {
                 Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+                Err(e) => return e.to_json_rpc_error(id),
             };
             match handler.assign_task(params).await {
                 Ok(task) => match serialize_task_for_mcp(&task) {
                     Ok(value) => create_success_response(id, value),
-                    Err(e) => McpError::from(e).to_json_rpc_error(id),
+                    Err(e) => e.to_json_rpc_error(id),
                 },
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
             }
@@ -181,39 +201,36 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
         "archive_task" => {
             let params: ArchiveTaskParams = match deserialize_mcp_params(params) {
                 Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+                Err(e) => return e.to_json_rpc_error(id),
             };
             match handler.archive_task(params).await {
                 Ok(task) => match serialize_task_for_mcp(&task) {
                     Ok(value) => create_success_response(id, value),
-                    Err(e) => McpError::from(e).to_json_rpc_error(id),
+                    Err(e) => e.to_json_rpc_error(id),
                 },
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
             }
         }
-        "health_check" => {
-            match handler.health_check().await {
-                Ok(health) => match serde_json::to_value(health) {
-                    Ok(value) => create_success_response(id, value),
-                    Err(e) => McpError::Serialization(e.to_string()).to_json_rpc_error(id),
-                },
-                Err(e) => McpError::from(e).to_json_rpc_error(id),
-            }
-        }
+        "health_check" => match handler.health_check().await {
+            Ok(health) => match serde_json::to_value(health) {
+                Ok(value) => create_success_response(id, value),
+                Err(e) => McpError::Serialization(e.to_string()).to_json_rpc_error(id),
+            },
+            Err(e) => McpError::from(e).to_json_rpc_error(id),
+        },
         // MCP v2 Advanced Multi-Agent Functions
         "discover_work" => {
             let params: DiscoverWorkParams = match deserialize_mcp_params(params) {
                 Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+                Err(e) => return e.to_json_rpc_error(id),
             };
             match handler.discover_work(params).await {
                 Ok(tasks) => {
-                    let task_values: Result<Vec<_>, _> = tasks.iter()
-                        .map(serialize_task_for_mcp)
-                        .collect();
+                    let task_values: Result<Vec<_>, _> =
+                        tasks.iter().map(serialize_task_for_mcp).collect();
                     match task_values {
                         Ok(values) => create_success_response(id, Value::Array(values)),
-                        Err(e) => McpError::from(e).to_json_rpc_error(id),
+                        Err(e) => e.to_json_rpc_error(id),
                     }
                 }
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
@@ -222,12 +239,12 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
         "claim_task" => {
             let params: ClaimTaskParams = match deserialize_mcp_params(params) {
                 Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+                Err(e) => return e.to_json_rpc_error(id),
             };
             match handler.claim_task(params).await {
                 Ok(task) => match serialize_task_for_mcp(&task) {
                     Ok(value) => create_success_response(id, value),
-                    Err(e) => McpError::from(e).to_json_rpc_error(id),
+                    Err(e) => e.to_json_rpc_error(id),
                 },
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
             }
@@ -235,12 +252,12 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
         "release_task" => {
             let params: ReleaseTaskParams = match deserialize_mcp_params(params) {
                 Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+                Err(e) => return e.to_json_rpc_error(id),
             };
             match handler.release_task(params).await {
                 Ok(task) => match serialize_task_for_mcp(&task) {
                     Ok(value) => create_success_response(id, value),
-                    Err(e) => McpError::from(e).to_json_rpc_error(id),
+                    Err(e) => e.to_json_rpc_error(id),
                 },
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
             }
@@ -248,22 +265,20 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
         "start_work_session" => {
             let params: StartWorkSessionParams = match deserialize_mcp_params(params) {
                 Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+                Err(e) => return e.to_json_rpc_error(id),
             };
             match handler.start_work_session(params).await {
-                Ok(session_info) => {
-                    match serde_json::to_value(session_info) {
-                        Ok(value) => create_success_response(id, value),
-                        Err(e) => McpError::Serialization(e.to_string()).to_json_rpc_error(id),
-                    }
-                }
+                Ok(session_info) => match serde_json::to_value(session_info) {
+                    Ok(value) => create_success_response(id, value),
+                    Err(e) => McpError::Serialization(e.to_string()).to_json_rpc_error(id),
+                },
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
             }
         }
         "end_work_session" => {
             let params: EndWorkSessionParams = match deserialize_mcp_params(params) {
                 Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+                Err(e) => return e.to_json_rpc_error(id),
             };
             match handler.end_work_session(params).await {
                 Ok(()) => create_success_response(id, Value::Null),
@@ -274,7 +289,7 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
         "create_task_message" => {
             let params: CreateTaskMessageParams = match deserialize_mcp_params(params) {
                 Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+                Err(e) => return e.to_json_rpc_error(id),
             };
             match handler.create_task_message(params).await {
                 Ok(message) => match serde_json::to_value(message) {
@@ -287,7 +302,7 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
         "get_task_messages" => {
             let params: GetTaskMessagesParams = match deserialize_mcp_params(params) {
                 Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+                Err(e) => return e.to_json_rpc_error(id),
             };
             match handler.get_task_messages(params).await {
                 Ok(messages) => match serde_json::to_value(messages) {
@@ -299,10 +314,11 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
         }
         // Workspace Setup Functions
         "get_setup_instructions" => {
-            let params: ::task_core::GetSetupInstructionsParams = match deserialize_mcp_params(params) {
-                Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
-            };
+            let params: ::task_core::GetSetupInstructionsParams =
+                match deserialize_mcp_params(params) {
+                    Ok(p) => p,
+                    Err(e) => return e.to_json_rpc_error(id),
+                };
             match handler.get_setup_instructions(params).await {
                 Ok(instructions) => match serde_json::to_value(instructions) {
                     Ok(value) => create_success_response(id, value),
@@ -312,10 +328,11 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
             }
         }
         "get_agentic_workflow_description" => {
-            let params: ::task_core::GetAgenticWorkflowDescriptionParams = match deserialize_mcp_params(params) {
-                Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
-            };
+            let params: ::task_core::GetAgenticWorkflowDescriptionParams =
+                match deserialize_mcp_params(params) {
+                    Ok(p) => p,
+                    Err(e) => return e.to_json_rpc_error(id),
+                };
             match handler.get_agentic_workflow_description(params).await {
                 Ok(workflow) => match serde_json::to_value(workflow) {
                     Ok(value) => create_success_response(id, value),
@@ -327,7 +344,7 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
         "register_agent" => {
             let params: ::task_core::RegisterAgentParams = match deserialize_mcp_params(params) {
                 Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+                Err(e) => return e.to_json_rpc_error(id),
             };
             match handler.register_agent(params).await {
                 Ok(agent) => match serde_json::to_value(agent) {
@@ -338,10 +355,11 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
             }
         }
         "get_instructions_for_main_ai_file" => {
-            let params: ::task_core::GetInstructionsForMainAiFileParams = match deserialize_mcp_params(params) {
-                Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
-            };
+            let params: ::task_core::GetInstructionsForMainAiFileParams =
+                match deserialize_mcp_params(params) {
+                    Ok(p) => p,
+                    Err(e) => return e.to_json_rpc_error(id),
+                };
             match handler.get_instructions_for_main_ai_file(params).await {
                 Ok(instructions) => match serde_json::to_value(instructions) {
                     Ok(value) => create_success_response(id, value),
@@ -353,7 +371,7 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
         "create_main_ai_file" => {
             let params: ::task_core::CreateMainAiFileParams = match deserialize_mcp_params(params) {
                 Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
+                Err(e) => return e.to_json_rpc_error(id),
             };
             match handler.create_main_ai_file(params).await {
                 Ok(file_data) => match serde_json::to_value(file_data) {
@@ -364,10 +382,11 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
             }
         }
         "get_workspace_manifest" => {
-            let params: ::task_core::GetWorkspaceManifestParams = match deserialize_mcp_params(params) {
-                Ok(p) => p,
-                Err(e) => return McpError::from(e).to_json_rpc_error(id),
-            };
+            let params: ::task_core::GetWorkspaceManifestParams =
+                match deserialize_mcp_params(params) {
+                    Ok(p) => p,
+                    Err(e) => return e.to_json_rpc_error(id),
+                };
             match handler.get_workspace_manifest(params).await {
                 Ok(manifest) => match serde_json::to_value(manifest) {
                     Ok(value) => create_success_response(id, value),
@@ -376,21 +395,24 @@ async fn execute_mcp_method<R: TaskRepository + Send + Sync, M: TaskMessageRepos
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
             }
         }
-        _ => {
-            McpError::Protocol(format!("Unknown method: {method}")).to_json_rpc_error(id)
-        }
+        _ => McpError::Protocol(format!("Unknown method: {method}")).to_json_rpc_error(id),
     }
 }
 
 /// SSE endpoint for MCP communication
-async fn sse_handler<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRepository + Send + Sync + 'static, W: WorkspaceContextRepository + Send + Sync + 'static>(
+async fn sse_handler<
+    R: TaskRepository + Send + Sync + 'static,
+    M: TaskMessageRepository + Send + Sync + 'static,
+    W: WorkspaceContextRepository + Send + Sync + 'static,
+>(
     State(_state): State<Arc<McpServerState<R, M, W>>>,
-) -> Result<Sse<UnboundedReceiverStream<Result<axum::response::sse::Event, axum::Error>>>, StatusCode> {
+) -> Result<Sse<UnboundedReceiverStream<Result<axum::response::sse::Event, axum::Error>>>, StatusCode>
+{
     let (tx, rx) = mpsc::unbounded_channel();
-    
+
     // Send initial connection event
-    let welcome_event = axum::response::sse::Event::default()
-        .data(json!({
+    let welcome_event = axum::response::sse::Event::default().data(
+        json!({
             "jsonrpc": "2.0",
             "method": "connection_established",
             "params": {
@@ -401,7 +423,7 @@ async fn sse_handler<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRe
                     "create_task", "update_task", "set_task_state",
                     "get_task_by_id", "get_task_by_code", "list_tasks",
                     "assign_task", "archive_task", "health_check",
-                    "discover_work", "claim_task", "release_task", 
+                    "discover_work", "claim_task", "release_task",
                     "start_work_session", "end_work_session",
                     "create_task_message", "get_task_messages",
                     "get_setup_instructions", "get_agentic_workflow_description",
@@ -409,12 +431,14 @@ async fn sse_handler<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRe
                     "create_main_ai_file", "get_workspace_manifest"
                 ]
             }
-        }).to_string());
-    
+        })
+        .to_string(),
+    );
+
     if tx.send(Ok(welcome_event)).is_err() {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
-    
+
     // Set up heartbeat
     let heartbeat_tx = tx.clone();
     tokio::spawn(async move {
@@ -424,44 +448,46 @@ async fn sse_handler<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRe
             let heartbeat = axum::response::sse::Event::default()
                 .event("heartbeat")
                 .data("ping");
-            
+
             if heartbeat_tx.send(Ok(heartbeat)).is_err() {
                 break;
             }
         }
     });
-    
+
     let stream = UnboundedReceiverStream::new(rx);
     Ok(Sse::new(stream))
 }
 
 /// JSON-RPC endpoint for MCP communication
-async fn rpc_handler<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRepository + Send + Sync + 'static, W: WorkspaceContextRepository + Send + Sync + 'static>(
+async fn rpc_handler<
+    R: TaskRepository + Send + Sync + 'static,
+    M: TaskMessageRepository + Send + Sync + 'static,
+    W: WorkspaceContextRepository + Send + Sync + 'static,
+>(
     State(state): State<Arc<McpServerState<R, M, W>>>,
     headers: HeaderMap,
     Json(request): Json<Value>,
 ) -> Result<(HeaderMap, Json<Value>), StatusCode> {
     info!("Received RPC request: {}", request);
-    
+
     // Extract ID first for error responses
     let id = request.get("id").cloned();
-    
+
     // Validate MCP-Protocol-Version header (required by 2025-06-18 spec)
-    let protocol_version = headers.get("MCP-Protocol-Version")
+    let protocol_version = headers
+        .get("MCP-Protocol-Version")
         .or_else(|| headers.get("mcp-protocol-version")) // Try lowercase variant
         .and_then(|v| v.to_str().ok());
-    
+
     // Set response headers
     let mut response_headers = HeaderMap::new();
     response_headers.insert(
         header::HeaderName::from_static("mcp-protocol-version"),
-        MCP_PROTOCOL_VERSION.parse().unwrap()
+        MCP_PROTOCOL_VERSION.parse().unwrap(),
     );
-    response_headers.insert(
-        header::CONTENT_TYPE,
-        "application/json".parse().unwrap()
-    );
-    
+    response_headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+
     // Validate protocol version - default to 2025-03-26 for backward compatibility if missing
     match protocol_version {
         Some(version) if version == MCP_PROTOCOL_VERSION => {
@@ -478,30 +504,36 @@ async fn rpc_handler<R: TaskRepository + Send + Sync + 'static, M: TaskMessageRe
         }
         None => {
             // Missing header - default to backward compatibility
-            info!("Missing MCP-Protocol-Version header, defaulting to 2025-03-26 compatibility mode");
+            info!(
+                "Missing MCP-Protocol-Version header, defaulting to 2025-03-26 compatibility mode"
+            );
         }
     }
-    
+
     // Validate that request is not a JSON-RPC batch (forbidden in 2025-06-18)
     if request.is_array() {
-        let error = McpError::Protocol("JSON-RPC batching is not supported in MCP 2025-06-18 specification".to_string());
+        let error = McpError::Protocol(
+            "JSON-RPC batching is not supported in MCP 2025-06-18 specification".to_string(),
+        );
         return Ok((response_headers, Json(error.to_json_rpc_error(id))));
     }
-    
+
     // Parse JSON-RPC request - return JSON-RPC errors instead of HTTP errors
     let method = match request.get("method").and_then(|v| v.as_str()) {
         Some(method) => method,
         None => {
-            let error = McpError::Protocol("Missing or invalid 'method' field in JSON-RPC request".to_string());
+            let error = McpError::Protocol(
+                "Missing or invalid 'method' field in JSON-RPC request".to_string(),
+            );
             return Ok((response_headers, Json(error.to_json_rpc_error(id))));
         }
     };
-    
+
     let params = request.get("params").unwrap_or(&Value::Null).clone();
-    
+
     // Execute the method directly through the handler
     let response = execute_mcp_method(&state.handler, method, params, id).await;
-    
+
     Ok((response_headers, Json(response)))
 }
 
@@ -513,16 +545,19 @@ async fn health_handler() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mockall::predicate::*;
-    use mockall::mock;
-    use async_trait::async_trait;
-    use ::task_core::{Task, NewTask, UpdateTask, TaskFilter, TaskState, RepositoryStats, TaskMessage, WorkspaceContextRepository};
     use ::task_core::error::Result;
     use ::task_core::workspace_setup::WorkspaceContext;
+    use ::task_core::{
+        NewTask, RepositoryStats, Task, TaskFilter, TaskMessage, TaskState, UpdateTask,
+        WorkspaceContextRepository,
+    };
+    use async_trait::async_trait;
+    use mockall::mock;
+    use mockall::predicate::*;
 
     mock! {
         TestRepository {}
-        
+
         #[async_trait]
         impl TaskRepository for TestRepository {
             async fn create(&self, task: NewTask) -> Result<Task>;
@@ -542,10 +577,10 @@ mod tests {
             async fn end_work_session(&self, session_id: i32, notes: Option<String>, productivity_score: Option<f64>) -> Result<()>;
         }
     }
-    
+
     // Simple mock for testing server creation
     struct SimpleTestMessageRepository;
-    
+
     #[async_trait]
     impl TaskMessageRepository for SimpleTestMessageRepository {
         async fn create_message(
@@ -568,7 +603,7 @@ mod tests {
                 reply_to_message_id,
             })
         }
-        
+
         async fn get_messages(
             &self,
             _task_code: &str,
@@ -580,38 +615,38 @@ mod tests {
         ) -> Result<Vec<TaskMessage>> {
             Ok(vec![])
         }
-        
+
         async fn get_message_by_id(&self, _message_id: i32) -> Result<Option<TaskMessage>> {
             Ok(None)
         }
     }
-    
+
     // Simple mock workspace context repository for testing
     struct SimpleTestWorkspaceContextRepository;
-    
+
     #[async_trait]
     impl WorkspaceContextRepository for SimpleTestWorkspaceContextRepository {
         async fn create(&self, context: WorkspaceContext) -> Result<WorkspaceContext> {
             Ok(context)
         }
-        
+
         async fn get_by_id(&self, _workspace_id: &str) -> Result<Option<WorkspaceContext>> {
             Ok(None)
         }
-        
+
         async fn update(&self, context: WorkspaceContext) -> Result<WorkspaceContext> {
             Ok(context)
         }
-        
+
         async fn delete(&self, _workspace_id: &str) -> Result<()> {
             Ok(())
         }
-        
+
         async fn health_check(&self) -> Result<()> {
             Ok(())
         }
     }
-    
+
     #[test]
     fn test_server_creation() {
         let mock_repo = Arc::new(MockTestRepository::new());
@@ -619,6 +654,6 @@ mod tests {
         let mock_workspace_repo = Arc::new(SimpleTestWorkspaceContextRepository);
         let _server = McpServer::new(mock_repo, mock_message_repo, mock_workspace_repo);
         // Basic test that server can be created
-        assert!(true);
+        // Test passes if server creation doesn't panic
     }
 }
