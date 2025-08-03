@@ -58,7 +58,7 @@ prompt_yes_no() {
     local prompt_message="$1"
     local default_answer="${2:-Y}" # Default to 'Y' if not specified
     while true; do
-        if [[ "$default_answer" == "Y" || "$default_answer" == "y" ]]; then
+        if [ "$default_answer" = "Y" ] || [ "$default_answer" = "y" ]; then
             read -rp "$prompt_message [Y/n]: " yn
         else
             read -rp "$prompt_message [y/N]: " yn
@@ -67,7 +67,7 @@ prompt_yes_no() {
             [Yy]* ) return 0;; # Yes
             [Nn]* ) return 1;; # No
             "" )
-                if [[ "$default_answer" == "Y" || "$default_answer" == "y" ]]; then
+                if [ "$default_answer" = "Y" ] || [ "$default_answer" = "y" ]; then
                     return 0
                 else
                     return 1
@@ -82,11 +82,11 @@ find_project_root() {
     local current_dir="$PWD"
     local root_found=""
 
-    while [[ "$current_dir" != "/" && "$current_dir" != "" ]]; do
-        if [[ -d "$current_dir/.git" ]]; then
+    while [ "$current_dir" != "/" ] && [ "$current_dir" != "" ]; do
+        if [ -d "$current_dir/.git" ]; then
             root_found="$current_dir"
             break
-        elif [[ -d "$current_dir/.claude" ]]; then
+        elif [ -d "$current_dir/.claude" ]; then
             root_found="$current_dir"
             break
         fi
@@ -406,17 +406,17 @@ main() {
     done
     
     # Determine project root if not explicitly set by CLI
-    if [[ "$INSTALL_MODE" == "auto" || "$INSTALL_MODE" == "project" ]]; then
+    if [ "$INSTALL_MODE" = "auto" ] || [ "$INSTALL_MODE" = "project" ]; then
         info "Detecting project root..."
         PROJECT_ROOT=$(find_project_root)
-        if [[ -n "$PROJECT_ROOT" ]]; then
+        if [ -n "$PROJECT_ROOT" ]; then
             success "Project root found: $PROJECT_ROOT"
-            if [[ "$INSTALL_MODE" == "auto" ]]; then
+            if [ "$INSTALL_MODE" = "auto" ]; then
                 INSTALL_MODE="project" # Default to project scope if detected and no override
             fi
         else
             warning "Project root not found. Installation will continue in user scope."
-            if [[ "$INSTALL_MODE" == "project" ]]; then
+            if [ "$INSTALL_MODE" = "project" ]; then
                 fatal "Argument --claude-code-project was provided, but project root was not found. Aborting."
             fi
             INSTALL_MODE="user" # Fallback to user if --claude-code-project not specified
@@ -424,10 +424,10 @@ main() {
     fi
     
     # Set installation directory based on determined mode
-    if [[ "$INSTALL_MODE" == "project" ]]; then
+    if [ "$INSTALL_MODE" = "project" ]; then
         INSTALL_DIR="$PROJECT_ROOT/.axon/bin"
         info "Project-scoped installation to: $INSTALL_DIR"
-    elif [[ "$INSTALL_MODE" == "user" ]]; then
+    elif [ "$INSTALL_MODE" = "user" ]; then
         # Use existing get_install_dir logic
         INSTALL_DIR="$(get_install_dir)"
         info "User-scoped installation to: $INSTALL_DIR"
@@ -445,7 +445,7 @@ main() {
     download_binary_to_dir "$INSTALL_DIR"
     
     # Configure PATH (only for user installs)
-    if [[ "$INSTALL_MODE" == "user" ]]; then
+    if [ "$INSTALL_MODE" = "user" ]; then
         configure_path
     fi
     
@@ -453,12 +453,12 @@ main() {
     health_check
     
     # --- Post-Installation Automation ---
-    if [[ "$INSTALL_MODE" == "project" ]]; then
+    if [ "$INSTALL_MODE" = "project" ]; then
         info "Running automation steps for project-scoped installation..."
 
         # Add .axon/ to .gitignore
         GITIGNORE_PATH="$PROJECT_ROOT/.gitignore"
-        if [[ -f "$GITIGNORE_PATH" ]]; then
+        if [ -f "$GITIGNORE_PATH" ]; then
             if ! grep -q "^\.axon/$" "$GITIGNORE_PATH"; then
                 if prompt_yes_no "Add '.axon/' to '$GITIGNORE_PATH'?" "Y"; then
                     echo ".axon/" >> "$GITIGNORE_PATH"
@@ -475,13 +475,13 @@ main() {
 
         # claude mcp add
         CLAUDE_DIR="$PROJECT_ROOT/.claude"
-        if [[ -d "$CLAUDE_DIR" ]]; then
+        if [ -d "$CLAUDE_DIR" ]; then
             info "Detected '.claude/' folder in project root."
             if prompt_yes_no "Run 'claude mcp add' for this project?" "Y"; then
                 info "Running 'claude mcp add'..."
                 # Execute claude mcp add from the project root
                 (cd "$PROJECT_ROOT" && claude mcp add axon-mcp -- "$INSTALL_DIR/$MCP_NAME") 2>/dev/null
-                if [[ $? -eq 0 ]]; then
+                if [ $? -eq 0 ]; then
                     success "'claude mcp add' executed successfully."
                 else
                     warning "'claude mcp add' failed. Check output for details or run manually."
@@ -496,7 +496,7 @@ main() {
         info "To use '$MCP_NAME' in this project, we recommend adding '$INSTALL_DIR' to your PATH, e.g. 'export PATH=\"\$PATH:$INSTALL_DIR\"' or run the binary directly: '$INSTALL_DIR/$MCP_NAME'."
         info "Or you can use alias: 'alias $MCP_NAME=\"$INSTALL_DIR/$MCP_NAME\"'."
 
-    elif [[ "$INSTALL_MODE" == "user" ]]; then
+    elif [ "$INSTALL_MODE" = "user" ]; then
         info "Running automation steps for user-scoped installation..."
         info "Make sure '$INSTALL_DIR' is in your PATH. You can add it to ~/.bashrc, ~/.zshrc or ~/.profile:"
         info "  export PATH=\"\$PATH:$INSTALL_DIR\""
@@ -507,7 +507,7 @@ main() {
     success "Installation complete!"
     echo ""
     echo "Next steps:"
-    if [[ "$INSTALL_MODE" == "project" ]]; then
+    if [ "$INSTALL_MODE" = "project" ]; then
         echo "  1. Use: ${BOLD}$INSTALL_DIR/$MCP_NAME --version${RESET}"
         echo "  2. In Claude Code, verify connection with: ${BOLD}/mcp${RESET}"
     else
@@ -521,6 +521,7 @@ main() {
 }
 
 # Run main function only if script is executed directly (not sourced)
-if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ -z "${BASH_SOURCE[0]}" ]; then
+# This works in both bash and POSIX sh
+if [ "${0##*/}" = "install.sh" ] || [ "${0##*/}" = "sh" ] || [ -z "${BASH_SOURCE-}" ]; then
     main "$@"
 fi

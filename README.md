@@ -29,7 +29,7 @@ Think of Axon as the neural relay between specialized agents—just add well-cra
 
 **macOS / Linux:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/janreges/axon-mcp/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/janreges/axon-mcp/main/install.sh | bash
 ```
 
 **Windows (PowerShell):**
@@ -39,7 +39,7 @@ irm https://raw.githubusercontent.com/janreges/axon-mcp/main/install.ps1 | iex
 
 **Windows (Git Bash / WSL):**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/janreges/axon-mcp/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/janreges/axon-mcp/main/install.sh | bash
 ```
 
 The installer will:
@@ -79,7 +79,7 @@ To update to the latest version:
 axon-mcp self-update
 
 # Or re-run the installer
-curl -fsSL https://raw.githubusercontent.com/janreges/axon-mcp/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/janreges/axon-mcp/main/install.sh | bash
 ```
 
 ### Configuration
