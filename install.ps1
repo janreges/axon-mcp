@@ -4,7 +4,7 @@
 # This script installs axon-mcp on Windows systems.
 # Run in PowerShell with: irm https://raw.githubusercontent.com/janreges/axon-mcp/main/install.ps1 | iex
 
-[CmdletBinding()]
+[CmdletBinding(SupportsShouldProcess)]
 param(
     [string]$Version = "latest",
     [string]$InstallDir = "$env:LOCALAPPDATA\axon-mcp\bin"
@@ -95,6 +95,12 @@ function Install-Binary {
     Write-Host "Axon MCP Installer for Windows" -ForegroundColor Cyan
     Write-Host "==============================" -ForegroundColor Cyan
     Write-Host ""
+    
+    # WhatIf support
+    if ($WhatIfPreference) {
+        Write-Host "WhatIf: Would install axon-mcp version $Version to $InstallDir" -ForegroundColor Yellow
+        return
+    }
     
     # Check if running as administrator
     if (Test-Administrator) {

@@ -153,7 +153,7 @@ download_binary() {
     
     # Create temp directory
     TMP_DIR="$(mktemp -d)"
-    trap "rm -rf $TMP_DIR" EXIT
+    trap 'rm -rf "$TMP_DIR"' EXIT
     
     # Download with timeout
     if ! curl -fsSL --connect-timeout 30 --max-time 300 "$DOWNLOAD_URL" -o "$TMP_DIR/${BINARY_NAME}.tar.gz"; then
@@ -227,10 +227,12 @@ configure_path() {
     info "Adding $INSTALL_DIR to PATH in $CONFIG_FILE"
     
     # Add PATH export with marker comment
-    echo "" >> "$CONFIG_FILE"
-    echo "# >>> axon-mcp installer >>>" >> "$CONFIG_FILE"
-    echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$CONFIG_FILE"
-    echo "# <<< axon-mcp installer <<<" >> "$CONFIG_FILE"
+    {
+        echo ""
+        echo "# >>> axon-mcp installer >>>"
+        echo "export PATH=\"\$PATH:$INSTALL_DIR\""
+        echo "# <<< axon-mcp installer <<<"
+    } >> "$CONFIG_FILE"
     
     warning "Please restart your shell or run: source $CONFIG_FILE"
 }
