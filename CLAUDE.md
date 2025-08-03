@@ -141,7 +141,7 @@ struct TaskMessage {
 
 ### Technology Stack
 - **Framework**: Rust with MCP SDK (https://github.com/modelcontextprotocol/rust-sdk)
-- **Database**: SQLite ONLY - with automatic path handling (~/db.sqlite default)
+- **Database**: SQLite ONLY - with automatic path handling (~/axon-mcp.sqlite default)
 - **Transport**: Server-Sent Events (SSE) for MCP communication
 - **Serialization**: JSON for MCP protocol compliance
 - **Testing**: Comprehensive unit, integration, and contract tests
@@ -157,7 +157,7 @@ This is a fundamental architectural decision that MUST be strictly enforced:
 - ❌ **NEVER** suggest PostgreSQL, MySQL, MongoDB, or any other database
 - ✅ **ALL** features must use SQLite: task storage, workspace contexts, session management, messaging, etc.
 - ✅ **JSON blob storage** in SQLite is preferred for complex data structures to minimize schema complexity
-- ✅ **Single database file** approach: ~/db.sqlite handles all persistence needs
+- ✅ **Single database file** approach: ~/axon-mcp.sqlite handles all persistence needs
 - ❌ **NO** multi-database architectures or external database services
 
 **Why SQLite Only:**
@@ -319,7 +319,7 @@ The project is fully implemented and functional:
 
 ## Key Technical Features
 
-- **SQLite Database**: Automatic path handling (~/db.sqlite default)
+- **SQLite Database**: Automatic path handling (~/axon-mcp.sqlite default)
 - **MCP v2 Protocol**: Latest specification with backward compatibility
 - **Multi-Agent Coordination**: Task discovery, claiming, work sessions
 - **Inter-Agent Messaging**: Targeted communication with threading support
@@ -416,4 +416,4 @@ get_task_messages(GetTaskMessagesParams {
    curl http://localhost:3000/health
    ```
 
-The server will automatically create a SQLite database at `~/db.sqlite` and start listening on `http://localhost:3000` with MCP endpoints available.
+The server will automatically create a SQLite database at `~/axon-mcp.sqlite` and start listening on `http://localhost:3000` with MCP endpoints available.

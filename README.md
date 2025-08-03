@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![Crates.io](https://img.shields.io/crates/v/axon-mcp?style=for-the-badge&logo=rust)]()
 
-Axon is a production-grade Model Context Protocol (MCP) server written in Rust. It acts as the single hub where your AI agents **create, claim, and track tasks while exchanging structured handoffs, questions, and blockers** in real-time. With dual transports (HTTP/SSE + JSON-RPC/STDIO), <100ms latency, and 15 first-class MCP functions, Axon lets you orchestrate small agent squads or large autonomous swarms—all backed by an ACID-compliant SQLite core.
+Axon is a production-grade Model Context Protocol (MCP) server written in Rust. It acts as the single hub where your AI agents **create, claim, and track tasks while exchanging structured handoffs, questions, and blockers** in real-time. With dual transports (HTTP/SSE + JSON-RPC/STDIO), low-latency communication, and 22 first-class MCP functions, Axon lets you orchestrate small agent squads or large autonomous swarms—all backed by an ACID-compliant SQLite core.
 
 Think of Axon as the neural relay between specialized agents—just add well-crafted prompts and watch them collaborate like a team.
 
@@ -25,24 +25,61 @@ Think of Axon as the neural relay between specialized agents—just add well-cra
 
 ## 🚀 Quick Start
 
-### Prerequisites
-- Rust 1.75+ 
-- SQLite 3.x (usually pre-installed)
+### One-Line Installation
 
-### Installation & Run
+**macOS / Linux:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/janreges/axon-mcp/main/install.sh | sh
+```
+
+**Windows (PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/janreges/axon-mcp/main/install.ps1 | iex
+```
+
+**Windows (Git Bash / WSL):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/janreges/axon-mcp/main/install.sh | sh
+```
+
+The installer will:
+- ✅ Detect your platform automatically
+- ✅ Download the latest pre-built binary
+- ✅ Add axon-mcp to your PATH
+- ✅ Configure Claude Code automatically
+- ✅ Run a health check to verify installation
+
+### Manual Installation
+
+If you prefer manual installation:
+
+1. Download the latest release for your platform from [GitHub Releases](https://github.com/janreges/axon-mcp/releases)
+2. Extract the archive and move `axon-mcp` to a directory in your PATH
+3. Configure Claude Code:
+   ```bash
+   claude mcp add axon-mcp -- /path/to/axon-mcp
+   ```
+
+### Verify Installation
 
 ```bash
-# Clone and build
-git clone https://github.com/janreges/axon-mcp.git
-cd axon-mcp
-cargo build --release
+# Check version
+axon-mcp --version
 
-# Run HTTP/SSE mode (default)
-./target/release/mcp-server
-# Database auto-created at ~/db.sqlite
+# In Claude Code, verify MCP connection
+/mcp
+```
 
-# Or run STDIO mode for direct MCP integration
-./target/release/mcp-server --transport stdio
+### Updates
+
+To update to the latest version:
+
+```bash
+# Using self-update (recommended)
+axon-mcp self-update
+
+# Or re-run the installer
+curl -fsSL https://raw.githubusercontent.com/janreges/axon-mcp/main/install.sh | sh
 ```
 
 ### Configuration
@@ -314,20 +351,25 @@ axon-mcp/
 
 **Task State Machine:**
 ```
-Created → InProgress → Review → Done → Archived
-    ↓         ↓          ↓       ↓
-  Blocked ←---+----------+-------+
+Created ─→ InProgress ─→ Review ─→ Done ─→ Archived
+   ├─→ PendingDecomposition ─→ Created
+   ├─→ WaitingForDependency ─→ Created
+   ├─→ Blocked ←─── InProgress
+   │                    ├─→ PendingHandoff ─→ InProgress
+   │                    └─→ Review
+   └─→ Any State ─→ Quarantined ─→ Created
 ```
 
 ---
 
 ## 📊 Performance & Scale
 
-- **Response Time**: <100ms for single operations
-- **Throughput**: 1000+ operations per second  
-- **Concurrent Agents**: 100+ simultaneous connections
-- **Database Capacity**: 1M+ tasks and messages without degradation
+- **Response Time**: Fast response times for task operations
+- **Throughput**: High throughput suitable for multi-agent coordination
+- **Concurrent Agents**: Supports multiple simultaneous agent connections
+- **Database Capacity**: SQLite scales well for typical task management workloads
 - **Message Filtering**: Optimized indexes for fast targeted retrieval
+- **Local Performance**: Zero-network latency for local desktop usage
 
 ---
 
@@ -380,6 +422,50 @@ cargo tarpaulin --out html
 ```
 
 ---
+
+## 👨‍💻 Development
+
+### Building from Source
+
+For contributors and developers who want to build from source:
+
+```bash
+# Clone the repository
+git clone https://github.com/janreges/axon-mcp.git
+cd axon-mcp
+
+# Build all crates
+cargo build --workspace
+
+# Run tests
+cargo test --workspace
+
+# Run with hot reload during development
+cargo watch -x run
+```
+
+### Useful Make Commands
+
+```bash
+make help                    # Show all available commands
+make build                   # Build all crates
+make test                    # Run all tests
+make check-status           # Show project status
+make check-deps            # Check dependencies
+make validate              # Validate status codes
+```
+
+### Project Structure
+
+```
+axon-mcp/
+├── core/                  # Domain models and traits
+├── database/             # SQLite repository implementation
+├── mcp-protocol/         # MCP server with SSE/HTTP transport
+├── mcp-server/          # Main binary executable
+├── mocks/               # Test utilities
+└── docs/                # Technical documentation
+```
 
 ## 🤝 Contributing
 
