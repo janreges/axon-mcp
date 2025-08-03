@@ -1,0 +1,128 @@
+name: Test Installation Scripts
+
+on:
+  push:
+    paths:
+      - 'install.sh'
+      - 'install.ps1'
+      - 'tests/**'
+      - '.github/workflows/test-install.yml'
+  pull_request:
+    paths:
+      - 'install.sh'
+      - 'install.ps1'
+      - 'tests/**'
+      - '.github/workflows/test-install.yml'
+
+jobs:
+  test-shell-script:
+    name: Test install.sh
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Install bats
+        run: |
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y bats
+          else
+            brew install bats-core
+          fi
+      
+      - name: Run shellcheck
+        run: |
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            sudo apt-get install -y shellcheck
+          else
+            brew install shellcheck
+          fi
+          shellcheck install.sh
+      
+      - name: Run bats tests
+        run: |
+          bats tests/install.bats
+      
+      - name: Test script in dry-run mode
+        run: |
+          # Test platform detection and basic functionality
+          bash install.sh --dry-run || true
+
+  test-powershell-script:
+    name: Test install.ps1
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Test PowerShell syntax
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          
+          # Test script can be parsed
+          $null = [System.Management.Automation.Language.Parser]::ParseFile(
+            "$PWD\install.ps1",
+            [ref]$null,
+            [ref]$null
+          )
+          
+          Write-Host "PowerShell script syntax is valid"
+      
+      - name: Test script functions
+        shell: pwsh
+        run: |
+          # Source the script in test mode
+          . .\install.ps1 -WhatIf
+          
+          # Test functions exist
+          Get-Command Get-Architecture
+          Get-Command Test-CommandExists
+          
+          Write-Host "PowerShell script functions loaded successfully"
+
+  integration-test:
+    name: Integration Test
+    needs: [test-shell-script, test-powershell-script]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Mock installation test (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          # Create mock binary
+          mkdir -p /tmp/mock-release
+          echo '#!/bin/bash' > /tmp/mock-release/axon-mcp
+          echo 'echo "axon-mcp v0.1.0"' >> /tmp/mock-release/axon-mcp
+          chmod +x /tmp/mock-release/axon-mcp
+          
+          # Test install directory creation
+          export INSTALL_DIR=/tmp/test-install
+          bash install.sh --dry-run
+      
+      - name: Mock installation test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Create mock binary
+          $mockDir = "$env:TEMP\mock-release"
+          New-Item -ItemType Directory -Path $mockDir -Force
+          
+          '@echo off' | Out-File "$mockDir\axon-mcp.exe" -Encoding ASCII
+          'echo axon-mcp v0.1.0' | Out-File "$mockDir\axon-mcp.exe" -Encoding ASCII -Append
+          
+          # Test install directory creation
+          $env:InstallDir = "$env:TEMP\test-install"
+          .\install.ps1 -WhatIf
