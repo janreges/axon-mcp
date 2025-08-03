@@ -82,6 +82,8 @@ impl From<TaskError> for McpError {
             TaskError::Serialization(msg) => McpError::Protocol(format!("Serialization error: {msg}")),
             TaskError::Deserialization(msg) => McpError::Protocol(format!("Deserialization error: {msg}")),
             TaskError::DuplicateKey(key) => McpError::DuplicateCode(key),
+            TaskError::UnsupportedAiTool(tool) => McpError::Validation(format!("Unsupported AI tool: {tool}")),
+            TaskError::UnsupportedOperation(op) => McpError::Validation(format!("Unsupported operation: {op}")),
         }
     }
 }

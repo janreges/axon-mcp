@@ -26,6 +26,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
+use crate::prompt_templates::EnhancedPromptBuilder;
 
 /// Supported AI tool types for workspace generation
 /// 
@@ -650,6 +651,7 @@ impl Default for WorkspaceSetupConfig {
 #[derive(Clone)]
 pub struct WorkspaceSetupService {
     config: WorkspaceSetupConfig,
+    prompt_builder: EnhancedPromptBuilder,
 }
 
 impl Default for WorkspaceSetupService {
@@ -663,12 +665,16 @@ impl WorkspaceSetupService {
     pub fn new() -> Self {
         Self {
             config: WorkspaceSetupConfig::default(),
+            prompt_builder: EnhancedPromptBuilder::new(),
         }
     }
     
     /// Create service with custom configuration
     pub fn with_config(config: WorkspaceSetupConfig) -> Self {
-        Self { config }
+        Self { 
+            config,
+            prompt_builder: EnhancedPromptBuilder::new(),
+        }
     }
     
     /// 1️⃣ GET SETUP INSTRUCTIONS
@@ -779,7 +785,7 @@ impl WorkspaceSetupService {
         // Ensure we respect max agents limit
         let recommended_agent_count = recommended_agent_count.min(self.config.max_agents as u32);
         
-        // Generate suggested agents based on archetype
+        // Generate suggested agents with enhanced prompts based on archetype
         let suggested_agents = self.generate_suggested_agents_for_archetype(&archetype, prd, recommended_agent_count).await?;
         
         // Generate workflow steps based on project archetype and agents
@@ -832,7 +838,7 @@ impl WorkspaceSetupService {
     }
     
     /// 3️⃣ REGISTER AGENT
-    pub async fn register_agent(&self, agent: AgentRegistration) -> WorkspaceSetupResult<AgentRegistrationResponse> {
+    pub async fn register_agent(&self, mut agent: AgentRegistration) -> WorkspaceSetupResult<AgentRegistrationResponse> {
         // Validate agent data
         if agent.name.trim().is_empty() {
             return Ok(WorkspaceSetupResponse::error(
@@ -855,11 +861,28 @@ impl WorkspaceSetupService {
             ));
         }
         
+        // Generate enhanced prompt using 2025 best practices
+        let enhanced_prompt = self.prompt_builder.generate_agent_prompt(
+            &SuggestedAgent {
+                name: agent.name.clone(),
+                description: agent.description.clone(),
+                required_capabilities: agent.capabilities.clone(),
+                workload_percentage: 100.0, // Default for individual agent registration
+                depends_on: agent.dependencies.clone(),
+            },
+            &ProjectArchetype::Generic, // Default archetype for individual registration
+            &format!("Agent registration for: {}", agent.name),
+            None
+        );
+        
+        // Update agent with enhanced prompt
+        agent.prompt = enhanced_prompt;
+        
         let agent_name = agent.name.clone();
         Ok(WorkspaceSetupResponse::success(
-            format!("Agent '{}' registered successfully with {} capabilities.", agent.name, agent.capabilities.len()),
+            format!("Agent '{}' registered successfully with {} capabilities and enhanced 2025 prompt.", agent.name, agent.capabilities.len()),
             agent
-        ).with_log(format!("Registered agent: {agent_name}")))
+        ).with_log(format!("Registered agent: {agent_name} with enhanced prompt generation")))
     }
     
     /// 4️⃣ GET MAIN FILE INSTRUCTIONS
@@ -947,8 +970,33 @@ impl WorkspaceSetupService {
         let workflow_response = self.get_agentic_workflow_description(prd).await?;
         let workflow = workflow_response.payload;
         
+        // Ensure all agents have enhanced prompts
+        let enhanced_agents: Vec<AgentRegistration> = agents.iter().map(|agent| {
+            let enhanced_prompt = self.prompt_builder.generate_agent_prompt(
+                &SuggestedAgent {
+                    name: agent.name.clone(),
+                    description: agent.description.clone(),
+                    required_capabilities: agent.capabilities.clone(),
+                    workload_percentage: 100.0 / agents.len() as f32,
+                    depends_on: agent.dependencies.clone(),
+                },
+                &self.classify_project_archetype(prd),
+                &format!("Project: {}", prd.title),
+                None
+            );
+            
+            AgentRegistration {
+                name: agent.name.clone(),
+                description: agent.description.clone(),
+                prompt: enhanced_prompt,
+                capabilities: agent.capabilities.clone(),
+                ai_tool_type: agent.ai_tool_type,
+                dependencies: agent.dependencies.clone(),
+            }
+        }).collect();
+        
         let manifest = WorkspaceManifest {
-            schema_version: "1.0".to_string(),
+            schema_version: "2.0".to_string(), // Updated for enhanced features
             ai_tool_type: AiToolType::ClaudeCode,
             project: ProjectMetadata {
                 name: prd.title.clone(),
@@ -957,7 +1005,7 @@ impl WorkspaceSetupService {
                 primary_domain: "software-development".to_string(),
                 technologies: prd.technical_requirements.clone(),
             },
-            agents: agents.to_vec(),
+            agents: enhanced_agents,
             workflow,
             setup_instructions: vec![],
             generated_files: if include_generated_files {
@@ -965,7 +1013,7 @@ impl WorkspaceSetupService {
                     GeneratedFile {
                         path: "CLAUDE.md".to_string(),
                         file_type: "coordination".to_string(),
-                        description: "Main coordination file for Claude Code".to_string(),
+                        description: "Main coordination file for Claude Code with 2025 enhancements".to_string(),
                         critical: true,
                     },
                 ]
@@ -973,11 +1021,11 @@ impl WorkspaceSetupService {
                 vec![]
             },
             created_at: Utc::now(),
-            axon_version: "1.2.0".to_string(),
+            axon_version: "2.0.0".to_string(), // Updated for enhanced features
         };
         
         Ok(WorkspaceSetupResponse::success(
-            format!("Workspace manifest generated for project '{}' with {} agents.", 
+            format!("Enhanced workspace manifest generated for project '{}' with {} agents using 2025 best practices.", 
                 manifest.project.name, 
                 manifest.agents.len()
             ),

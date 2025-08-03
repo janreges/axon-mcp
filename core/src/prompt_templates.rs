@@ -109,6 +109,7 @@ pub struct ErrorHandlingRule {
 }
 
 /// Enhanced prompt builder implementing 2025 best practices
+#[derive(Clone)]
 pub struct EnhancedPromptBuilder {
     /// Capability catalog
     capabilities: HashMap<String, CapabilityDefinition>,
