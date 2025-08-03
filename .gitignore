@@ -26,6 +26,9 @@ Cargo.lock
 **/debug/
 .claude/
 
+# Database debug artifacts
+database/:memory:contract_*
+database/:memory:test_*
 **/:memory*
 
 # Release artifacts (except the release directory itself)
