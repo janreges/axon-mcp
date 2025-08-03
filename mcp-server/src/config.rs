@@ -144,7 +144,7 @@ impl Config {
     pub fn default_database_url() -> String {
         // Use XDG_DATA_HOME if available (better for containers/production)
         if let Ok(xdg_data) = env::var("XDG_DATA_HOME") {
-            return format!("sqlite://{xdg_data}/mcp-server/db.sqlite");
+            return format!("sqlite://{xdg_data}/axon-mcp/axon-mcp.sqlite");
         }
 
         // Fallback to HOME directory
@@ -154,7 +154,7 @@ impl Config {
                 // Last resort: use current directory if no home is available
                 ".".to_string()
             });
-        format!("sqlite://{home}/db.sqlite")
+        format!("sqlite://{home}/axon-mcp.sqlite")
     }
 
     /// Get the server socket address
