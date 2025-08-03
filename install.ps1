@@ -98,9 +98,9 @@ function Test-Administrator {
 function Get-Architecture {
     $arch = $env:PROCESSOR_ARCHITECTURE
     switch ($arch) {
-        "AMD64" { return "x86_64" }
+        "AMD64" { return "amd64" }
         "x86" { return "x86" }
-        "ARM64" { return "aarch64" }
+        "ARM64" { return "arm64" }
         default { 
             Write-Error "Unsupported architecture: $arch"
             exit 1
@@ -198,15 +198,31 @@ function Install-Binary {
     
     # Detect architecture
     $arch = Get-Architecture
-    $platform = "$arch-pc-windows-msvc"
+    $platform = "windows-$arch"
     Write-Info "Detected platform: $platform"
     
+    # Get version for asset name
+    if ($Version -eq "latest") {
+        # Get latest version from GitHub API
+        try {
+            $apiResponse = Invoke-RestMethod -Uri "https://api.github.com/repos/$GitHubRepo/releases/latest" -ErrorAction Stop
+            $versionTag = $apiResponse.tag_name
+        } catch {
+            Write-Error "Failed to get latest version from GitHub API: $_"
+            exit 1
+        }
+    } else {
+        $versionTag = "v$Version"
+    }
+    
+    # Construct beautiful asset name: axon-mcp-{platform}-v{version}.zip
+    $assetName = "$BinaryName-$platform-$versionTag.zip"
+    
     # Construct download URL
-    $assetName = "$BinaryName-$platform.zip"
     if ($Version -eq "latest") {
         $downloadUrl = "https://github.com/$GitHubRepo/releases/latest/download/$assetName"
     } else {
-        $downloadUrl = "https://github.com/$GitHubRepo/releases/download/$Version/$assetName"
+        $downloadUrl = "https://github.com/$GitHubRepo/releases/download/$versionTag/$assetName"
     }
     
     Write-Info "Download URL: $downloadUrl"

@@ -18,23 +18,33 @@ jobs:
           # Linux x86_64 (musl for static linking)
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
-            asset_name: axon-mcp-x86_64-unknown-linux-musl
+            platform: linux
+            arch: amd64
             
           # Linux aarch64 (musl for static linking)
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
-            asset_name: axon-mcp-aarch64-unknown-linux-musl
+            platform: linux
+            arch: arm64
             use_cross: true
             
-          # macOS Universal Binary
+          # macOS x86_64
           - os: macos-latest
-            target: universal-apple-darwin
-            asset_name: axon-mcp-universal-apple-darwin
+            target: x86_64-apple-darwin
+            platform: darwin
+            arch: amd64
+            
+          # macOS ARM64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            platform: darwin
+            arch: arm64
             
           # Windows x86_64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            asset_name: axon-mcp-x86_64-pc-windows-msvc
+            platform: windows
+            arch: amd64
 
     steps:
       - name: Checkout repository
@@ -43,13 +53,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target != 'universal-apple-darwin' && matrix.target || '' }}
-
-      - name: Install additional targets for macOS universal
-        if: matrix.target == 'universal-apple-darwin'
-        run: |
-          rustup target add x86_64-apple-darwin
-          rustup target add aarch64-apple-darwin
+          targets: ${{ matrix.target }}
 
       - name: Install musl tools
         if: matrix.target == 'x86_64-unknown-linux-musl'
@@ -73,9 +77,9 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
 
-      # Build for Linux/Windows single targets
+      # Build for most targets
       - name: Build binary
-        if: matrix.target != 'universal-apple-darwin' && !matrix.use_cross
+        if: "!matrix.use_cross"
         env:
           # Use rustls instead of native-tls for musl builds
           CARGO_NET_GIT_FETCH_WITH_CLI: true
@@ -96,34 +100,14 @@ jobs:
         run: |
           cross build --release --target ${{ matrix.target }} --bin axon-mcp
 
-      # Build macOS universal binary
-      - name: Build macOS universal binary
-        if: matrix.target == 'universal-apple-darwin'
-        run: |
-          # Build for both architectures
-          cargo build --release --target x86_64-apple-darwin --bin axon-mcp
-          cargo build --release --target aarch64-apple-darwin --bin axon-mcp
-          
-          # Create universal binary
-          mkdir -p target/release
-          lipo -create \
-            target/x86_64-apple-darwin/release/axon-mcp \
-            target/aarch64-apple-darwin/release/axon-mcp \
-            -output target/release/axon-mcp
-
       # Prepare binary
       - name: Prepare binary
         shell: bash
         run: |
-          # Rename binary to axon-mcp
-          if [ "${{ matrix.target }}" = "universal-apple-darwin" ]; then
-            # Already renamed in the lipo step
-            BINARY_PATH="target/release/axon-mcp"
-          elif [ "${{ runner.os }}" = "Windows" ]; then
-            BINARY_PATH="target/${{ matrix.target }}/release/axon-mcp.exe"
+          # Set binary path
+          if [ "${{ runner.os }}" = "Windows" ]; then
             BINARY_PATH="target/${{ matrix.target }}/release/axon-mcp.exe"
           else
-            BINARY_PATH="target/${{ matrix.target }}/release/axon-mcp"
             BINARY_PATH="target/${{ matrix.target }}/release/axon-mcp"
           fi
           
@@ -136,7 +120,6 @@ jobs:
 
       # Install and run UPX for binary compression
       - name: Compress binary with UPX
-        if: matrix.target != 'universal-apple-darwin' # UPX doesn't work well with universal binaries
         shell: bash
         run: |
           # Install UPX
@@ -161,23 +144,31 @@ jobs:
         run: |
           mkdir -p dist
           
+          # Extract version from tag (remove 'v' prefix)
+          VERSION=${GITHUB_REF#refs/tags/v}
+          
+          # Generate beautiful asset name: axon-mcp-{platform}-{arch}-v{version}
+          ASSET_NAME="axon-mcp-${{ matrix.platform }}-${{ matrix.arch }}-v${VERSION}"
+          
           if [ "${{ runner.os }}" = "Windows" ]; then
             # For Windows, create a zip file
             cd "$(dirname "${{ env.BINARY_PATH }}")"
-            7z a "$GITHUB_WORKSPACE/dist/${{ matrix.asset_name }}.zip" "axon-mcp.exe"
-            echo "ASSET_PATH=dist/${{ matrix.asset_name }}.zip" >> $GITHUB_ENV
+            7z a "$GITHUB_WORKSPACE/dist/${ASSET_NAME}.zip" "axon-mcp.exe"
+            echo "ASSET_PATH=dist/${ASSET_NAME}.zip" >> $GITHUB_ENV
           else
             # For Unix, create a tar.gz
             cd "$(dirname "${{ env.BINARY_PATH }}")"
-            tar -czf "$GITHUB_WORKSPACE/dist/${{ matrix.asset_name }}.tar.gz" "axon-mcp"
-            echo "ASSET_PATH=dist/${{ matrix.asset_name }}.tar.gz" >> $GITHUB_ENV
+            tar -czf "$GITHUB_WORKSPACE/dist/${ASSET_NAME}.tar.gz" "axon-mcp"
+            echo "ASSET_PATH=dist/${ASSET_NAME}.tar.gz" >> $GITHUB_ENV
           fi
+          
+          echo "ASSET_NAME=${ASSET_NAME}" >> $GITHUB_ENV
 
       # Upload artifacts
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset_name }}
+          name: ${{ env.ASSET_NAME }}
           path: ${{ env.ASSET_PATH }}
 
   create-release:

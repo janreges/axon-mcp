@@ -98,46 +98,37 @@ find_project_root() {
 
 # Detect OS and architecture
 detect_platform() {
-    OS="$(uname -s)"
-    ARCH="$(uname -m)"
+    RAW_OS="$(uname -s)"
+    RAW_ARCH="$(uname -m)"
     
-    case "$OS" in
+    case "$RAW_OS" in
         Linux*)
-            OS="unknown-linux-musl"
+            PLATFORM_OS="linux"
             ;;
         Darwin*)
-            OS="apple-darwin"
-            # We'll use universal binary for macOS
-            ARCH="universal"
+            PLATFORM_OS="darwin"
             ;;
         MINGW* | MSYS* | CYGWIN*)
-            OS="pc-windows-msvc"
+            PLATFORM_OS="windows"
             ;;
         *)
-            fatal "Unsupported operating system: $OS"
+            fatal "Unsupported operating system: $RAW_OS"
             ;;
     esac
     
-    case "$ARCH" in
+    case "$RAW_ARCH" in
         x86_64 | amd64)
-            if [ "$OS" != "apple-darwin" ]; then
-                ARCH="x86_64"
-            fi
+            PLATFORM_ARCH="amd64"
             ;;
         aarch64 | arm64)
-            if [ "$OS" != "apple-darwin" ]; then
-                ARCH="aarch64"
-            fi
-            ;;
-        universal)
-            # Already set for macOS
+            PLATFORM_ARCH="arm64"
             ;;
         *)
-            fatal "Unsupported architecture: $ARCH"
+            fatal "Unsupported architecture: $RAW_ARCH"
             ;;
     esac
     
-    PLATFORM="${ARCH}-${OS}"
+    PLATFORM="${PLATFORM_OS}-${PLATFORM_ARCH}"
     info "Detected platform: $PLATFORM"
 }
 
@@ -184,12 +175,32 @@ get_install_dir() {
 # Download and extract binary to specified directory
 download_binary_to_dir() {
     local target_install_dir="$1"
-    BINARY_NAME="${MCP_NAME}-${PLATFORM}"
+    
+    # Determine file extension based on platform
+    if [ "$PLATFORM_OS" = "windows" ]; then
+        FILE_EXT=".zip"
+    else
+        FILE_EXT=".tar.gz"
+    fi
+    
+    # Generate beautiful asset name based on version
+    if [ "$VERSION" = "latest" ]; then
+        # For latest, we need to get the actual version tag from GitHub API
+        LATEST_VERSION=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" | grep -o '"tag_name": *"[^"]*"' | grep -o 'v[^"]*' | head -1)
+        if [ -z "$LATEST_VERSION" ]; then
+            fatal "Failed to get latest version from GitHub API"
+        fi
+        VERSION_TAG="$LATEST_VERSION"
+    else
+        VERSION_TAG="v$VERSION"
+    fi
+    
+    BINARY_NAME="${MCP_NAME}-${PLATFORM}-${VERSION_TAG}"
     
     if [ "$VERSION" = "latest" ]; then
-        DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/latest/download/${BINARY_NAME}.tar.gz"
+        DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/latest/download/${BINARY_NAME}${FILE_EXT}"
     else
-        DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}/${BINARY_NAME}.tar.gz"
+        DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/${VERSION_TAG}/${BINARY_NAME}${FILE_EXT}"
     fi
     
     info "Downloading $MCP_NAME from $DOWNLOAD_URL"
@@ -199,19 +210,28 @@ download_binary_to_dir() {
     trap 'rm -rf "$TMP_DIR"' EXIT
     
     # Download with timeout
-    if ! curl -fsSL --connect-timeout 30 --max-time 300 "$DOWNLOAD_URL" -o "$TMP_DIR/${BINARY_NAME}.tar.gz"; then
+    ARCHIVE_FILE="${BINARY_NAME}${FILE_EXT}"
+    if ! curl -fsSL --connect-timeout 30 --max-time 300 "$DOWNLOAD_URL" -o "$TMP_DIR/${ARCHIVE_FILE}"; then
         fatal "Failed to download binary. Please check your internet connection and try again."
     fi
     
     # Verify download (check it's not empty)
-    if [ ! -s "$TMP_DIR/${BINARY_NAME}.tar.gz" ]; then
+    if [ ! -s "$TMP_DIR/${ARCHIVE_FILE}" ]; then
         fatal "Downloaded file is empty"
     fi
     
     # Extract
     info "Extracting binary..."
-    if ! tar -xzf "$TMP_DIR/${BINARY_NAME}.tar.gz" -C "$TMP_DIR"; then
-        fatal "Failed to extract binary."
+    if [ "$PLATFORM_OS" = "windows" ]; then
+        # Extract zip file
+        if ! unzip -q "$TMP_DIR/${ARCHIVE_FILE}" -d "$TMP_DIR"; then
+            fatal "Failed to extract binary from zip."
+        fi
+    else
+        # Extract tar.gz file
+        if ! tar -xzf "$TMP_DIR/${ARCHIVE_FILE}" -C "$TMP_DIR"; then
+            fatal "Failed to extract binary from tar.gz."
+        fi
     fi
     
     # Create install directory if it doesn't exist
@@ -222,14 +242,24 @@ download_binary_to_dir() {
     
     # Install binary atomically
     info "Installing binary '$MCP_NAME' to '$target_install_dir'..."
-    if ! cp "$TMP_DIR/$MCP_NAME" "$target_install_dir/$MCP_NAME"; then
+    if [ "$PLATFORM_OS" = "windows" ]; then
+        SOURCE_BINARY="$TMP_DIR/${MCP_NAME}.exe"
+        TARGET_BINARY="$target_install_dir/${MCP_NAME}.exe"
+    else
+        SOURCE_BINARY="$TMP_DIR/$MCP_NAME"
+        TARGET_BINARY="$target_install_dir/$MCP_NAME"
+    fi
+    
+    if ! cp "$SOURCE_BINARY" "$TARGET_BINARY"; then
         fatal "Failed to copy binary. Check permissions."
     fi
     success "Binary '$MCP_NAME' successfully copied to '$target_install_dir'."
     
-    # Ensure executable permissions
-    if ! chmod +x "$target_install_dir/$MCP_NAME"; then
-        warning "Failed to set executable permissions for '$target_install_dir/$MCP_NAME'."
+    # Ensure executable permissions (not needed on Windows)
+    if [ "$PLATFORM_OS" != "windows" ]; then
+        if ! chmod +x "$TARGET_BINARY"; then
+            warning "Failed to set executable permissions for '$TARGET_BINARY'."
+        fi
     fi
     
     success "Binary installed successfully!"
@@ -279,7 +309,11 @@ configure_path() {
 # Configure Claude Code
 configure_claude() {
     INSTALL_DIR="$(get_install_dir)"
-    BINARY_PATH="$INSTALL_DIR/$MCP_NAME"
+    if [ "$PLATFORM_OS" = "windows" ]; then
+        BINARY_PATH="$INSTALL_DIR/${MCP_NAME}.exe"
+    else
+        BINARY_PATH="$INSTALL_DIR/$MCP_NAME"
+    fi
     
     info "Configuring Claude Code..."
     
@@ -360,7 +394,11 @@ setup_gitignore_for_project_scope() {
 # Health check
 health_check() {
     INSTALL_DIR="$(get_install_dir)"
-    BINARY_PATH="$INSTALL_DIR/$MCP_NAME"
+    if [ "$PLATFORM_OS" = "windows" ]; then
+        BINARY_PATH="$INSTALL_DIR/${MCP_NAME}.exe"
+    else
+        BINARY_PATH="$INSTALL_DIR/$MCP_NAME"
+    fi
     
     info "Running health check..."
     
@@ -508,15 +546,15 @@ main() {
     echo ""
     echo "Next steps:"
     if [ "$INSTALL_MODE" = "project" ]; then
-        echo "  1. Use: ${BOLD}$INSTALL_DIR/$MCP_NAME --version${RESET}"
-        echo "  2. In Claude Code, verify connection with: ${BOLD}/mcp${RESET}"
+        printf "  1. Use: %s%s --version%s\n" "$BOLD" "$INSTALL_DIR/$MCP_NAME" "$RESET"
+        printf "  2. In Claude Code, verify connection with: %s/mcp%s\n" "$BOLD" "$RESET"
     else
-        echo "  1. Restart your shell or run: ${BOLD}source ~/.bashrc${RESET} (or appropriate config file)"
-        echo "  2. Verify installation: ${BOLD}${MCP_NAME} --version${RESET}"
-        echo "  3. In Claude Code, verify connection with: ${BOLD}/mcp${RESET}"
+        printf "  1. Restart your shell or run: %ssource ~/.bashrc%s (or appropriate config file)\n" "$BOLD" "$RESET"
+        printf "  2. Verify installation: %s%s --version%s\n" "$BOLD" "$MCP_NAME" "$RESET"
+        printf "  3. In Claude Code, verify connection with: %s/mcp%s\n" "$BOLD" "$RESET"
     fi
     echo ""
-    echo "For updates, run: ${BOLD}${MCP_NAME} self-update${RESET}"
+    printf "For updates, run: %s%s self-update%s\n" "$BOLD" "$MCP_NAME" "$RESET"
     echo ""
 }
 
