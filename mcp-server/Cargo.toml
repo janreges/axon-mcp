@@ -10,7 +10,7 @@ path = "src/lib.rs"
 
 # Binary executable
 [[bin]]
-name = "mcp-server"
+name = "axon-mcp"
 path = "src/main.rs"
 
 [dependencies]
@@ -34,6 +34,8 @@ mcp-protocol = { version = "0.1.0", path = "../mcp-protocol" }
 toml = "0.9.3"
 serde_json = "1.0.141"
 sqlx = "0.8.6"
+reqwest = { version = "0.12.22", features = ["json"] }
+zip = { version = "4.3.0", features = ["deflate"] }
 
 [dev-dependencies]
 futures-util = "0.3.31"
