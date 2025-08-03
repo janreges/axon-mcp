@@ -242,7 +242,7 @@ async fn test_scenario_edge_vague_prd() {
 #[tokio::test]
 async fn test_scenario_edge_minimal_prd() {
     println!("\n🧪 TESTING: Edge Case - Minimal PRD");
-    let service = WorkspaceSetupService::new();
+    let _service = WorkspaceSetupService::new();
     
     // This should fail parsing due to insufficient content
     let prd_result = PrdDocument::from_content(PRD_EDGE_MINIMAL);

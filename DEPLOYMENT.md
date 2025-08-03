@@ -250,17 +250,17 @@ top -p $(pidof mcp-server)
 ## 📊 Performance Metrics
 
 ### Benchmarks (Production Hardware)
-- **Startup Time**: <2 seconds
-- **Memory Usage**: ~50MB at rest, ~200MB under load
-- **Response Time**: <100ms for agent generation
-- **Throughput**: 1000+ requests/second
-- **Database**: 10,000+ tasks with <50ms query time
+- **Startup Time**: Fast startup for immediate productivity
+- **Memory Usage**: Efficient memory management for server applications
+- **Response Time**: Responsive agent generation suitable for interactive use
+- **Throughput**: High throughput appropriate for multi-agent coordination
+- **Database**: Scalable SQLite performance for task management workloads
 
 ### ProjectArchetype Classification Performance
-- **Simple CLI**: 3 agents generated in ~50ms
-- **Web Application**: 8 agents generated in ~150ms  
-- **Complex Enterprise**: 12 agents generated in ~300ms
-- **Classification Accuracy**: >95% based on unit tests
+- **Simple CLI**: Quick agent generation for lightweight projects
+- **Web Application**: Efficient processing for moderate complexity projects
+- **Complex Enterprise**: Comprehensive analysis for large-scale projects
+- **Classification Accuracy**: Reliable project archetype detection based on unit tests
 
 ## 🔒 Security & Authentication
 
@@ -462,9 +462,9 @@ curl http://localhost:8080/health
 ## 🎉 Production Success Metrics
 
 After deployment, you should see:
-- ✅ **62.5% reduction** in agent overhead for simple projects
-- ✅ **<100ms response times** for agent team generation  
-- ✅ **>95% classification accuracy** across project types
+- ✅ **Efficient resource utilization** for simple projects with appropriate agent sizing
+- ✅ **Fast response times** suitable for interactive agent team generation
+- ✅ **Reliable classification accuracy** across project types based on testing
 - ✅ **Dynamic scaling** from 3 to 12 agents based on complexity
 - ✅ **R.I.C.H. pattern compliance** in all generated prompts
 

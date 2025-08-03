@@ -44,12 +44,26 @@ pub struct Task {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskState {
+    /// Newly created task
     Created,
+    /// Task is actively being worked on
     InProgress,
+    /// Task is blocked and cannot proceed
     Blocked,
+    /// Task is ready for review
     Review,
+    /// Task has been completed
     Done,
+    /// Task has been archived
     Archived,
+    /// Task needs to be broken down into subtasks (MCP v2)
+    PendingDecomposition,
+    /// Waiting for agent handoff (MCP v2)
+    PendingHandoff,
+    /// Too many failures, needs human review (MCP v2)
+    Quarantined,
+    /// Blocked on other tasks completing (MCP v2)
+    WaitingForDependency,
 }
 
 // DTOs for create/update operations
@@ -130,29 +144,35 @@ pub trait TaskRepository: Send + Sync {
 // protocol.rs - MCP protocol handler trait
 #[async_trait]
 pub trait ProtocolHandler: Send + Sync {
-    /// Handle MCP create_task function
+    // Core Task Management (9 functions)
     async fn create_task(&self, params: CreateTaskParams) -> Result<Task>;
-    
-    /// Handle MCP update_task function
     async fn update_task(&self, params: UpdateTaskParams) -> Result<Task>;
-    
-    /// Handle MCP set_task_state function
     async fn set_task_state(&self, params: SetStateParams) -> Result<Task>;
-    
-    /// Handle MCP get_task_by_id function
-    async fn get_task_by_id(&self, id: i32) -> Result<Option<Task>>;
-    
-    /// Handle MCP get_task_by_code function
-    async fn get_task_by_code(&self, code: &str) -> Result<Option<Task>>;
-    
-    /// Handle MCP list_tasks function
+    async fn get_task_by_id(&self, params: GetTaskByIdParams) -> Result<Option<Task>>;
+    async fn get_task_by_code(&self, params: GetTaskByCodeParams) -> Result<Option<Task>>;
     async fn list_tasks(&self, params: ListTasksParams) -> Result<Vec<Task>>;
-    
-    /// Handle MCP assign_task function
     async fn assign_task(&self, params: AssignTaskParams) -> Result<Task>;
-    
-    /// Handle MCP archive_task function
-    async fn archive_task(&self, id: i32) -> Result<Task>;
+    async fn archive_task(&self, params: ArchiveTaskParams) -> Result<Task>;
+    async fn health_check(&self) -> Result<HealthStatus>;
+
+    // Advanced Multi-Agent Operations (5 functions)
+    async fn discover_work(&self, params: DiscoverWorkParams) -> Result<Vec<Task>>;
+    async fn claim_task(&self, params: ClaimTaskParams) -> Result<Task>;
+    async fn release_task(&self, params: ReleaseTaskParams) -> Result<Task>;
+    async fn start_work_session(&self, params: StartWorkSessionParams) -> Result<WorkSessionInfo>;
+    async fn end_work_session(&self, params: EndWorkSessionParams) -> Result<()>;
+
+    // Inter-Agent Messaging (2 functions)
+    async fn create_task_message(&self, params: CreateTaskMessageParams) -> Result<TaskMessage>;
+    async fn get_task_messages(&self, params: GetTaskMessagesParams) -> Result<Vec<TaskMessage>>;
+
+    // Workspace Setup Automation (6 functions)
+    async fn get_setup_instructions(&self, params: GetSetupInstructionsParams) -> Result<SetupInstructions>;
+    async fn get_agentic_workflow_description(&self, params: GetAgenticWorkflowDescriptionParams) -> Result<AgenticWorkflowDescription>;
+    async fn register_agent(&self, params: RegisterAgentParams) -> Result<AgentRegistration>;
+    async fn get_instructions_for_main_ai_file(&self, params: GetInstructionsForMainAiFileParams) -> Result<MainAiFileInstructions>;
+    async fn create_main_ai_file(&self, params: CreateMainAiFileParams) -> Result<MainAiFileData>;
+    async fn get_workspace_manifest(&self, params: GetWorkspaceManifestParams) -> Result<WorkspaceManifest>;
 }
 
 // MCP parameter types
@@ -193,17 +213,36 @@ pub struct AssignTaskParams {
 
 // validation.rs - Business logic validation
 impl Task {
-    /// Validate state transition
+    /// Validate state transition based on MCP v2 state machine
     pub fn can_transition_to(&self, new_state: TaskState) -> bool {
+        use TaskState::*;
         match (self.state, new_state) {
-            (TaskState::Created, TaskState::InProgress) => true,
-            (TaskState::InProgress, TaskState::Blocked) => true,
-            (TaskState::InProgress, TaskState::Review) => true,
-            (TaskState::InProgress, TaskState::Done) => true,
-            (TaskState::Blocked, TaskState::InProgress) => true,
-            (TaskState::Review, TaskState::InProgress) => true,
-            (TaskState::Review, TaskState::Done) => true,
-            (TaskState::Done, TaskState::Archived) => true,
+            // Valid transitions from Created
+            (Created, InProgress | PendingDecomposition | WaitingForDependency) => true,
+            
+            // Valid transitions from InProgress
+            (InProgress, Blocked | Review | Done | PendingHandoff) => true,
+            
+            // Valid transitions from Blocked
+            (Blocked, InProgress) => true,
+            
+            // Valid transitions from Review  
+            (Review, InProgress | Done) => true,
+            
+            // Valid transitions from Done
+            (Done, Archived) => true, // Only via archive_task
+            
+            // MCP v2 state transitions
+            (PendingDecomposition, Created) => true, // After decomposition
+            (PendingHandoff, InProgress) => true, // When handoff accepted
+            (_, Quarantined) => true, // Any state can be quarantined
+            (Quarantined, Created) => true, // Reset after human review
+            (WaitingForDependency, Created) => true, // When dependencies met
+            
+            // No transitions allowed from Archived
+            (Archived, _) => false,
+            
+            // All other transitions are invalid
             _ => false,
         }
     }
@@ -308,8 +347,9 @@ pub fn deserialize_mcp_params<T: DeserializeOwned>(params: Value) -> Result<T>;
 #### MCP Function Mapping
 
 ```rust
-// Maps MCP function names to handler methods
+// Maps MCP function names to handler methods (22 total functions)
 match method {
+    // Core Task Management (9 functions)
     "create_task" => handler.create_task(params),
     "update_task" => handler.update_task(params),
     "set_task_state" => handler.set_task_state(params),
@@ -318,6 +358,26 @@ match method {
     "list_tasks" => handler.list_tasks(params),
     "assign_task" => handler.assign_task(params),
     "archive_task" => handler.archive_task(params),
+    "health_check" => handler.health_check(),
+    
+    // Advanced Multi-Agent Operations (5 functions)
+    "discover_work" => handler.discover_work(params),
+    "claim_task" => handler.claim_task(params),
+    "release_task" => handler.release_task(params),
+    "start_work_session" => handler.start_work_session(params),
+    "end_work_session" => handler.end_work_session(params),
+    
+    // Inter-Agent Messaging (2 functions)
+    "create_task_message" => handler.create_task_message(params),
+    "get_task_messages" => handler.get_task_messages(params),
+    
+    // Workspace Setup Automation (6 functions)
+    "get_setup_instructions" => handler.get_setup_instructions(params),
+    "get_agentic_workflow_description" => handler.get_agentic_workflow_description(params),
+    "register_agent" => handler.register_agent(params),
+    "get_instructions_for_main_ai_file" => handler.get_instructions_for_main_ai_file(params),
+    "create_main_ai_file" => handler.create_main_ai_file(params),
+    "get_workspace_manifest" => handler.get_workspace_manifest(params),
 }
 ```
 

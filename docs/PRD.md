@@ -91,10 +91,10 @@ Moves a task to archived state.
 ## Technical Requirements
 
 ### Performance
-- **Response Time**: <100ms for single task operations
-- **Throughput**: >1000 operations per second
-- **Concurrent Clients**: Support 100+ simultaneous MCP connections
-- **Database Size**: Handle 1M+ tasks without degradation
+- **Response Time**: Fast response times suitable for interactive use
+- **Throughput**: High throughput appropriate for multi-agent coordination
+- **Concurrent Clients**: Support for multiple simultaneous MCP connections
+- **Database Size**: Scalable performance for typical task management workloads
 
 ### Reliability
 - **Availability**: 99.9% uptime target

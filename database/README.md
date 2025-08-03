@@ -213,10 +213,10 @@ async fn get_stats(&self) -> Result<RepositoryStats>;
 ### Benchmarks
 
 Typical performance characteristics:
-- **Single Task Operations**: <1ms response time
-- **Bulk Operations**: >1000 tasks/second
-- **Concurrent Clients**: 100+ simultaneous connections
-- **Database Size**: Tested with 1M+ tasks
+- **Single Task Operations**: Fast response times for individual operations
+- **Bulk Operations**: Efficient bulk processing capabilities
+- **Concurrent Clients**: Supports multiple simultaneous connections
+- **Database Size**: Scales well for typical task management workloads
 
 ## Transaction Safety
 

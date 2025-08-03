@@ -195,14 +195,14 @@ Errors include contextual information:
 ## Performance Characteristics
 
 ### Response Times
-- **Single Task Operations**: <1ms average
-- **List Operations**: <5ms for 1000+ tasks
-- **Concurrent Requests**: Linear scaling to 100+ clients
+- **Single Task Operations**: Fast response times for individual operations
+- **List Operations**: Efficient querying with database-level optimization
+- **Concurrent Requests**: Scales well with multiple simultaneous clients
 
 ### Throughput
-- **Peak Operations**: >2000 requests/second
-- **Sustained Load**: >1000 requests/second
-- **Memory Usage**: <50MB for 10k concurrent tasks
+- **Operations**: High throughput suitable for multi-agent coordination
+- **Sustained Load**: Consistent performance under typical workloads
+- **Memory Usage**: Efficient memory management for concurrent operations
 
 ### Benchmarks
 
@@ -213,13 +213,7 @@ cd mcp-protocol
 cargo test --release performance
 ```
 
-Example results:
-```
-create_task: 0.8ms average (1250 ops/sec)
-get_task_by_id: 0.3ms average (3333 ops/sec)  
-list_tasks: 2.1ms average (476 ops/sec)
-concurrent_clients: 100 clients @ 500 ops/sec each
-```
+Performance tests validate operational efficiency and concurrent handling capabilities.
 
 ## Configuration
 

@@ -8,7 +8,6 @@ use task_core::{Task, NewTask, UpdateTask, TaskState, TaskRepository, TaskMessag
 use task_core::error::{Result, TaskError};
 use task_core::workspace_setup::WorkspaceContext;
 use async_trait::async_trait;
-use serde_json::{json, Value};
 use chrono::Utc;
 
 /// Mock repository for testing

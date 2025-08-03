@@ -905,10 +905,10 @@ const recentTasks = await sendMCPRequest({
 
 ## Performance Considerations
 
-- **Response Time**: All operations complete in <100ms under normal load
-- **Throughput**: Server handles >1000 operations per second
-- **Connection Limits**: Supports 100+ concurrent SSE connections
-- **Database**: Optimized for 1M+ tasks with proper indexing
+- **Response Time**: Fast response times for task operations under normal load
+- **Throughput**: High throughput suitable for multi-agent coordination
+- **Connection Limits**: Supports multiple concurrent SSE connections
+- **Database**: SQLite optimized with proper indexing for task management workloads
 
 ## Rate Limiting
 

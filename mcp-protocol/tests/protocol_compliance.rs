@@ -3,7 +3,7 @@
 //! Validates that all responses follow the JSON-RPC 2.0 specification
 
 use mcp_protocol::*;
-use serde_json::{json, Value};
+use serde_json::json;
 use task_core::TaskState;
 
 #[test]
