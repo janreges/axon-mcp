@@ -297,6 +297,8 @@ impl TaskRepository for SqliteTaskRepository {
     async fn list(&self, filter: TaskFilter) -> Result<Vec<Task>> {
         // Use the modern build_filter_query function with proper QueryBuilder
         use crate::common::build_filter_query;
+        #[cfg(debug_assertions)]
+        use sqlx::Execute;
 
         // Debug logging - only in debug builds for performance
         #[cfg(debug_assertions)]
