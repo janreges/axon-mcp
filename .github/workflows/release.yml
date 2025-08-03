@@ -79,6 +79,7 @@ jobs:
         env:
           # Use rustls instead of native-tls for musl builds
           CARGO_NET_GIT_FETCH_WITH_CLI: true
+        shell: bash
         run: |
           # Set environment variables for musl cross-compilation
           if [ "${{ matrix.target }}" = "x86_64-unknown-linux-musl" ]; then
