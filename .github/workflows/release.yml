@@ -63,7 +63,7 @@ jobs:
           cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Cache cargo dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/bin/
@@ -164,7 +164,7 @@ jobs:
 
       # Upload artifacts
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
           path: ${{ env.ASSET_PATH }}
@@ -181,13 +181,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: dist
+          merge-multiple: true
 
       - name: Generate checksums
         run: |
           cd dist
+          # Find all tar.gz and zip files (artifacts are now in individual directories)
           find . -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec sha256sum {} \; > checksums.txt
           cat checksums.txt
 
