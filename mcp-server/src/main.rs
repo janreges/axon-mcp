@@ -173,18 +173,29 @@ async fn main() -> Result<()> {
             
             // Spawn a task to handle shutdown signals
             tokio::spawn(async move {
-                let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                    .expect("Failed to register SIGTERM handler");
-                let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
-                    .expect("Failed to register SIGINT handler");
+                #[cfg(unix)]
+                {
+                    let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                        .expect("Failed to register SIGTERM handler");
+                    let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+                        .expect("Failed to register SIGINT handler");
+                    
+                    tokio::select! {
+                        _ = sigterm.recv() => {
+                            info!("Received SIGTERM, initiating graceful shutdown");
+                        }
+                        _ = sigint.recv() => {
+                            info!("Received SIGINT, initiating graceful shutdown");
+                        }
+                    }
+                }
                 
-                tokio::select! {
-                    _ = sigterm.recv() => {
-                        info!("Received SIGTERM, initiating graceful shutdown");
-                    }
-                    _ = sigint.recv() => {
-                        info!("Received SIGINT, initiating graceful shutdown");
-                    }
+                #[cfg(windows)]
+                {
+                    tokio::signal::ctrl_c()
+                        .await
+                        .expect("Failed to listen for ctrl+c");
+                    info!("Received Ctrl+C, initiating graceful shutdown");
                 }
                 
                 let _ = shutdown_tx.send(());
