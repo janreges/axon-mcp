@@ -55,7 +55,7 @@ jobs:
         if: matrix.target == 'x86_64-unknown-linux-musl'
         run: |
           sudo apt-get update
-          sudo apt-get install -y musl-tools
+          sudo apt-get install -y musl-tools musl-dev
 
       - name: Install cross
         if: matrix.use_cross
@@ -76,7 +76,17 @@ jobs:
       # Build for Linux/Windows single targets
       - name: Build binary
         if: matrix.target != 'universal-apple-darwin' && !matrix.use_cross
+        env:
+          # Use rustls instead of native-tls for musl builds
+          CARGO_NET_GIT_FETCH_WITH_CLI: true
         run: |
+          # Set environment variables for musl cross-compilation
+          if [ "${{ matrix.target }}" = "x86_64-unknown-linux-musl" ]; then
+            export OPENSSL_STATIC=1
+            export OPENSSL_DIR=/usr
+            export PKG_CONFIG_ALLOW_CROSS=1
+            export CC=musl-gcc
+          fi
           cargo build --release --target ${{ matrix.target }} --bin axon-mcp
           
       # Build using cross for aarch64-linux
