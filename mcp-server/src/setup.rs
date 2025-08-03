@@ -117,9 +117,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_repository_with_default_url() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let temp_db_path = temp_dir.path().join("test_default.db");
+        
         let config = Config {
             database: DatabaseConfig {
-                url: None,
+                url: Some(format!("sqlite://{}", temp_db_path.display())),
                 max_connections: 5,
                 connection_timeout: 30,
             },

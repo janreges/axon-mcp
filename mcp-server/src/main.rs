@@ -2,6 +2,7 @@ mod config;
 mod setup;
 mod stdio;
 mod telemetry;
+mod self_update;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -12,9 +13,9 @@ use telemetry::{init_telemetry, init_telemetry_with_writer, log_startup_info, lo
 use tracing::{info, error};
 
 #[derive(Parser)]
-#[command(name = "mcp-server")]
+#[command(name = "axon-mcp")]
 #[command(about = "MCP Task Management Server")]
-#[command(version)]
+#[command(version = env!("CARGO_PKG_VERSION"))]
 struct Cli {
     /// Configuration file path
     #[arg(short, long, env = "CONFIG_FILE")]
@@ -35,6 +36,14 @@ struct Cli {
     /// Transport mode: 'http' for web server (default) or 'stdio' for stdin/stdout
     #[arg(long, default_value = "http")]
     transport: String,
+    
+    /// Check for updates and install if available
+    #[arg(long = "self-update")]
+    self_update: bool,
+    
+    /// Show version information
+    #[arg(short = 'V', long = "version")]
+    version: bool,
 }
 
 fn load_config(cli: &Cli) -> Result<Config> {
@@ -75,6 +84,16 @@ async fn main() -> Result<()> {
     
     // Parse CLI arguments
     let cli = Cli::parse();
+    
+    // Handle special commands first
+    if cli.version {
+        self_update::print_version();
+        return Ok(());
+    }
+    
+    if cli.self_update {
+        return self_update::self_update(env!("CARGO_PKG_VERSION")).await;
+    }
     
     // Load configuration
     let config = load_config(&cli).context("Failed to load configuration")?;
