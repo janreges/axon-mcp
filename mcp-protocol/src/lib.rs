@@ -22,11 +22,12 @@
 //! async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
 //!     // In real usage, you would use database::SqliteTaskRepository
 //!     // let repository = Arc::new(database::SqliteTaskRepository::new("tasks.db").await?);
-//!     # use task_core::{TaskRepository, TaskMessageRepository, Task, TaskMessage, NewTask, UpdateTask, TaskFilter, TaskState, RepositoryStats};
+//!     # use task_core::{TaskRepository, TaskMessageRepository, WorkspaceContextRepository, Task, TaskMessage, NewTask, UpdateTask, TaskFilter, TaskState, RepositoryStats};
 //!     # use task_core::error::Result;
 //!     # use async_trait::async_trait;
 //!     # struct MockRepo;
 //!     # struct MockMessageRepo;
+//!     # struct MockWorkspaceRepo;
 //!     # #[async_trait]
 //!     # impl TaskRepository for MockRepo {
 //!     #     async fn create(&self, _task: NewTask) -> Result<Task> { unimplemented!() }
@@ -51,22 +52,29 @@
 //!     #     async fn get_messages(&self, _task_code: &str, _author_agent_name: Option<&str>, _target_agent_name: Option<&str>, _message_type: Option<&str>, _reply_to_message_id: Option<i32>, _limit: Option<u32>) -> Result<Vec<TaskMessage>> { unimplemented!() }
 //!     #     async fn get_message_by_id(&self, _message_id: i32) -> Result<Option<TaskMessage>> { unimplemented!() }
 //!     # }
+//!     # #[async_trait]
+//!     # impl WorkspaceContextRepository for MockWorkspaceRepo {
+//!     #     async fn create(&self, _context: task_core::workspace_setup::WorkspaceContext) -> Result<task_core::workspace_setup::WorkspaceContext> { unimplemented!() }
+//!     #     async fn get_by_id(&self, _workspace_id: &str) -> Result<Option<task_core::workspace_setup::WorkspaceContext>> { unimplemented!() }
+//!     #     async fn update(&self, _context: task_core::workspace_setup::WorkspaceContext) -> Result<task_core::workspace_setup::WorkspaceContext> { unimplemented!() }
+//!     #     async fn delete(&self, _workspace_id: &str) -> Result<()> { unimplemented!() }
+//!     #     async fn health_check(&self) -> Result<()> { unimplemented!() }
+//!     # }
 //!     let repository = Arc::new(MockRepo);
 //!     let message_repository = Arc::new(MockMessageRepo);
-//!     let server = McpServer::new(repository, message_repository);
+//!     let workspace_repository = Arc::new(MockWorkspaceRepo);
+//!     let server = McpServer::new(repository, message_repository, workspace_repository);
 //!     server.serve("127.0.0.1:3000").await?;
 //!     Ok(())
 //! }
 //! ```
 
-pub mod auth;
 pub mod error;
 pub mod handler;
 pub mod serialization;
 pub mod server;
 
 // Re-export key types for easier usage
-pub use auth::{McpAuth, TokenValidation, McpScope};
 pub use error::*;
 pub use handler::McpTaskHandler;
 pub use serialization::*;
