@@ -46,4 +46,4 @@ Thumbs.db
 # SQLite temporary files
 *.db-journal
 *.db-wal
-*.db-shm
+*.db-shm.axon/
