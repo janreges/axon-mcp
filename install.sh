@@ -31,21 +31,21 @@ else
     RESET=''
 fi
 
-# Helper functions
+# Helper functions with beautiful colored dots
 info() {
-    printf "${BLUE}ℹ${RESET}  %s\n" "$1"
+    printf "${BLUE}●${RESET}  %s\n" "$1"
 }
 
 success() {
-    printf "${GREEN}✓${RESET}  %s\n" "$1"
+    printf "${GREEN}●${RESET}  %s\n" "$1"
 }
 
 warning() {
-    printf "${YELLOW}⚠${RESET}  %s\n" "$1" >&2
+    printf "${YELLOW}●${RESET}  %s\n" "$1" >&2
 }
 
 error() {
-    printf "${RED}✗${RESET}  %s\n" "$1" >&2
+    printf "${RED}●${RESET}  %s\n" "$1" >&2
 }
 
 fatal() {
@@ -317,22 +317,37 @@ configure_claude() {
     
     info "Configuring Claude Code..."
     
-    # Method 1: Try using claude CLI
+    # Method 1: Try using claude CLI with proper scope
     if command -v claude >/dev/null 2>&1; then
         info "Found claude CLI, attempting automatic configuration..."
         
-        if claude mcp add "$MCP_NAME" -- "$BINARY_PATH" 2>/dev/null; then
-            success "Claude Code configured successfully!"
-            return 0
-        else
-            warning "claude mcp add failed, trying alternative method..."
+        # Try project scope first if in a project directory
+        if [ -d ".git" ] || [ -d ".claude" ]; then
+            info "Attempting project-scoped MCP configuration..."
+            if claude mcp add -s project "$MCP_NAME" -- "$BINARY_PATH" 2>/dev/null; then
+                success "Claude Code configured successfully in project scope!"
+                return 0
+            else
+                warning "Project-scoped configuration failed, trying user scope..."
+            fi
         fi
         
-        # Method 2: Try claude mcp add-json
-        JSON_CONFIG="{\"command\":[\"$BINARY_PATH\"]}"
-        if echo "$JSON_CONFIG" | claude mcp add-json "$MCP_NAME" 2>/dev/null; then
-            success "Claude Code configured successfully using add-json!"
+        # Try user scope as fallback
+        info "Attempting user-scoped MCP configuration..."
+        if claude mcp add -s user "$MCP_NAME" -- "$BINARY_PATH" 2>/dev/null; then
+            success "Claude Code configured successfully in user scope!"
             return 0
+        else
+            warning "User-scoped configuration failed, trying local scope..."
+        fi
+        
+        # Try local scope as final fallback
+        info "Attempting local-scoped MCP configuration..."
+        if claude mcp add -s local "$MCP_NAME" -- "$BINARY_PATH" 2>/dev/null; then
+            success "Claude Code configured successfully in local scope!"
+            return 0
+        else
+            warning "All claude mcp add attempts failed."
         fi
     fi
     
@@ -417,9 +432,8 @@ health_check() {
 
 # Main installation flow
 main() {
-    echo "${BOLD}Axon MCP Installer${RESET}"
-    echo "==================="
-    echo ""
+    printf "\n${BOLD}🧠 Axon MCP Installer${RESET}\n"
+    printf "${BOLD}════════════════════════${RESET}\n\n"
     
     # --- CLI Parsing and Installation Path Logic ---
     PROJECT_ROOT=""
@@ -473,12 +487,16 @@ main() {
         fatal "Unknown installation mode: $INSTALL_MODE"
     fi
     
+    printf "\n${BOLD}📋 Pre-Installation Checks${RESET}\n"
+    printf "───────────────────────────\n"
     # Check requirements
     check_requirements
     
     # Detect platform
     detect_platform
     
+    printf "\n${BOLD}📦 Download & Installation${RESET}\n"
+    printf "──────────────────────────\n"
     # Download and install with custom directory
     download_binary_to_dir "$INSTALL_DIR"
     
@@ -487,9 +505,13 @@ main() {
         configure_path
     fi
     
+    printf "\n${BOLD}🔍 Health Check${RESET}\n"
+    printf "───────────────\n"
     # Run health check
     health_check
     
+    printf "\n${BOLD}⚙️  Post-Installation Setup${RESET}\n"
+    printf "──────────────────────────\n"
     # --- Post-Installation Automation ---
     if [ "$INSTALL_MODE" = "project" ]; then
         info "Running automation steps for project-scoped installation..."
@@ -516,11 +538,16 @@ main() {
         if [ -d "$CLAUDE_DIR" ]; then
             info "Detected '.claude/' folder in project root."
             if prompt_yes_no "Run 'claude mcp add' for this project?" "Y"; then
-                info "Running 'claude mcp add'..."
-                # Execute claude mcp add from the project root
-                (cd "$PROJECT_ROOT" && claude mcp add axon-mcp -- "$INSTALL_DIR/$MCP_NAME") 2>/dev/null
+                info "Running 'claude mcp add' with project scope..."
+                # Execute claude mcp add from the project root with proper binary path
+                CORRECT_BINARY_PATH="$INSTALL_DIR/$MCP_NAME"
+                if [ "$PLATFORM_OS" = "windows" ]; then
+                    CORRECT_BINARY_PATH="${CORRECT_BINARY_PATH}.exe"
+                fi
+                
+                (cd "$PROJECT_ROOT" && claude mcp add -s project axon-mcp -- "$CORRECT_BINARY_PATH") 2>/dev/null
                 if [ $? -eq 0 ]; then
-                    success "'claude mcp add' executed successfully."
+                    success "'claude mcp add' executed successfully in project scope."
                 else
                     warning "'claude mcp add' failed. Check output for details or run manually."
                 fi
@@ -541,10 +568,9 @@ main() {
         info "Then run 'source ~/.bashrc' (or appropriate file) or restart terminal."
     fi
     
-    echo ""
-    success "Installation complete!"
-    echo ""
-    echo "Next steps:"
+    printf "\n${GREEN}${BOLD}🎉 Installation Complete!${RESET}\n"
+    printf "${GREEN}${BOLD}═════════════════════════${RESET}\n\n"
+    printf "${BOLD}📝 Next Steps:${RESET}\n"
     if [ "$INSTALL_MODE" = "project" ]; then
         printf "  1. Use: %s%s --version%s\n" "$BOLD" "$INSTALL_DIR/$MCP_NAME" "$RESET"
         printf "  2. In Claude Code, verify connection with: %s/mcp%s\n" "$BOLD" "$RESET"

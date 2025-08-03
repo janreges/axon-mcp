@@ -23,25 +23,25 @@ $OriginalForegroundColor = $Host.UI.RawUI.ForegroundColor
 
 function Write-Info {
     param([string]$Message)
-    Write-Host "ℹ " -ForegroundColor Blue -NoNewline
+    Write-Host "● " -ForegroundColor Blue -NoNewline
     Write-Host " $Message"
 }
 
 function Write-Success {
     param([string]$Message)
-    Write-Host "✓ " -ForegroundColor Green -NoNewline
+    Write-Host "● " -ForegroundColor Green -NoNewline
     Write-Host " $Message"
 }
 
 function Write-Warning {
     param([string]$Message)
-    Write-Host "⚠ " -ForegroundColor Yellow -NoNewline
+    Write-Host "● " -ForegroundColor Yellow -NoNewline
     Write-Host " $Message" -ForegroundColor Yellow
 }
 
 function Write-Error {
     param([string]$Message)
-    Write-Host "✗ " -ForegroundColor Red -NoNewline
+    Write-Host "● " -ForegroundColor Red -NoNewline
     Write-Host " $Message" -ForegroundColor Red
 }
 
