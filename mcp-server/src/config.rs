@@ -335,8 +335,7 @@ pub fn resolve_database_path() -> Result<(PathBuf, InstallScope)> {
 
             // Create a stable hash of the project root path
             let project_root = find_project_root(&current_dir).unwrap_or(current_dir);
-            let canonical_root = project_root.canonicalize().unwrap_or(project_root);
-            let project_path_str = canonical_root.to_string_lossy();
+            let project_path_str = project_root.to_string_lossy();
 
             let mut hasher = Sha256::new();
             hasher.update(project_path_str.as_bytes());

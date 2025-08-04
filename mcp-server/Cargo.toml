@@ -13,6 +13,11 @@ path = "src/lib.rs"
 name = "axon-mcp"
 path = "src/main.rs"
 
+# Minimal test binary
+[[bin]]
+name = "axon-mcp-minimal"
+path = "src/main_minimal.rs"
+
 [dependencies]
 task-core = { path = "../core" }
 tokio = { workspace = true, features = ["full", "signal"] }
