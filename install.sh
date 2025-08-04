@@ -561,42 +561,72 @@ main() {
     
     printf "\n%b🎉 Axon MCP Installed Successfully!%b\n\n" "$GREEN$BOLD" "$RESET"
     
-    # Determine project root and name for server startup
-    CURRENT_DIR="$(pwd)"
-    PROJECT_NAME="$(basename "$CURRENT_DIR")"
+    # Smart project detection and parameter pre-filling
+    DETECTED_PROJECT_ROOT=""
+    DETECTED_PROJECT_NAME=""
     SERVER_PORT="8499"
     
-    if [ "$INSTALL_MODE" = "project" ]; then
+    if [ "$INSTALL_MODE" = "project" ] && [ -n "$PROJECT_ROOT" ]; then
+        DETECTED_PROJECT_ROOT="$PROJECT_ROOT"
         BINARY_PATH="$INSTALL_DIR/$MCP_NAME"
-        STARTUP_PROJECT_ROOT="$PROJECT_ROOT"
     else
-        BINARY_PATH="$MCP_NAME"
-        STARTUP_PROJECT_ROOT="$CURRENT_DIR"
+        # Try to detect project from current directory
+        CURRENT_DIR="$(pwd)"
+        DETECTED_PROJECT_ROOT=$(find_project_root)
+        if [ -z "$DETECTED_PROJECT_ROOT" ]; then
+            DETECTED_PROJECT_ROOT="$CURRENT_DIR"
+        fi
+        
+        if [ "$INSTALL_MODE" = "project" ]; then
+            BINARY_PATH="$INSTALL_DIR/$MCP_NAME"
+        else
+            BINARY_PATH="$MCP_NAME"
+        fi
     fi
+    
+    # Generate sanitized project name from detected path
+    DETECTED_PROJECT_NAME=$(basename "$DETECTED_PROJECT_ROOT" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g' | sed -E 's/^-+|-+$//g')
     
     if [ "$PLATFORM_OS" = "windows" ]; then
         BINARY_PATH="${BINARY_PATH}.exe"
     fi
     
-    printf "%b🚀 Next Steps:%b\n\n" "$BOLD" "$RESET"
+    printf "%b🚀 Ready to Start Server:%b\n\n" "$BOLD" "$RESET"
     
-    printf "%b1. Start Axon MCP Server:%b\n" "$BOLD" "$RESET"
-    printf "   Open a new terminal and run:\n"
-    printf "   %b%s --start --port=%s --project=%s --project-root=\"%s\"%b\n\n" "$BLUE" "$BINARY_PATH" "$SERVER_PORT" "$PROJECT_NAME" "$STARTUP_PROJECT_ROOT" "$RESET"
+    # Display auto-detected values prominently
+    printf "%b✨ Auto-detected configuration:%b\n" "$GREEN" "$RESET"
+    printf "   Project root: %b%s%b\n" "$BLUE" "$DETECTED_PROJECT_ROOT" "$RESET"
+    printf "   Project name: %b%s%b\n" "$BLUE" "$DETECTED_PROJECT_NAME" "$RESET"
+    printf "   Server port:  %b%s%b\n\n" "$BLUE" "$SERVER_PORT" "$RESET"
+    
+    # Show the ready-to-use command in a prominent box
+    printf "%b┌─────────────────────────────────────────────────────────────────────┐%b\n" "$BOLD" "$RESET"
+    printf "%b│                    📋 COPY & PASTE COMMAND                          │%b\n" "$BOLD" "$RESET"
+    printf "%b├─────────────────────────────────────────────────────────────────────┤%b\n" "$BOLD" "$RESET"
+    printf "%b│%b %s --start --port=%s --project=\"%s\" --project-root=\"%s\" %b│%b\n" "$BOLD" "$BLUE" "$BINARY_PATH" "$SERVER_PORT" "$DETECTED_PROJECT_NAME" "$DETECTED_PROJECT_ROOT" "$BOLD" "$RESET"
+    printf "%b└─────────────────────────────────────────────────────────────────────┘%b\n\n" "$BOLD" "$RESET"
+    
+    printf "%b📋 Step-by-step instructions:%b\n\n" "$BOLD" "$RESET"
+    
+    printf "%b1. Start the server:%b\n" "$BOLD" "$RESET"
+    printf "   • Open a %bNEW terminal window%b\n" "$BOLD" "$RESET"
+    printf "   • Copy and paste the command from the box above\n"
+    printf "   • Press Enter to start the server\n\n"
     
     printf "%b2. Connect Claude Code:%b\n" "$BOLD" "$RESET"
-    printf "   Once server is running:\n"
-    printf "   %bcd \"%s\"%b\n" "$BLUE" "$STARTUP_PROJECT_ROOT" "$RESET"
+    printf "   • Once server shows \"Server listening...\", run:\n"
+    printf "   %bcd \"%s\"%b\n" "$BLUE" "$DETECTED_PROJECT_ROOT" "$RESET"
     printf "   %bclaude mcp add --url http://127.0.0.1:%s%b\n\n" "$BLUE" "$SERVER_PORT" "$RESET"
     
-    printf "%b✅ Quick Test (optional):%b\n" "$BOLD" "$RESET"
-    printf "• Health check: %bcurl http://127.0.0.1:%s/health%b\n" "$BLUE" "$SERVER_PORT" "$RESET"
-    printf "• In Claude Code: %b/mcp%b to verify connection\n\n" "$BLUE" "$RESET"
+    printf "%b✅ Verification (optional):%b\n" "$BOLD" "$RESET"
+    printf "   • Health check: %bcurl http://127.0.0.1:%s/health%b\n" "$BLUE" "$SERVER_PORT" "$RESET"
+    printf "   • In Claude Code: Type %b/mcp%b to verify connection\n\n" "$BLUE" "$RESET"
     
-    printf "%b💡 Tips:%b\n" "$YELLOW" "$RESET"
-    printf "• Keep server running in separate terminal\n"
-    printf "• Stop server with Ctrl+C\n"
-    printf "• Database: %s/.axon/axon.%s.sqlite\n\n" "$STARTUP_PROJECT_ROOT" "$PROJECT_NAME"
+    printf "%b💡 Pro Tips:%b\n" "$YELLOW" "$RESET"
+    printf "   • Keep the server terminal open (don't close it)\n"
+    printf "   • Stop server anytime with Ctrl+C\n"
+    printf "   • Database will be stored in: %b%s/.axon/axon.%s.sqlite%b\n" "$BLUE" "$DETECTED_PROJECT_ROOT" "$DETECTED_PROJECT_NAME" "$RESET"
+    printf "   • Wrong project name? Edit it in the command above before running\n\n"
 }
 
 # Run main function only if script is executed directly (not sourced)
