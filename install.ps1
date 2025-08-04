@@ -455,7 +455,7 @@ function Configure-ClaudeCode {
     Write-Host "  $env:APPDATA\Claude\claude_desktop_config.json"
     Write-Host ""
     Write-Host "Add this to the mcpServers section:" -ForegroundColor Cyan
-    Write-Host @"
+    $ConfigJson = @"
 {
   "mcpServers": {
     "$BinaryName": {
@@ -463,7 +463,8 @@ function Configure-ClaudeCode {
     }
   }
 }
-"@ -ForegroundColor Blue
+"@
+    Write-Host $ConfigJson -ForegroundColor Blue
     Write-Host ""
 }
 
