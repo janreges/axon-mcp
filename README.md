@@ -1,7 +1,7 @@
 # MCP Task Management Server
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/janreges/axon-mcp)
-[![Version](https://img.shields.io/badge/version-0.4.3-blue)](https://github.com/janreges/axon-mcp/releases)
+[![Version](https://img.shields.io/badge/version-0.4.4-blue)](https://github.com/janreges/axon-mcp/releases)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 **Production-ready server for orchestrating and coordinating tasks between multiple AI agents.**
