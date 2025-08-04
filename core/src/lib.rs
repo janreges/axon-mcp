@@ -89,7 +89,6 @@ pub use protocol::{
     GetTaskByCodeParams,
     GetTaskByIdParams,
     GetTaskMessagesParams,
-    GetWorkspaceManifestParams,
     HealthStatus,
     ListTasksParams,
     ProtocolHandler,

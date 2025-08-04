@@ -8,8 +8,8 @@ use ::task_core::TaskError;
 use ::task_core::{
     AgentRegistration, AgenticWorkflowDescription, CreateMainAiFileParams,
     GetAgenticWorkflowDescriptionParams, GetInstructionsForMainAiFileParams,
-    GetSetupInstructionsParams, GetWorkspaceManifestParams, MainAiFileData, MainAiFileInstructions,
-    PrdDocument, RegisterAgentParams, SetupInstructions, WorkspaceManifest, WorkspaceSetupService,
+    GetSetupInstructionsParams, MainAiFileData, MainAiFileInstructions,
+    RegisterAgentParams, SetupInstructions, WorkspaceSetupService,
 };
 use ::task_core::{
     ClaimTaskParams, DiscoverWorkParams, EndWorkSessionParams, ReleaseTaskParams,
@@ -239,67 +239,14 @@ impl<
 
     async fn get_setup_instructions(
         &self,
-        params: GetSetupInstructionsParams,
+        _params: GetSetupInstructionsParams,
     ) -> Result<SetupInstructions> {
-        use ::task_core::WorkspaceSetupError;
-        use task_core::protocol::DEFAULT_WORKSPACE_ID;
-
-        // Get or create workspace context with DEFAULT_WORKSPACE_ID
-        let maybe_context = self
-            .workspace_context_repository
-            .get_by_id(DEFAULT_WORKSPACE_ID)
-            .await?;
-
-        let mut workspace_context = maybe_context.as_ref().map(|c| c.clone()).unwrap_or_else(|| {
-            ::task_core::workspace_setup::WorkspaceContext::new(DEFAULT_WORKSPACE_ID.to_string())
-        });
-        
-        // Update PRD content if provided in params
-        if let Some(prd_content) = params.prd_content {
-            workspace_context.prd_content = Some(prd_content);
-        }
-        // If no PRD content and we have project_root, try to load from CLAUDE.md
-        else if workspace_context.prd_content.is_none() {
-            if let Some(ref project_root) = self.project_root {
-                let claude_md_path = project_root.join("CLAUDE.md");
-                if claude_md_path.exists() {
-                    match tokio::fs::read_to_string(&claude_md_path).await {
-                        Ok(content) => {
-                            workspace_context.prd_content = Some(content);
-                        }
-                        Err(e) => {
-                            tracing::warn!("Failed to read CLAUDE.md from {}: {}", claude_md_path.display(), e);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Save updated context if needed
-        if maybe_context.is_some() {
-            self.workspace_context_repository
-                .update(workspace_context)
-                .await?;
-        } else {
-            self.workspace_context_repository
-                .create(workspace_context)
-                .await?;
-        }
-
-        // Always use ClaudeCode as default AI tool type
+        // Return static setup instructions without PRD processing
         let response = self
             .workspace_setup_service
             .get_setup_instructions(::task_core::workspace_setup::AiToolType::ClaudeCode)
             .await
-            .map_err(|e| match e {
-                WorkspaceSetupError::UnsupportedAiTool(tool) => {
-                    ::task_core::TaskError::Validation(format!("Unsupported AI tool type: {tool}"))
-                }
-                WorkspaceSetupError::InvalidConfiguration(msg) => {
-                    ::task_core::TaskError::Validation(format!("Invalid configuration: {msg}"))
-                }
-                _ => ::task_core::TaskError::Protocol(format!("Workspace setup error: {e}")),
-            })?;
+            .map_err(|e| ::task_core::TaskError::Protocol(format!("Workspace setup error: {e}")))?;
 
         Ok(response.payload)
     }
@@ -308,79 +255,75 @@ impl<
         &self,
         params: GetAgenticWorkflowDescriptionParams,
     ) -> Result<AgenticWorkflowDescription> {
-        use ::task_core::WorkspaceSetupError;
+        // Get agent count (default to 3 if not specified)
+        let agent_count = params.requested_agent_count.unwrap_or(3);
+        
+        // Create static workflow description with agent count placeholder filled
+        let workflow_prompt = format!(
+            r#"# AI Agent Workflow Instructions
 
-        // Parse PRD content
-        let prd = PrdDocument::from_content(&params.prd_content).map_err(|e| match e {
-            WorkspaceSetupError::PrdParsingFailed(msg) => {
-                ::task_core::TaskError::Validation(format!("PRD parsing failed: {msg}"))
-            }
-            WorkspaceSetupError::PrdValidationFailed { errors } => {
-                ::task_core::TaskError::Validation(format!("PRD validation failed: {errors:?}"))
-            }
-            _ => ::task_core::TaskError::Protocol(format!("PRD processing error: {e}")),
-        })?;
+## Overview
+You are setting up a multi-agent AI system with {} agents for MCP-based project coordination.
 
-        // Check if PRD is valid
-        if !prd.is_valid() {
-            return Err(::task_core::TaskError::Validation(format!(
-                "Invalid PRD: {:?}",
-                prd.get_validation_errors()
-            )));
-        }
+## Agent Coordination Strategy
+1. **Agent Count**: {} agents will collaborate on this project
+2. **Coordination Pattern**: Use MCP (Model Context Protocol) functions for task coordination
+3. **Communication**: All agents communicate through the shared MCP task system
 
-        let response = self
-            .workspace_setup_service
-            .get_agentic_workflow_description(&prd)
-            .await
-            .map_err(|e| {
-                ::task_core::TaskError::Protocol(format!("Workflow analysis error: {e}"))
-            })?;
+## Recommended Workflow Steps
 
-        // Get-or-create workspace context for statefulness
-        use task_core::protocol::DEFAULT_WORKSPACE_ID;
-        let maybe_context = self
-            .workspace_context_repository
-            .get_by_id(DEFAULT_WORKSPACE_ID)
-            .await?;
+### Phase 1: Discovery & Planning
+- Use `list_tasks` to discover available work
+- Use `discover_work` to find tasks matching your capabilities
+- Use `claim_task` to claim specific tasks for your agent
 
-        let mut workspace_context = maybe_context.clone().unwrap_or_else(|| {
-            ::task_core::workspace_setup::WorkspaceContext::new(DEFAULT_WORKSPACE_ID.to_string())
-        });
+### Phase 2: Execution & Coordination  
+- Use `start_work_session` to begin timed work sessions
+- Use `create_task_message` to communicate with other agents
+- Use `get_task_messages` to read messages from team members
+- Use `update_task` to report progress and status changes
 
-        // Update context with new data
-        workspace_context.prd_content = Some(params.prd_content.clone());
-        workspace_context.workflow_data = Some(response.payload.clone());
+### Phase 3: Handoffs & Completion
+- Use `assign_task` to transfer tasks between agents
+- Use `set_task_state` to mark tasks as completed or blocked
+- Use `end_work_session` to close work sessions with metrics
 
-        // Save context (create if new, update if existing)
-        if maybe_context.is_some() {
-            // The context existed, so we must call update
-            self.workspace_context_repository
-                .update(workspace_context)
-                .await
-                .map_err(|e| match e {
-                    ::task_core::TaskError::Conflict(msg) => {
-                        ::task_core::TaskError::Conflict(format!(
-                            "Concurrent modification detected: {msg}. Please retry the operation."
-                        ))
-                    }
-                    _ => ::task_core::TaskError::Database(format!(
-                        "Failed to update workspace context: {e}"
-                    )),
-                })?;
-        } else {
-            // The context was new, so we must call create
-            self.workspace_context_repository
-                .create(workspace_context)
-                .await
-                .map_err(|e| {
-                    ::task_core::TaskError::Database(format!(
-                        "Failed to create workspace context: {e}"
-                    ))
-                })?;
-        }
+## Agent Capabilities Template
+Each of the {} agents should:
+- Have distinct specializations (frontend, backend, testing, etc.)
+- Monitor their assigned task queues regularly
+- Communicate clearly through MCP messages
+- Coordinate handoffs through task assignment
 
-        Ok(response.payload)
+## Best Practices
+- Check task status before claiming new work
+- Use descriptive messages for inter-agent communication
+- Set appropriate task states to keep the team informed
+- Coordinate through MCP rather than direct communication
+
+This workflow scales effectively with {} agents working in parallel."#,
+            agent_count, agent_count, agent_count, agent_count
+        );
+
+        // Return simplified AgenticWorkflowDescription with static content
+        Ok(AgenticWorkflowDescription {
+            workflow_description: workflow_prompt,
+            recommended_agent_count: agent_count,
+            suggested_agents: vec![], // Empty - let AI decide based on the prompt
+            task_decomposition_strategy: "MCP-based coordination with parallel execution".to_string(),
+            coordination_patterns: vec![
+                "Task claiming and assignment".to_string(),
+                "Message-based communication".to_string(),
+                "Work session tracking".to_string(),
+            ],
+            workflow_steps: vec![
+                "1. Discover available tasks using MCP functions".to_string(),
+                "2. Claim tasks matching agent capabilities".to_string(),
+                "3. Execute work with regular status updates".to_string(),
+                "4. Coordinate handoffs through task assignment".to_string(),
+                "5. Complete tasks with proper state management".to_string(),
+            ],
+        })
     }
 
     async fn register_agent(&self, params: RegisterAgentParams) -> Result<AgentRegistration> {
@@ -584,46 +527,6 @@ impl<
         }
     }
 
-    async fn get_workspace_manifest(
-        &self,
-        _params: GetWorkspaceManifestParams,
-    ) -> Result<WorkspaceManifest> {
-        use task_core::protocol::DEFAULT_WORKSPACE_ID;
-        
-        // Load workspace context from repository using DEFAULT_WORKSPACE_ID
-        let workspace_context = self
-            .workspace_context_repository
-            .get_by_id(DEFAULT_WORKSPACE_ID)
-            .await?
-            .unwrap_or_else(|| {
-                ::task_core::workspace_setup::WorkspaceContext::new(DEFAULT_WORKSPACE_ID.to_string())
-            });
-
-        // Parse PRD from workspace context
-        let prd_content = workspace_context.prd_content.as_ref().ok_or_else(|| {
-            ::task_core::TaskError::Validation("Workspace has no PRD content".to_string())
-        })?;
-
-        let prd = ::task_core::workspace_setup::PrdDocument::from_content(prd_content)
-            .map_err(|e| ::task_core::TaskError::Validation(format!("Failed to parse PRD: {e}")))?;
-
-        // Use registered agents from workspace context
-        let agents = workspace_context.registered_agents.clone();
-
-        let include_generated_files = true; // Always include generated files by default
-
-        let response = self
-            .workspace_setup_service
-            .generate_workspace_manifest(&prd, &agents, include_generated_files)
-            .await
-            .map_err(|e| {
-                ::task_core::TaskError::Protocol(format!(
-                    "Workspace manifest generation error: {e}"
-                ))
-            })?;
-
-        Ok(response.payload)
-    }
 }
 
 #[cfg(test)]

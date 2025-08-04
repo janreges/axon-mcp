@@ -95,11 +95,6 @@ pub trait ProtocolHandler: Send + Sync {
         params: CreateMainAiFileParams,
     ) -> Result<crate::workspace_setup::MainAiFileData>;
 
-    /// Get complete workspace manifest
-    async fn get_workspace_manifest(
-        &self,
-        params: GetWorkspaceManifestParams,
-    ) -> Result<crate::workspace_setup::WorkspaceManifest>;
 }
 
 /// MCP parameters for creating a new task
@@ -336,13 +331,12 @@ pub const DEFAULT_WORKSPACE_ID: &str = "default";
 /// MCP parameters for getting setup instructions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetSetupInstructionsParams {
-    pub prd_content: Option<String>,
+    // No parameters needed - returns static AI prompts
 }
 
 /// MCP parameters for getting agentic workflow description
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetAgenticWorkflowDescriptionParams {
-    pub prd_content: String,
     pub requested_agent_count: Option<u32>,
 }
 
@@ -367,11 +361,6 @@ pub struct CreateMainAiFileParams {
     pub content: String,
 }
 
-/// MCP parameters for getting workspace manifest
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GetWorkspaceManifestParams {
-    // No parameters needed - uses current project workspace
-}
 
 #[cfg(test)]
 mod tests {

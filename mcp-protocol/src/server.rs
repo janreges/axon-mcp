@@ -383,20 +383,6 @@ async fn execute_mcp_method<
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
             }
         }
-        "get_workspace_manifest" => {
-            let params: ::task_core::GetWorkspaceManifestParams =
-                match deserialize_mcp_params(params) {
-                    Ok(p) => p,
-                    Err(e) => return e.to_json_rpc_error(id),
-                };
-            match handler.get_workspace_manifest(params).await {
-                Ok(manifest) => match serde_json::to_value(manifest) {
-                    Ok(value) => create_success_response(id, value),
-                    Err(e) => McpError::Serialization(e.to_string()).to_json_rpc_error(id),
-                },
-                Err(e) => McpError::from(e).to_json_rpc_error(id),
-            }
-        }
         "tools/list" => {
             // Return list of all available tools per MCP specification
             let tools_list = json!({
@@ -603,9 +589,7 @@ async fn execute_mcp_method<
                         "description": "Generate AI workspace setup instructions",
                         "inputSchema": {
                             "type": "object",
-                            "properties": {
-                                "prd_content": {"type": "string"}
-                            },
+                            "properties": {},
                             "required": []
                         }
                     },
@@ -615,10 +599,9 @@ async fn execute_mcp_method<
                         "inputSchema": {
                             "type": "object",
                             "properties": {
-                                "prd_content": {"type": "string"},
                                 "requested_agent_count": {"type": "integer"}
                             },
-                            "required": ["prd_content"]
+                            "required": []
                         }
                     },
                     {
@@ -655,15 +638,6 @@ async fn execute_mcp_method<
                                 "content": {"type": "string"}
                             },
                             "required": ["content"]
-                        }
-                    },
-                    {
-                        "name": "get_workspace_manifest",
-                        "description": "Generate complete workspace manifest",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {},
-                            "required": []
                         }
                     }
                 ]

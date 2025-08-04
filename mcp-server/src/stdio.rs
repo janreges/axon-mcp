@@ -702,13 +702,6 @@ impl<
                 let result = self.handler.create_main_ai_file(params).await?;
                 Ok(serde_json::to_value(result)?)
             }
-            "get_workspace_manifest" => {
-                use task_core::GetWorkspaceManifestParams;
-                let params: GetWorkspaceManifestParams =
-                    serde_json::from_value(params).context("Invalid get_workspace_manifest parameters")?;
-                let manifest = self.handler.get_workspace_manifest(params).await?;
-                Ok(serde_json::to_value(manifest)?)
-            }
             
             _ => Err(anyhow::anyhow!("Unknown operation: {}", operation)),
         }
