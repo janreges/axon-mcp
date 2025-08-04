@@ -356,26 +356,26 @@ configure_claude() {
     echo ""
     echo "Please add the following configuration manually:"
     echo ""
-    echo "For project-specific configuration, add to ${BOLD}./.mcp.json${RESET}:"
-    echo "For global configuration, add to:"
-    echo "  - macOS: ${BOLD}~/Library/Application Support/Claude/claude_desktop_config.json${RESET}"
-    echo "  - Windows: ${BOLD}%APPDATA%\\Claude\\claude_desktop_config.json${RESET}"
-    echo ""
-    echo "${BLUE}{"
-    echo "  \"mcpServers\": {"
-    echo "    \"$MCP_NAME\": {"
-    echo "      \"command\": [\"$BINARY_PATH\"],"
-    echo "      \"env\": {"
-    echo "        \"AXON_MCP_SCOPE\": \"project\""
-    echo "      }"
-    echo "    }"
-    echo "  }"
-    echo "}${RESET}"
-    echo ""
-    echo "${YELLOW}Database Configuration:${RESET}"
-    echo "• Project scope: Database stored in ${BOLD}.axon/axon-mcp.sqlite${RESET} within your project"
-    echo "• User scope: Database stored in user data directory with project isolation"
-    echo "• To force user-scope, set ${BOLD}AXON_MCP_SCOPE=user${RESET} in env config"
+    printf "For project-specific configuration, add to %b./.mcp.json%b:\n" "$BOLD" "$RESET"
+    printf "For global configuration, add to:\n"
+    printf "  - macOS: %b~/Library/Application Support/Claude/claude_desktop_config.json%b\n" "$BOLD" "$RESET"
+    printf "  - Windows: %b%%APPDATA%%\\Claude\\claude_desktop_config.json%b\n" "$BOLD" "$RESET"
+    printf "\n"
+    printf "%b{\n" "$BLUE"
+    printf "  \"mcpServers\": {\n"
+    printf "    \"%s\": {\n" "$MCP_NAME"
+    printf "      \"command\": [\"%s\"],\n" "$BINARY_PATH"
+    printf "      \"env\": {\n"
+    printf "        \"AXON_MCP_SCOPE\": \"project\"\n"
+    printf "      }\n"
+    printf "    }\n"
+    printf "  }\n"
+    printf "}%b\n" "$RESET"
+    printf "\n"
+    printf "%bDatabase Configuration:%b\n" "$YELLOW" "$RESET"
+    printf "• Project scope: Database stored in %b.axon/axon-mcp.sqlite%b within your project\n" "$BOLD" "$RESET"
+    printf "• User scope: Database stored in user data directory with project isolation\n"
+    printf "• To force user-scope, set %bAXON_MCP_SCOPE=user%b in env config\n" "$BOLD" "$RESET"
     echo ""
     
     # Add .axon to .gitignore if in a git repository and using project scope
@@ -432,8 +432,8 @@ health_check() {
 
 # Main installation flow
 main() {
-    printf "\n${BOLD}🧠 Axon MCP Installer${RESET}\n"
-    printf "${BOLD}════════════════════════${RESET}\n\n"
+    printf "\n%b🧠 Axon MCP Installer%b\n" "$BOLD" "$RESET"
+    printf "%b════════════════════════%b\n\n" "$BOLD" "$RESET"
     
     # --- CLI Parsing and Installation Path Logic ---
     PROJECT_ROOT=""
@@ -487,7 +487,7 @@ main() {
         fatal "Unknown installation mode: $INSTALL_MODE"
     fi
     
-    printf "\n${BOLD}📋 Pre-Installation Checks${RESET}\n"
+    printf "\n%b📋 Pre-Installation Checks%b\n" "$BOLD" "$RESET"
     printf "───────────────────────────\n"
     # Check requirements
     check_requirements
@@ -495,7 +495,7 @@ main() {
     # Detect platform
     detect_platform
     
-    printf "\n${BOLD}📦 Download & Installation${RESET}\n"
+    printf "\n%b📦 Download & Installation%b\n" "$BOLD" "$RESET"
     printf "──────────────────────────\n"
     # Download and install with custom directory
     download_binary_to_dir "$INSTALL_DIR"
@@ -505,12 +505,12 @@ main() {
         configure_path
     fi
     
-    printf "\n${BOLD}🔍 Health Check${RESET}\n"
+    printf "\n%b🔍 Health Check%b\n" "$BOLD" "$RESET"
     printf "───────────────\n"
     # Run health check
     health_check
     
-    printf "\n${BOLD}⚙️  Post-Installation Setup${RESET}\n"
+    printf "\n%b⚙️  Post-Installation Setup%b\n" "$BOLD" "$RESET"  
     printf "──────────────────────────\n"
     # --- Post-Installation Automation ---
     if [ "$INSTALL_MODE" = "project" ]; then
@@ -568,20 +568,53 @@ main() {
         info "Then run 'source ~/.bashrc' (or appropriate file) or restart terminal."
     fi
     
-    printf "\n${GREEN}${BOLD}🎉 Installation Complete!${RESET}\n"
-    printf "${GREEN}${BOLD}═════════════════════════${RESET}\n\n"
-    printf "${BOLD}📝 Next Steps:${RESET}\n"
+    printf "\n%b%b🎉 Installation Complete!%b\n" "$GREEN" "$BOLD" "$RESET"
+    printf "%b%b═════════════════════════%b\n\n" "$GREEN" "$BOLD" "$RESET"
+    
+    # Determine project root and name for server startup
+    CURRENT_DIR="$(pwd)"
+    PROJECT_NAME="$(basename "$CURRENT_DIR")"
+    SERVER_PORT="8499"
+    
     if [ "$INSTALL_MODE" = "project" ]; then
-        printf "  1. Use: %s%s --version%s\n" "$BOLD" "$INSTALL_DIR/$MCP_NAME" "$RESET"
-        printf "  2. In Claude Code, verify connection with: %s/mcp%s\n" "$BOLD" "$RESET"
+        BINARY_PATH="$INSTALL_DIR/$MCP_NAME"
+        STARTUP_PROJECT_ROOT="$PROJECT_ROOT"
     else
-        printf "  1. Restart your shell or run: %ssource ~/.bashrc%s (or appropriate config file)\n" "$BOLD" "$RESET"
-        printf "  2. Verify installation: %s%s --version%s\n" "$BOLD" "$MCP_NAME" "$RESET"
-        printf "  3. In Claude Code, verify connection with: %s/mcp%s\n" "$BOLD" "$RESET"
+        BINARY_PATH="$MCP_NAME"
+        STARTUP_PROJECT_ROOT="$CURRENT_DIR"
     fi
-    echo ""
-    printf "For updates, run: %s%s self-update%s\n" "$BOLD" "$MCP_NAME" "$RESET"
-    echo ""
+    
+    if [ "$PLATFORM_OS" = "windows" ]; then
+        BINARY_PATH="${BINARY_PATH}.exe"
+    fi
+    
+    printf "%b🚀 How to Start the MCP Server:%b\n" "$BOLD" "$RESET"
+    printf "═══════════════════════════════════\n\n"
+    printf "1. %bOpen a new terminal window%b and run:\n\n" "$BOLD" "$RESET"
+    printf "%b%s --start --port=%s --project=%s --project-root=\"%s\"%b\n\n" "$BLUE" "$BINARY_PATH" "$SERVER_PORT" "$PROJECT_NAME" "$STARTUP_PROJECT_ROOT" "$RESET"
+    
+    printf "2. %bOnce the server is running%b, add it to Claude Code:\n\n" "$BOLD" "$RESET"
+    printf "%bclaude mcp add --url http://127.0.0.1:%s%b\n\n" "$BLUE" "$SERVER_PORT" "$RESET"
+    
+    printf "%b📋 Quick Verification:%b\n" "$BOLD" "$RESET"
+    printf "─────────────────────\n"
+    printf "• Server health check: %bcurl http://127.0.0.1:%s/health%b\n" "$BLUE" "$SERVER_PORT" "$RESET"
+    printf "• Version check: %b%s --version%b\n" "$BLUE" "$BINARY_PATH" "$RESET"
+    printf "• In Claude Code: %b/mcp%b to verify connection\n\n" "$BLUE" "$RESET"
+    
+    printf "%b🎯 Key Features:%b\n" "$BOLD" "$RESET"
+    printf "─────────────────\n"
+    printf "• HTTP-only transport for multi-agent coordination\n"
+    printf "• Project-scoped SQLite database in .axon/\n"
+    printf "• All 22 MCP functions including task claiming and timeout\n"
+    printf "• Race condition fixes and 15-minute timeout mechanism\n\n"
+    
+    printf "%b💡 Pro Tips:%b\n" "$YELLOW" "$RESET"
+    printf "─────────────\n"
+    printf "• Keep the server running in a separate terminal\n"
+    printf "• Database will be created at: %s/.axon/axon.%s.sqlite\n" "$STARTUP_PROJECT_ROOT" "$PROJECT_NAME"
+    printf "• Server logs show all MCP function calls\n"
+    printf "• Use Ctrl+C to stop the server gracefully\n\n"
 }
 
 # Run main function only if script is executed directly (not sourced)
