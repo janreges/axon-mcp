@@ -331,7 +331,7 @@ pub const DEFAULT_WORKSPACE_ID: &str = "default";
 /// MCP parameters for getting setup instructions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetSetupInstructionsParams {
-    // No parameters needed - returns static AI prompts
+    pub ai_tool_type: String, // AI tool type (e.g., "claude-code") to select appropriate prompt
 }
 
 /// MCP parameters for getting agentic workflow description

@@ -239,12 +239,18 @@ impl<
 
     async fn get_setup_instructions(
         &self,
-        _params: GetSetupInstructionsParams,
+        params: GetSetupInstructionsParams,
     ) -> Result<SetupInstructions> {
-        // Return static setup instructions without PRD processing
+        // Parse AI tool type, default to claude-code if not provided or invalid
+        let ai_tool_type = match params.ai_tool_type.as_str() {
+            "claude-code" => ::task_core::workspace_setup::AiToolType::ClaudeCode,
+            _ => ::task_core::workspace_setup::AiToolType::ClaudeCode, // Default fallback
+        };
+
+        // Return static setup instructions based on AI tool type
         let response = self
             .workspace_setup_service
-            .get_setup_instructions(::task_core::workspace_setup::AiToolType::ClaudeCode)
+            .get_setup_instructions(ai_tool_type)
             .await
             .map_err(|e| ::task_core::TaskError::Protocol(format!("Workspace setup error: {e}")))?;
 

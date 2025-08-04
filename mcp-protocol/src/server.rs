@@ -589,8 +589,10 @@ async fn execute_mcp_method<
                         "description": "Generate AI workspace setup instructions",
                         "inputSchema": {
                             "type": "object",
-                            "properties": {},
-                            "required": []
+                            "properties": {
+                                "ai_tool_type": {"type": "string"}
+                            },
+                            "required": ["ai_tool_type"]
                         }
                     },
                     {

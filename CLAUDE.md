@@ -76,7 +76,7 @@ enum TaskState {
 }
 ```
 
-### Required MCP Functions (22 Total)
+### Required MCP Functions (19 Total)
 
 #### Core Task Management (9 Functions)
 - **create_task**: Add new task with validation
@@ -100,13 +100,12 @@ enum TaskState {
 - **create_task_message**: Send targeted messages between agents within tasks
 - **get_task_messages**: Retrieve messages with advanced filtering by sender, recipient, type
 
-#### Workspace Setup Automation (6 Functions)
-- **get_setup_instructions**: Generate AI workspace setup instructions based on PRD analysis
-- **get_agentic_workflow_description**: Analyze PRD and recommend optimal agent roles and workflow
+#### Workspace Setup Automation (5 Functions)
+- **get_setup_instructions**: Generate static AI workspace setup instructions
+- **get_agentic_workflow_description**: Generate agent workflow templates with dynamic placeholders
 - **register_agent**: Register an AI agent in the workspace
 - **get_instructions_for_main_ai_file**: Get instructions for creating main AI coordination file
 - **create_main_ai_file**: Create the main AI coordination file (CLAUDE.md, etc.)
-- **get_workspace_manifest**: Generate complete workspace manifest for AI automation
 
 ### Advanced Inter-Agent Messaging System
 
@@ -398,7 +397,7 @@ Each crate also contains its own README.md with specific documentation.
 The project is fully implemented and functional:
 
 ### ✅ Completed Features
-- **All 22 MCP Functions**: Core task management, advanced coordination, messaging, and workspace automation
+- **All 19 MCP Functions**: Core task management, advanced coordination, messaging, and workspace automation
 - **Multi-Transport Support**: HTTP/JSON-RPC and legacy SSE support
 - **SQLite Database**: Full persistence with migrations and connection pooling
 - **Comprehensive Testing**: 64+ tests across all crates with high coverage

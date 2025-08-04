@@ -455,8 +455,9 @@ impl<
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "prd_content": {"type": "string"}
-                                }
+                                    "ai_tool_type": {"type": "string"}
+                                },
+                                "required": ["ai_tool_type"]
                             }
                         },
                         {
@@ -465,10 +466,9 @@ impl<
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "prd_content": {"type": "string"},
                                     "requested_agent_count": {"type": "integer"}
                                 },
-                                "required": ["prd_content"]
+                                "required": []
                             }
                         },
                         {
@@ -504,13 +504,6 @@ impl<
                                     "content": {"type": "string"}
                                 },
                                 "required": ["content"]
-                            }
-                        },
-                        {
-                            "name": "get_workspace_manifest",
-                            "description": "Generate complete workspace manifest",
-                            "inputSchema": {
-                                "type": "object"
                             }
                         }
                     ]

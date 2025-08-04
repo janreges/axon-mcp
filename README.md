@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![Crates.io](https://img.shields.io/crates/v/axon-mcp?style=for-the-badge&logo=rust)]()
 
-Axon is a production-grade Model Context Protocol (MCP) server written in Rust. It acts as the single hub where your AI agents **create, claim, and track tasks while exchanging structured handoffs, questions, and blockers** in real-time. With dual transports (HTTP/SSE + JSON-RPC/STDIO), low-latency communication, and 22 first-class MCP functions, Axon lets you orchestrate small agent squads or large autonomous swarms—all backed by an ACID-compliant SQLite core.
+Axon is a production-grade Model Context Protocol (MCP) server written in Rust. It acts as the single hub where your AI agents **create, claim, and track tasks while exchanging structured handoffs, questions, and blockers** in real-time. With dual transports (HTTP/SSE + JSON-RPC/STDIO), low-latency communication, and 19 first-class MCP functions, Axon lets you orchestrate small agent squads or large autonomous swarms—all backed by an ACID-compliant SQLite core.
 
 Think of Axon as the neural relay between specialized agents—just add well-crafted prompts and watch them collaborate like a team.
 
@@ -99,34 +99,28 @@ export DATABASE_URL="sqlite:///path/to/axon.db"
 
 ## 🌟 **NEW: Workspace Setup Automation**
 
-**Transform PRD → Complete AI Workspace in seconds!**
+**Generate Complete AI Workspace Templates in seconds!**
 
 ### 🎯 The Problem
 Setting up multi-agent AI workspaces is complex and time-consuming:
 - Manual agent role design takes hours
 - Coordination patterns require deep expertise  
 - Tool-specific setup varies dramatically
-- Project requirements analysis is repetitive
+- Workflow templates need constant customization
 
 ### ⚡ The Axon Solution
-**One command creates your entire AI workspace:**
+**AI workspace generation through static templates with dynamic placeholders:**
 
-```bash
-# Future CLI (in development)
-axon setup --prd ./docs/PRD.md --tool claude-code --agents 5
+**Through AI agent prompt:**
 ```
-
-**Or through AI agent prompt:**
-```
-"Nastav mi celý workspace pomocí Axon MCP. Mám PRD.md v ./docs/ 
-a chci použít 5 AI agentů pro realizaci projektu v Claude Code."
+"Nastav mi celý workspace pomocí Axon MCP. 
+Chci použít 5 AI agentů pro realizaci projektu v Claude Code."
 ```
 
 ### 🔥 What Gets Generated
-- **📋 Intelligent Agent Roles** - Based on your PRD requirements
-- **🤝 Coordination Workflows** - Optimized handoff sequences  
+- **📋 Agent Role Templates** - Configurable roles with dynamic agent counts
+- **🤝 Coordination Workflows** - Static workflow patterns with placeholders
 - **📁 Complete File Structure** - CLAUDE.md, .claude/agents/, commands
-- **🎯 Project Manifest** - Full metadata in .axon/manifest.json
 - **📖 Setup Instructions** - Step-by-step guidance for immediate productivity
 
 ### 📄 Example: E-commerce Platform PRD
@@ -159,7 +153,6 @@ a chci použít 5 AI agentů pro realizaci projektu v Claude Code."
 ```json
 // MCP Function Call
 {"method": "get_agentic_workflow_description", "params": {
-  "prd_content": "# E-commerce Platform\n\n## Overview...",
   "requested_agent_count": 5
 }}
 
@@ -277,7 +270,7 @@ Always include context and clear handoffs in your messages.
 
 ## 📋 Complete MCP Function Reference
 
-Axon implements **22 comprehensive MCP functions** organized in four categories:
+Axon implements **19 comprehensive MCP functions** organized in four categories:
 
 <details>
 <summary><strong>📝 Core Task Management (9 Functions)</strong></summary>
@@ -317,14 +310,13 @@ Axon implements **22 comprehensive MCP functions** organized in four categories:
 </details>
 
 <details>
-<summary><strong>🚀 Workspace Setup Automation (6 Functions)</strong></summary>
+<summary><strong>🚀 Workspace Setup Automation (5 Functions)</strong></summary>
 
-- **`get_setup_instructions`** - Get step-by-step workspace setup instructions
-- **`get_agentic_workflow_description`** - Analyze PRD and recommend agent workflow
+- **`get_setup_instructions`** - Generate static AI workspace setup instructions
+- **`get_agentic_workflow_description`** - Generate agent workflow templates with dynamic placeholders
 - **`register_agent`** - Register AI agent with capabilities and prompt
 - **`get_instructions_for_main_ai_file`** - Get template for main coordination file
 - **`create_main_ai_file`** - Generate main AI coordination file (CLAUDE.md, etc.)
-- **`get_workspace_manifest`** - Get complete workspace metadata and configuration
 
 </details>
 

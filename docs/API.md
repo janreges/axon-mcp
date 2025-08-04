@@ -762,11 +762,10 @@ Retrieves messages for a task with optional filtering.
 
 ### get_setup_instructions
 
-Generates AI workspace setup instructions based on PRD analysis.
+Generates static AI workspace setup instructions.
 
 **Parameters:**
-- `prd_content` (string, required): Product Requirements Document content
-- `ai_tool_type` (string, required): AI tool type ("claude-code")
+- `ai_tool_type` (string, required): AI tool type (e.g., "claude-code") to select appropriate prompt
 
 **Returns:** SetupInstructions object with step-by-step guidance
 
