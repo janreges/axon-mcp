@@ -10,6 +10,13 @@ pub struct Config {
     pub database: DatabaseConfig,
     pub server: ServerConfig,
     pub logging: LoggingConfig,
+    pub project: ProjectConfig,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ProjectConfig {
+    /// Project root directory for workspace operations
+    pub root: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -107,7 +114,7 @@ impl Config {
             .context("Failed to deserialize configuration from file")
     }
 
-    /// Apply standard environment variables (DATABASE_URL, LISTEN_ADDR, LOG_LEVEL)
+    /// Apply standard environment variables (DATABASE_URL, LISTEN_ADDR, LOG_LEVEL, PROJECT_ROOT)
     /// This provides compatibility with common deployment patterns
     fn apply_standard_env_vars(config: &mut Config) {
         if let Ok(database_url) = env::var("DATABASE_URL") {
@@ -120,6 +127,10 @@ impl Config {
 
         if let Ok(log_level) = env::var("LOG_LEVEL") {
             config.logging.level = log_level;
+        }
+
+        if let Ok(project_root) = env::var("PROJECT_ROOT") {
+            config.project.root = Some(project_root);
         }
     }
 
@@ -159,6 +170,11 @@ impl Config {
         format!("{}:{}", self.server.listen_addr, self.server.port)
     }
 
+    /// Get the project root directory
+    pub fn project_root(&self) -> Option<PathBuf> {
+        self.project.root.as_ref().map(PathBuf::from)
+    }
+
     /// Validate the configuration
     pub fn validate(&self) -> Result<()> {
         // Validate log level
@@ -196,6 +212,23 @@ impl Config {
             ));
         }
 
+        // Validate project root if provided
+        if let Some(ref root) = self.project.root {
+            let root_path = Path::new(root);
+            if !root_path.is_absolute() {
+                return Err(anyhow::anyhow!(
+                    "Project root must be an absolute path. Got: {}",
+                    root
+                ));
+            }
+            if !root_path.exists() {
+                return Err(anyhow::anyhow!(
+                    "Project root directory does not exist: {}",
+                    root
+                ));
+            }
+        }
+
         Ok(())
     }
 }
@@ -216,6 +249,9 @@ impl Default for Config {
             logging: LoggingConfig {
                 level: "info".to_string(),
                 format: LogFormat::Pretty,
+            },
+            project: ProjectConfig {
+                root: None,
             },
         }
     }
@@ -410,9 +446,12 @@ mod tests {
     #[test]
     fn test_environment_override() {
         env::set_var("DATABASE_URL", "sqlite://test.db");
+        env::set_var("PROJECT_ROOT", "/test/project");
         let config = Config::default().merge_with_env().unwrap();
         assert_eq!(config.database.url, Some("sqlite://test.db".to_string()));
+        assert_eq!(config.project.root, Some("/test/project".to_string()));
         env::remove_var("DATABASE_URL");
+        env::remove_var("PROJECT_ROOT");
     }
 
     #[test]

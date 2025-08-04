@@ -370,7 +370,7 @@ where
 async fn test_create_task_performance() {
     let repository = Arc::new(FastMockRepository);
     let workspace_repo = Arc::new(FastMockRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo, None);
 
     let params = CreateTaskParams {
         code: "PERF-001".to_string(),
@@ -400,7 +400,7 @@ async fn test_create_task_performance() {
 async fn test_get_task_performance() {
     let repository = Arc::new(FastMockRepository);
     let workspace_repo = Arc::new(FastMockRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo, None);
 
     let params = GetTaskByIdParams { id: 1 };
 
@@ -419,7 +419,7 @@ async fn test_get_task_performance() {
 async fn test_list_tasks_performance() {
     let repository = Arc::new(FastMockRepository);
     let workspace_repo = Arc::new(FastMockRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo, None);
 
     let params = ListTasksParams::default();
 
@@ -438,7 +438,7 @@ async fn test_list_tasks_performance() {
 async fn test_update_task_performance() {
     let repository = Arc::new(FastMockRepository);
     let workspace_repo = Arc::new(FastMockRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo, None);
 
     let params = UpdateTaskParams {
         id: 1,
@@ -471,7 +471,7 @@ async fn test_update_task_performance() {
 async fn test_state_transition_performance() {
     let repository = Arc::new(FastMockRepository);
     let workspace_repo = Arc::new(FastMockRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo, None);
 
     let params = SetStateParams {
         id: 1,
@@ -538,6 +538,7 @@ async fn test_concurrent_operations_performance() {
         repository.clone(),
         repository,
         workspace_repo,
+        None,
     ));
 
     let start = Instant::now();

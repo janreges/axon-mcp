@@ -66,11 +66,17 @@ pub fn create_server(
     repository: Arc<SqliteTaskRepository>,
     message_repository: Arc<SqliteTaskRepository>,
     workspace_context_repository: Arc<SqliteWorkspaceContextRepository>,
+    config: &Config,
 ) -> Result<McpServer<SqliteTaskRepository, SqliteTaskRepository, SqliteWorkspaceContextRepository>>
 {
     info!("Creating MCP server");
 
-    let server = McpServer::new(repository, message_repository, workspace_context_repository);
+    let server = McpServer::new(
+        repository,
+        message_repository,
+        workspace_context_repository,
+        config.project_root(),
+    );
 
     info!("MCP server created successfully");
     Ok(server)
@@ -98,7 +104,7 @@ pub async fn initialize_app(
         .context("Failed to create workspace context repository")?;
 
     // Create server
-    let server = create_server(repository, message_repository, workspace_context_repository)
+    let server = create_server(repository, message_repository, workspace_context_repository, config)
         .context("Failed to create server")?;
 
     info!("Application initialized successfully");
@@ -244,6 +250,9 @@ mod tests {
                 level: "info".to_string(),
                 format: LogFormat::Pretty,
             },
+            project: crate::config::ProjectConfig {
+                root: None,
+            },
         };
 
         let repo = create_repository(&config).await;
@@ -274,6 +283,9 @@ mod tests {
                 level: "info".to_string(),
                 format: LogFormat::Pretty,
             },
+            project: crate::config::ProjectConfig {
+                root: None,
+            },
         };
 
         let repo = create_repository(&config).await;
@@ -296,6 +308,9 @@ mod tests {
             logging: LoggingConfig {
                 level: "info".to_string(),
                 format: LogFormat::Pretty,
+            },
+            project: crate::config::ProjectConfig {
+                root: None,
             },
         };
 
@@ -336,12 +351,15 @@ mod tests {
                 level: "info".to_string(),
                 format: LogFormat::Pretty,
             },
+            project: crate::config::ProjectConfig {
+                root: None,
+            },
         };
 
         let repo = create_repository(&config).await.unwrap();
         let message_repo = repo.clone();
         let workspace_context_repo = create_workspace_context_repository(&config).await.unwrap();
-        let server = create_server(repo, message_repo, workspace_context_repo);
+        let server = create_server(repo, message_repo, workspace_context_repo, &config);
         assert!(server.is_ok());
     }
 }

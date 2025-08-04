@@ -48,12 +48,14 @@ impl<
         repository: Arc<R>,
         message_repository: Arc<M>,
         workspace_context_repository: Arc<W>,
+        project_root: Option<std::path::PathBuf>,
     ) -> Self {
         Self {
             handler: McpTaskHandler::new(
                 repository,
                 message_repository,
                 workspace_context_repository,
+                project_root,
             ),
         }
     }
@@ -602,10 +604,9 @@ async fn execute_mcp_method<
                         "inputSchema": {
                             "type": "object",
                             "properties": {
-                                "workspace_id": {"type": "string"},
                                 "prd_content": {"type": "string"}
                             },
-                            "required": ["workspace_id"]
+                            "required": []
                         }
                     },
                     {
@@ -614,10 +615,10 @@ async fn execute_mcp_method<
                         "inputSchema": {
                             "type": "object",
                             "properties": {
-                                "workspace_id": {"type": "string"},
-                                "prd_content": {"type": "string"}
+                                "prd_content": {"type": "string"},
+                                "requested_agent_count": {"type": "integer"}
                             },
-                            "required": ["workspace_id"]
+                            "required": ["prd_content"]
                         }
                     },
                     {
@@ -626,13 +627,12 @@ async fn execute_mcp_method<
                         "inputSchema": {
                             "type": "object",
                             "properties": {
-                                "workspace_id": {"type": "string"},
                                 "agent_name": {"type": "string"},
                                 "agent_type": {"type": "string"},
                                 "capabilities": {"type": "array", "items": {"type": "string"}},
                                 "description": {"type": "string"}
                             },
-                            "required": ["workspace_id", "agent_name", "agent_type", "capabilities"]
+                            "required": ["agent_name", "agent_type", "capabilities"]
                         }
                     },
                     {
@@ -641,10 +641,9 @@ async fn execute_mcp_method<
                         "inputSchema": {
                             "type": "object",
                             "properties": {
-                                "workspace_id": {"type": "string"},
                                 "file_type": {"type": "string"}
                             },
-                            "required": ["workspace_id"]
+                            "required": []
                         }
                     },
                     {
@@ -653,11 +652,9 @@ async fn execute_mcp_method<
                         "inputSchema": {
                             "type": "object",
                             "properties": {
-                                "workspace_id": {"type": "string"},
-                                "file_path": {"type": "string"},
                                 "content": {"type": "string"}
                             },
-                            "required": ["workspace_id", "file_path", "content"]
+                            "required": ["content"]
                         }
                     },
                     {
@@ -665,10 +662,8 @@ async fn execute_mcp_method<
                         "description": "Generate complete workspace manifest",
                         "inputSchema": {
                             "type": "object",
-                            "properties": {
-                                "workspace_id": {"type": "string"}
-                            },
-                            "required": ["workspace_id"]
+                            "properties": {},
+                            "required": []
                         }
                     }
                 ]
@@ -922,7 +917,7 @@ mod tests {
         let mock_repo = Arc::new(MockTestRepository::new());
         let mock_message_repo = Arc::new(SimpleTestMessageRepository);
         let mock_workspace_repo = Arc::new(SimpleTestWorkspaceContextRepository);
-        let _server = McpServer::new(mock_repo, mock_message_repo, mock_workspace_repo);
+        let _server = McpServer::new(mock_repo, mock_message_repo, mock_workspace_repo, None);
         // Basic test that server can be created
         // Test passes if server creation doesn't panic
     }

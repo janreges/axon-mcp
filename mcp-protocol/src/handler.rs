@@ -33,6 +33,7 @@ pub struct McpTaskHandler<R, M, W> {
     message_repository: Arc<M>,
     workspace_context_repository: Arc<W>,
     workspace_setup_service: WorkspaceSetupService,
+    project_root: Option<std::path::PathBuf>,
 }
 
 impl<R, M, W> McpTaskHandler<R, M, W> {
@@ -41,12 +42,14 @@ impl<R, M, W> McpTaskHandler<R, M, W> {
         repository: Arc<R>,
         message_repository: Arc<M>,
         workspace_context_repository: Arc<W>,
+        project_root: Option<std::path::PathBuf>,
     ) -> Self {
         Self {
             repository,
             message_repository,
             workspace_context_repository: workspace_context_repository.clone(),
             workspace_setup_service: WorkspaceSetupService::new(),
+            project_root,
         }
     }
 
@@ -247,25 +250,40 @@ impl<
             .get_by_id(DEFAULT_WORKSPACE_ID)
             .await?;
 
-        let workspace_context = maybe_context.as_ref().map(|c| c.clone()).unwrap_or_else(|| {
+        let mut workspace_context = maybe_context.as_ref().map(|c| c.clone()).unwrap_or_else(|| {
             ::task_core::workspace_setup::WorkspaceContext::new(DEFAULT_WORKSPACE_ID.to_string())
         });
-
-        // Update PRD content if provided
+        
+        // Update PRD content if provided in params
         if let Some(prd_content) = params.prd_content {
-            let mut updated_context = workspace_context;
-            updated_context.prd_content = Some(prd_content);
-
-            // Save updated context
-            if maybe_context.is_some() {
-                self.workspace_context_repository
-                    .update(updated_context)
-                    .await?;
-            } else {
-                self.workspace_context_repository
-                    .create(updated_context)
-                    .await?;
+            workspace_context.prd_content = Some(prd_content);
+        }
+        // If no PRD content and we have project_root, try to load from CLAUDE.md
+        else if workspace_context.prd_content.is_none() {
+            if let Some(ref project_root) = self.project_root {
+                let claude_md_path = project_root.join("CLAUDE.md");
+                if claude_md_path.exists() {
+                    match tokio::fs::read_to_string(&claude_md_path).await {
+                        Ok(content) => {
+                            workspace_context.prd_content = Some(content);
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to read CLAUDE.md from {}: {}", claude_md_path.display(), e);
+                        }
+                    }
+                }
             }
+        }
+
+        // Save updated context if needed
+        if maybe_context.is_some() {
+            self.workspace_context_repository
+                .update(workspace_context)
+                .await?;
+        } else {
+            self.workspace_context_repository
+                .create(workspace_context)
+                .await?;
         }
 
         // Always use ClaudeCode as default AI tool type
@@ -721,7 +739,7 @@ mod tests {
         let mock_repo = Arc::new(MockTestRepository::new());
         let mock_message_repo = Arc::new(SimpleTestMessageRepository);
         let mock_workspace_repo = Arc::new(SimpleTestWorkspaceContextRepository);
-        let _handler = McpTaskHandler::new(mock_repo, mock_message_repo, mock_workspace_repo);
+        let _handler = McpTaskHandler::new(mock_repo, mock_message_repo, mock_workspace_repo, None);
         // Basic test that handler can be created
         // Test passes if handler creation doesn't panic
     }

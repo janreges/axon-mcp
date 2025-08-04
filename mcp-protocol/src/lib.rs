@@ -63,7 +63,7 @@
 //!     let repository = Arc::new(MockRepo);
 //!     let message_repository = Arc::new(MockMessageRepo);
 //!     let workspace_repository = Arc::new(MockWorkspaceRepo);
-//!     let server = McpServer::new(repository, message_repository, workspace_repository);
+//!     let server = McpServer::new(repository, message_repository, workspace_repository, None);
 //!     server.serve("127.0.0.1:3000").await?;
 //!     Ok(())
 //! }

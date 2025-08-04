@@ -282,7 +282,7 @@ impl WorkspaceContextRepository for MockWorkspaceContextRepository {
 async fn test_k01_database_level_pagination() {
     let repository = Arc::new(AuditTestMockRepository::new());
     let workspace_repo = Arc::new(MockWorkspaceContextRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo, None);
 
     // Create 10 tasks
     for i in 1..=10 {
@@ -326,7 +326,7 @@ async fn test_k01_database_level_pagination() {
 async fn test_v01_routing_logic_deduplication() {
     let repository = Arc::new(AuditTestMockRepository::new());
     let workspace_repo = Arc::new(MockWorkspaceContextRepository);
-    let _server = McpServer::new(repository.clone(), repository, workspace_repo);
+    let _server = McpServer::new(repository.clone(), repository, workspace_repo, None);
 
     // The fact that we can create a server instance and it compiles
     // demonstrates that the routing logic deduplication was successful
@@ -359,7 +359,7 @@ async fn test_v03_json_rpc_compliance() {
 async fn test_m01_version_consistency() {
     let repository = Arc::new(AuditTestMockRepository::new());
     let workspace_repo = Arc::new(MockWorkspaceContextRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo, None);
 
     // Test health check returns the same version as the crate
     let health = handler.health_check().await.unwrap();
@@ -378,7 +378,7 @@ async fn test_m01_version_consistency() {
 async fn test_integrated_audit_fixes() {
     let repository = Arc::new(AuditTestMockRepository::new());
     let workspace_repo = Arc::new(MockWorkspaceContextRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo, None);
 
     // Create multiple tasks
     for i in 1..=5 {

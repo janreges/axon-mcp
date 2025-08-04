@@ -142,8 +142,12 @@ async fn main() -> Result<()> {
                     .context("Failed to create workspace context repository")?;
 
             // Create STDIO server
-            let stdio_server =
-                StdioMcpServer::new(repository, message_repository, workspace_context_repository);
+            let stdio_server = StdioMcpServer::new(
+                repository,
+                message_repository,
+                workspace_context_repository,
+                config.project_root(),
+            );
 
             // Run STDIO server (blocks until stdin is closed)
             stdio_server

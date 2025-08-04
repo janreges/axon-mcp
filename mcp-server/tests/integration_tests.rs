@@ -24,6 +24,9 @@ async fn test_server_startup_with_sqlite() {
             level: "info".to_string(),
             format: LogFormat::Pretty,
         },
+        project: mcp_server::config::ProjectConfig {
+            root: None,
+        },
     };
 
     let repo = create_repository(&config).await;
@@ -133,6 +136,9 @@ fn test_server_address_formatting() {
             level: "info".to_string(),
             format: LogFormat::Json,
         },
+        project: mcp_server::config::ProjectConfig {
+            root: None,
+        },
     };
 
     assert_eq!(config.server_address(), "0.0.0.0:8080");
@@ -158,6 +164,9 @@ async fn test_repository_creation_with_migrations() {
         logging: LoggingConfig {
             level: "info".to_string(),
             format: LogFormat::Pretty,
+        },
+        project: mcp_server::config::ProjectConfig {
+            root: None,
         },
     };
 
@@ -188,6 +197,9 @@ async fn test_multiple_repository_instances() {
         logging: LoggingConfig {
             level: "info".to_string(),
             format: LogFormat::Pretty,
+        },
+        project: mcp_server::config::ProjectConfig {
+            root: None,
         },
     };
 

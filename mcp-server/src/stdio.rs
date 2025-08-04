@@ -41,12 +41,14 @@ impl<
         repository: Arc<R>,
         message_repository: Arc<M>,
         workspace_context_repository: Arc<W>,
+        project_root: Option<std::path::PathBuf>,
     ) -> Self {
         Self {
             handler: McpTaskHandler::new(
                 repository,
                 message_repository,
                 workspace_context_repository,
+                project_root,
             ),
             state: McpState::WaitingForInitialize,
         }

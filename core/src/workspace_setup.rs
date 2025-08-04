@@ -614,48 +614,7 @@ pub struct GeneratedFile {
     pub critical: bool,
 }
 
-/// MCP function parameters
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GetSetupInstructionsParams {
-    pub workspace_id: String,
-    pub ai_tool_type: AiToolType,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GetAgenticWorkflowDescriptionParams {
-    pub workspace_id: String,
-    pub prd_content: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RegisterAgentParams {
-    pub workspace_id: String,
-    pub agent: AgentRegistration,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GetMainFileInstructionsParams {
-    pub workspace_id: String,
-    pub ai_tool_type: AiToolType,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateMainFileParams {
-    pub workspace_id: String,
-    pub content: String,
-    pub ai_tool_type: AiToolType,
-    pub project_name: Option<String>,
-    pub overwrite_existing: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GenerateWorkspaceManifestParams {
-    pub workspace_id: String,
-    pub prd_content: String,
-    pub agents: Vec<AgentRegistration>,
-    pub include_generated_files: bool,
-}
+/// MCP function parameters - moved to protocol.rs to avoid duplication
 
 /// Type aliases for cleaner MCP function signatures
 pub type SetupInstructionsResponse = WorkspaceSetupResponse<SetupInstructions>;

@@ -338,7 +338,7 @@ impl TaskMessageRepository for MockRepository {
 async fn test_create_task_integration() {
     let repository = Arc::new(MockRepository::new());
     let workspace_repo = Arc::new(MockWorkspaceContextRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo, None);
 
     let params = CreateTaskParams {
         code: "TEST-001".to_string(),
@@ -366,7 +366,7 @@ async fn test_create_task_integration() {
 async fn test_task_lifecycle_integration() {
     let repository = Arc::new(MockRepository::new());
     let workspace_repo = Arc::new(MockWorkspaceContextRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo, None);
 
     // Create task
     let create_params = CreateTaskParams {
@@ -434,7 +434,7 @@ async fn test_task_lifecycle_integration() {
 async fn test_error_handling_integration() {
     let repository = Arc::new(MockRepository::new());
     let workspace_repo = Arc::new(MockWorkspaceContextRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo, None);
 
     // Test duplicate code error
     let params1 = CreateTaskParams {
@@ -510,7 +510,7 @@ async fn test_error_handling_integration() {
 async fn test_list_tasks_with_filters() {
     let repository = Arc::new(MockRepository::new());
     let workspace_repo = Arc::new(MockWorkspaceContextRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo, None);
 
     // Create multiple tasks
     for i in 1..=5 {
@@ -575,7 +575,7 @@ async fn test_list_tasks_with_filters() {
 async fn test_serialization_integration() {
     let repository = Arc::new(MockRepository::new());
     let workspace_repo = Arc::new(MockWorkspaceContextRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo, None);
 
     let params = CreateTaskParams {
         code: "SERIAL-001".to_string(),
@@ -606,7 +606,7 @@ async fn test_serialization_integration() {
 async fn test_health_check_integration() {
     let repository = Arc::new(MockRepository::new());
     let workspace_repo = Arc::new(MockWorkspaceContextRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo, None);
 
     let health = handler.health_check().await.unwrap();
     assert_eq!(health.status, "healthy");
@@ -619,7 +619,7 @@ async fn test_health_check_integration() {
 async fn test_assign_task_integration() {
     let repository = Arc::new(MockRepository::new());
     let workspace_repo = Arc::new(MockWorkspaceContextRepository);
-    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo);
+    let handler = McpTaskHandler::new(repository.clone(), repository, workspace_repo, None);
 
     let create_params = CreateTaskParams {
         code: "ASSIGN-001".to_string(),
