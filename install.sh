@@ -261,8 +261,6 @@ download_binary_to_dir() {
             warning "Failed to set executable permissions for '$TARGET_BINARY'."
         fi
     fi
-    
-    success "Binary installed successfully!"
 }
 
 # Configure PATH if needed
@@ -462,7 +460,7 @@ main() {
         info "Detecting project root..."
         PROJECT_ROOT=$(find_project_root)
         if [ -n "$PROJECT_ROOT" ]; then
-            success "Project root found: $PROJECT_ROOT"
+            success "Project root detected: $PROJECT_ROOT (installing to .axon/bin)"
             if [ "$INSTALL_MODE" = "auto" ]; then
                 INSTALL_MODE="project" # Default to project scope if detected and no override
             fi
@@ -478,7 +476,6 @@ main() {
     # Set installation directory based on determined mode
     if [ "$INSTALL_MODE" = "project" ]; then
         INSTALL_DIR="$PROJECT_ROOT/.axon/bin"
-        info "Project-scoped installation to: $INSTALL_DIR"
     elif [ "$INSTALL_MODE" = "user" ]; then
         # Use existing get_install_dir logic
         INSTALL_DIR="$(get_install_dir)"
@@ -593,11 +590,12 @@ main() {
     
     printf "%b🚀 Ready to Start Server:%b\n\n" "$BOLD" "$RESET"
     
+    
     # Display auto-detected values prominently
-    printf "%b✨ Auto-detected configuration:%b\n" "$GREEN" "$RESET"
+    printf "%b✨ Auto-detected configuration:%b\n" "$GREEN" "$RESET" 
     printf "   Project root: %b%s%b\n" "$BLUE" "$DETECTED_PROJECT_ROOT" "$RESET"
-    printf "   Project name: %b%s%b\n" "$BLUE" "$DETECTED_PROJECT_NAME" "$RESET"
-    printf "   Server port:  %b%s%b\n\n" "$BLUE" "$SERVER_PORT" "$RESET"
+    printf "   Project name: %b%s%b (derived from project folder name)\n" "$BLUE" "$DETECTED_PROJECT_NAME" "$RESET"
+    printf "   Server port:  %b%s%b (If in use, change --port=%s to e.g., --port=%s in command below)\n\n" "$BLUE" "$SERVER_PORT" "$RESET" "$SERVER_PORT" "$((SERVER_PORT + 1))"
     
     # Show the ready-to-use command in a prominent box
     printf "%b┌─────────────────────────────────────────────────────────────────────┐%b\n" "$BOLD" "$RESET"
@@ -611,12 +609,13 @@ main() {
     printf "%b1. Start the server:%b\n" "$BOLD" "$RESET"
     printf "   • Open a %bNEW terminal window%b\n" "$BOLD" "$RESET"
     printf "   • Copy and paste the command from the box above\n"
-    printf "   • Press Enter to start the server\n\n"
+    printf "   • Press Enter to start the server (expect output like: \"[INFO] Server listening on http://127.0.0.1:%s\")\n\n" "$SERVER_PORT"
     
     printf "%b2. Connect Claude Code:%b\n" "$BOLD" "$RESET"
-    printf "   • Once server shows \"Server listening...\", run:\n"
-    printf "   %bcd \"%s\"%b\n" "$BLUE" "$DETECTED_PROJECT_ROOT" "$RESET"
-    printf "   %bclaude mcp add --url http://127.0.0.1:%s%b\n\n" "$BLUE" "$SERVER_PORT" "$RESET"
+    printf "   • Open your terminal in the project root:\n"
+    printf "     %bcd \"%s\"%b\n" "$BLUE" "$DETECTED_PROJECT_ROOT" "$RESET"
+    printf "   • Then run:\n"
+    printf "     %bclaude mcp add --url http://127.0.0.1:%s%b\n\n" "$BLUE" "$SERVER_PORT" "$RESET"
     
     printf "%b✅ Verification (optional):%b\n" "$BOLD" "$RESET"
     printf "   • Health check: %bcurl http://127.0.0.1:%s/health%b\n" "$BLUE" "$SERVER_PORT" "$RESET"
