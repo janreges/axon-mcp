@@ -45,6 +45,7 @@
 //!     #     async fn release_task(&self, _task_id: i32, _agent_name: &str) -> Result<Task> { unimplemented!() }
 //!     #     async fn start_work_session(&self, _task_id: i32, _agent_name: &str) -> Result<i32> { unimplemented!() }
 //!     #     async fn end_work_session(&self, _session_id: i32, _notes: Option<String>, _productivity_score: Option<f64>) -> Result<()> { unimplemented!() }
+//!     #     async fn cleanup_timed_out_tasks(&self, _timeout_minutes: i64) -> Result<Vec<Task>> { unimplemented!() }
 //!     # }
 //!     # #[async_trait]
 //!     # impl TaskMessageRepository for MockMessageRepo {

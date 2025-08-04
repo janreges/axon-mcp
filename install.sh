@@ -590,10 +590,22 @@ main() {
     
     printf "%b🚀 How to Start the MCP Server:%b\n" "$BOLD" "$RESET"
     printf "═══════════════════════════════════\n\n"
+    printf "%b⚠️  IMPORTANT: Replace the placeholders below with your actual values:%b\n" "$YELLOW" "$RESET"
+    printf "   • Replace %b<project-name>%b with your project name (no spaces)\n" "$BOLD" "$RESET"
+    printf "   • Replace %b<full-path-to-project>%b with absolute path to your project\n\n" "$BOLD" "$RESET"
+    
     printf "1. %bOpen a new terminal window%b and run:\n\n" "$BOLD" "$RESET"
+    printf "%b%s --start --port=%s --project=<project-name> --project-root=\"<full-path-to-project>\"%b\n\n" "$BLUE" "$BINARY_PATH" "$SERVER_PORT" "$RESET"
+    
+    printf "%bExample with real values:%b\n" "$BOLD" "$RESET"
     printf "%b%s --start --port=%s --project=%s --project-root=\"%s\"%b\n\n" "$BLUE" "$BINARY_PATH" "$SERVER_PORT" "$PROJECT_NAME" "$STARTUP_PROJECT_ROOT" "$RESET"
     
-    printf "2. %bOnce the server is running%b, add it to Claude Code:\n\n" "$BOLD" "$RESET"
+    printf "2. %bOnce the server is running%b, navigate to your project and add it to Claude Code:\n\n" "$BOLD" "$RESET"
+    printf "%bcd <full-path-to-project>%b\n" "$BLUE" "$RESET"
+    printf "%bclaude mcp add --url http://127.0.0.1:%s%b\n\n" "$BLUE" "$SERVER_PORT" "$RESET"
+    
+    printf "%bExample:%b\n" "$BOLD" "$RESET"
+    printf "%bcd \"%s\"%b\n" "$BLUE" "$STARTUP_PROJECT_ROOT" "$RESET"
     printf "%bclaude mcp add --url http://127.0.0.1:%s%b\n\n" "$BLUE" "$SERVER_PORT" "$RESET"
     
     printf "%b📋 Quick Verification:%b\n" "$BOLD" "$RESET"

@@ -9,6 +9,7 @@ CREATE TABLE task_messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     task_code TEXT NOT NULL,                    -- Task code (e.g., "FEAT-123") 
     author_agent_name TEXT NOT NULL,            -- Author of the message
+    target_agent_name TEXT NULL,                -- Target agent for the message
     message_type TEXT NOT NULL,                 -- Flexible string type (e.g., "handoff", "comment")
     content TEXT NOT NULL,                      -- Message content
     reply_to_message_id INTEGER NULL,           -- For threading messages
@@ -27,8 +28,10 @@ CREATE TABLE task_messages (
 -- Create optimized indexes for messaging queries
 CREATE INDEX idx_task_messages_task_code ON task_messages(task_code, created_at DESC);
 CREATE INDEX idx_task_messages_author ON task_messages(author_agent_name, created_at DESC);  
+CREATE INDEX idx_task_messages_target_agent ON task_messages(target_agent_name);
 CREATE INDEX idx_task_messages_type ON task_messages(message_type, created_at DESC);
 CREATE INDEX idx_task_messages_composite ON task_messages(task_code, author_agent_name, message_type, created_at DESC);
+CREATE INDEX idx_task_messages_task_target_type ON task_messages(task_code, target_agent_name, message_type);
 CREATE INDEX idx_task_messages_threading ON task_messages(reply_to_message_id) WHERE reply_to_message_id IS NOT NULL;
 
 -- Migration complete: task_messages table updated for flexible messaging

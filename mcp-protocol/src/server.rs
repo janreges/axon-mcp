@@ -835,6 +835,7 @@ mod tests {
             async fn release_task(&self, task_id: i32, agent_name: &str) -> Result<Task>;
             async fn start_work_session(&self, task_id: i32, agent_name: &str) -> Result<i32>;
             async fn end_work_session(&self, session_id: i32, notes: Option<String>, productivity_score: Option<f64>) -> Result<()>;
+            async fn cleanup_timed_out_tasks(&self, timeout_minutes: i64) -> Result<Vec<Task>>;
         }
     }
 

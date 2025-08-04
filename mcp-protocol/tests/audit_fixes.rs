@@ -43,6 +43,7 @@ impl TaskRepository for AuditTestMockRepository {
             state: TaskState::Created,
             inserted_at: Utc::now(),
             done_at: None,
+            claimed_at: None,
             workflow_definition_id: None,
             workflow_cursor: None,
             priority_score: 5.0,
@@ -207,6 +208,10 @@ impl TaskRepository for AuditTestMockRepository {
         _productivity_score: Option<f64>,
     ) -> Result<()> {
         Ok(())
+    }
+
+    async fn cleanup_timed_out_tasks(&self, _timeout_minutes: i64) -> Result<Vec<Task>> {
+        Ok(vec![])
     }
 }
 

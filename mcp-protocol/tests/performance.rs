@@ -30,6 +30,7 @@ impl TaskRepository for FastMockRepository {
             state: TaskState::Created,
             inserted_at: Utc::now(),
             done_at: None,
+            claimed_at: None,
             workflow_definition_id: task.workflow_definition_id,
             workflow_cursor: None, // NewTask doesn't have workflow_cursor
             priority_score: task.priority_score,
@@ -57,6 +58,7 @@ impl TaskRepository for FastMockRepository {
             state: TaskState::Created,
             inserted_at: Utc::now(),
             done_at: None,
+            claimed_at: None,
             workflow_definition_id: updates.workflow_definition_id.flatten(),
             workflow_cursor: updates.workflow_cursor.flatten(),
             priority_score: updates.priority_score.unwrap_or(5.0),
@@ -82,6 +84,7 @@ impl TaskRepository for FastMockRepository {
             } else {
                 None
             },
+            claimed_at: None,
             workflow_definition_id: None,
             workflow_cursor: None,
             priority_score: 5.0,
@@ -103,6 +106,7 @@ impl TaskRepository for FastMockRepository {
             state: TaskState::Created,
             inserted_at: Utc::now(),
             done_at: None,
+            claimed_at: None,
             workflow_definition_id: None,
             workflow_cursor: None,
             priority_score: 5.0,
@@ -124,6 +128,7 @@ impl TaskRepository for FastMockRepository {
             state: TaskState::Created,
             inserted_at: Utc::now(),
             done_at: None,
+            claimed_at: None,
             workflow_definition_id: None,
             workflow_cursor: None,
             priority_score: 5.0,
@@ -146,6 +151,7 @@ impl TaskRepository for FastMockRepository {
                 state: TaskState::Created,
                 inserted_at: Utc::now(),
                 done_at: None,
+            claimed_at: None,
                 workflow_definition_id: None,
                 workflow_cursor: None,
                 priority_score: 5.0,
@@ -164,6 +170,7 @@ impl TaskRepository for FastMockRepository {
                 state: TaskState::InProgress,
                 inserted_at: Utc::now(),
                 done_at: None,
+            claimed_at: None,
                 workflow_definition_id: None,
                 workflow_cursor: None,
                 priority_score: 5.0,
@@ -186,6 +193,7 @@ impl TaskRepository for FastMockRepository {
             state: TaskState::Created,
             inserted_at: Utc::now(),
             done_at: None,
+            claimed_at: None,
             workflow_definition_id: None,
             workflow_cursor: None,
             priority_score: 5.0,
@@ -207,6 +215,7 @@ impl TaskRepository for FastMockRepository {
             state: TaskState::Archived,
             inserted_at: Utc::now(),
             done_at: None,
+            claimed_at: None,
             workflow_definition_id: None,
             workflow_cursor: None,
             priority_score: 5.0,
@@ -245,6 +254,7 @@ impl TaskRepository for FastMockRepository {
             state: TaskState::InProgress,
             inserted_at: Utc::now(),
             done_at: None,
+            claimed_at: None,
             workflow_definition_id: None,
             workflow_cursor: None,
             priority_score: 5.0,
@@ -266,6 +276,7 @@ impl TaskRepository for FastMockRepository {
             state: TaskState::Created,
             inserted_at: Utc::now(),
             done_at: None,
+            claimed_at: None,
             workflow_definition_id: None,
             workflow_cursor: None,
             priority_score: 5.0,
@@ -288,6 +299,10 @@ impl TaskRepository for FastMockRepository {
         _productivity_score: Option<f64>,
     ) -> Result<()> {
         Ok(())
+    }
+
+    async fn cleanup_timed_out_tasks(&self, _timeout_minutes: i64) -> Result<Vec<Task>> {
+        Ok(vec![])
     }
 }
 
@@ -502,6 +517,7 @@ async fn test_serialization_performance() {
         state: TaskState::InProgress,
         inserted_at: Utc::now(),
         done_at: None,
+        claimed_at: None,
         workflow_definition_id: None,
         workflow_cursor: None,
         priority_score: 5.0,

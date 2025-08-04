@@ -1,69 +1,76 @@
-# Axon MCP – Task Management Server for AI Agents
+# MCP Task Management Server
 
-Welcome to the **Axon MCP** server – a production-ready Model Context Protocol (MCP) server designed for coordinating multiple AI agents working in parallel.
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/janreges/axon-mcp)
+[![Version](https://img.shields.io/badge/version-0.4.1-blue)](https://github.com/janreges/axon-mcp/releases)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**Why HTTP-only?** Traditional STDIO-based MCP servers can't handle multiple concurrent requests needed for multi-agent coordination, task discovery, and long-polling workflows. Axon uses HTTP transport to enable simultaneous agent connections and real-time task coordination.
+**Production-ready server pro orchestraci a koordinaci úkolů mezi více AI agenty.**
 
----
+MCP Task Management Server je robustní a spolehlivé řešení navržené pro efektivní správu úkolů v multi-agentních systémech. Pokud stavíte aplikace, kde více AI agentů potřebuje spolupracovat, sdílet práci a komunikovat, náš server vám poskytne centralizovaný hub, který celý proces zjednodušší a zajistí jeho spolehlivost.
 
-## 1. Overview
+Zapomeňte na složité nastavování a správu stavu. Díky zero-configuration přístupu s využitím SQLite je server připraven k použití během několika sekund. Soustřeďte se na logiku vašich agentů, ne na infrastrukturu pro správu úkolů.
 
-|                 | Traditional MCPs        | Axon MCP             |
-|-----------------|-------------------------|----------------------|
-| Transport       | STDIO (single request)  | **HTTP (concurrent)** |
-| Use Case        | Single agent interaction| **Multi-agent coordination** |
-| State storage   | Flat files              | **`.axon/axon.<PROJECT>.sqlite`** |
-| Integration     | Custom configuration    | **`claude mcp add`** (built-in) |
+## ✨ Klíčové vlastnosti
 
-Key design goals:
+* **🤝 Seamless Multi-Agent Coordination:** Umožňuje více agentům efektivně spolupracovat na společných cílech, nárokovat si úkoly a sdílet výsledky
+* **🚀 Production-Ready & Robust:** Navrženo pro reálné nasazení s ošetřením race conditions a spolehlivým mechanismem pro timeouty úkolů (15 minut)
+* **📋 Comprehensive MCP Implementation:** Plná podpora pro 22 klíčových MCP funkcí, které pokrývají celý životní cyklus úkolů – od vytvoření přes nárokování až po dokončení
+* **⚡ Zero-Configuration Setup:** Díky integrované databázi SQLite (single-file) je spuštění serveru triviální. Žádné externí závislosti na databázových serverech
+* **💬 Built-in Messaging:** Agenti mohou komunikovat přímo mezi sebou prostřednictvím vestavěného systému zpráv, což usnadňuje komplexní koordinaci
+* **🎯 Workspace Automation:** Ideální pro automatizaci pracovních postupů, kde je potřeba dynamicky přidělovat úkoly a sledovat jejich stav
 
-* **Multi-agent support** – HTTP transport enables concurrent requests from multiple agents
-* **Project-scoped data** – each project gets its own lightweight SQLite DB under `.axon/`
-* **Complete MCP implementation** – all 22 MCP functions available via JSON-RPC 2.0
-* **Production ready** – structured logging, health checks, graceful shutdown
-* **Zero configuration** – automatically creates `.axon/` and `.claude/` directories
-
----
-
-## 2. Quick Install (curl)
+### 1. 📦 Instalace
 
 ```bash
-# 1) Download & install the latest binary (macOS / Linux x86_64)
+# Stáhněte a nainstalujte nejnovější binárku (macOS / Linux x86_64)
 curl -s https://raw.githubusercontent.com/janreges/axon-mcp/main/install.sh | bash
 
-# 2) The script prints the final path, e.g.
+# Script vypíše finální cestu, např:
 # Installed axon-mcp to /usr/local/bin/axon-mcp
 ```
 
-Keep the printed path handy – you'll need it in the next step.
+💡 **Poznámka:** Zapamatujte si vypsanou cestu – budete ji potřebovat v dalším kroku.
 
----
+### 2. 🚀 Spuštění MCP serveru
 
-## 3. Usage Workflow
+**Před spuštěním nahraďte parametry v <> svými hodnotami:**
 
-### 3.1 Start the MCP server
+```bash
+# Nahraďte <project-name> názvem vašeho projektu (bez mezer)
+# Nahraďte <full-path-to-project> úplnou cestou k vašemu projektu
+axon-mcp --start \
+  --port=8499 \
+  --project=<project-name> \
+  --project-root="<full-path-to-project>"
+```
 
+**Příklad reálného použití:**
 ```bash
 axon-mcp --start \
-  --port=8888 \
-  --project=my-project \
-  --project-root=/path/to/project
+  --port=8499 \
+  --project=my-web-app \
+  --project-root="/Users/jan/projects/my-web-app"
 ```
 
-What happens:
+Co se stane:
+* Vytvoří se složky `.axon/` a `.claude/` (pokud neexistují)
+* Inicializuje se SQLite DB jako `.axon/axon.<project-name>.sqlite`
+* Server naslouchá na `http://localhost:8499`
 
-* `.axon/` and `.claude/` folders are created if missing.
-* A SQLite DB named `.axon/axon.my-project.sqlite` is initialised.
-* Server listens on `http://localhost:8888`.
-
-### 3.2 Hook Claude into the running server
+### 3. 🔗 Připojení Claude k běžícímu serveru
 
 ```bash
-cd /path/to/project
-claude mcp add --url http://localhost:8888
+cd <full-path-to-project>
+claude mcp add --url http://127.0.0.1:8499
 ```
 
-Claude now forwards all MCP calls over HTTP; no further setup required.
+**Příklad:**
+```bash
+cd /Users/jan/projects/my-web-app
+claude mcp add --url http://127.0.0.1:8499
+```
+
+✅ **Hotovo!** Claude nyní přeposílá všechny MCP volání přes HTTP; žádné další nastavování není potřeba.
 
 ---
 
@@ -135,7 +142,13 @@ Axon implements **22 comprehensive MCP functions** organized in four categories:
 
 ---
 
-## 6. Architecture
+## 6. Technické detaily
+
+### Proč HTTP transport?
+
+**HTTP-only design choice:** Tradiční STDIO-based MCP servery nezvládnou současné požadavky potřebné pro multi-agent koordinaci, task discovery a long-polling workflows. Náš server používá HTTP transport pro umožnění simultánního připojení agentů a real-time koordinaci úkolů.
+
+### Architektura
 
 **Multi-crate Rust workspace** designed for performance and maintainability:
 
@@ -148,7 +161,16 @@ axon-mcp/
 └── mocks/          # 🧪 Test utilities and fixtures
 ```
 
-**Key Features:**
+### Srovnání s tradičními MCP servery
+
+|                 | Traditional MCPs        | Axon MCP             |
+|-----------------|-------------------------|----------------------|
+| Transport       | STDIO (single request)  | **HTTP (concurrent)** |
+| Use Case        | Single agent interaction| **Multi-agent coordination** |
+| State storage   | Flat files              | **`.axon/axon.<PROJECT>.sqlite`** |
+| Integration     | Custom configuration    | **`claude mcp add`** (built-in) |
+
+**Klíčové technické výhody:**
 - **Concurrent request support**: HTTP enables multiple agents to work simultaneously
 - **Task coordination**: Atomic claiming, work sessions, and inter-agent messaging
 - **Project-scoped databases**: Each project gets its own SQLite file

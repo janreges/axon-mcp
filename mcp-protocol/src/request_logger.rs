@@ -204,7 +204,7 @@ mod tests {
         
         let summary = format_params_summary(&params);
         assert!(summary.contains("code=\"TASK-001\""));
-        assert!(summary.contains("name=\"This is a very long task...\""));
+        assert!(summary.contains("name=\"This is a very long task na...\""));
         assert!(summary.contains("count=\"42\""));
         assert!(summary.contains("enabled=\"true\""));
     }
