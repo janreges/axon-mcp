@@ -46,4 +46,11 @@ Thumbs.db
 # SQLite temporary files
 *.db-journal
 *.db-wal
-*.db-shm.axon/
+*.db-shm
+.axon/
+
+# Dev helpers
+.mcp.json
+debug_path.rs
+mcp-server/src/*minimal*
+test_minimal*

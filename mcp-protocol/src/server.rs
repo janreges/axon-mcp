@@ -395,6 +395,286 @@ async fn execute_mcp_method<
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
             }
         }
+        "tools/list" => {
+            // Return list of all available tools per MCP specification
+            let tools_list = json!({
+                "tools": [
+                    {
+                        "name": "create_task",
+                        "description": "Create a new task",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "string"},
+                                "name": {"type": "string"},
+                                "description": {"type": "string"},
+                                "owner_agent_name": {"type": "string"}
+                            },
+                            "required": ["code", "name", "description", "owner_agent_name"]
+                        }
+                    },
+                    {
+                        "name": "update_task",
+                        "description": "Update an existing task",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "integer"},
+                                "name": {"type": "string"},
+                                "description": {"type": "string"}
+                            },
+                            "required": ["id"]
+                        }
+                    },
+                    {
+                        "name": "set_task_state",
+                        "description": "Set task state",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "integer"},
+                                "state": {"type": "string", "enum": ["Created", "InProgress", "Blocked", "Review", "Done", "Archived"]}
+                            },
+                            "required": ["id", "state"]
+                        }
+                    },
+                    {
+                        "name": "get_task_by_id",
+                        "description": "Get task by ID",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "integer"}
+                            },
+                            "required": ["id"]
+                        }
+                    },
+                    {
+                        "name": "get_task_by_code",
+                        "description": "Get task by code",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "string"}
+                            },
+                            "required": ["code"]
+                        }
+                    },
+                    {
+                        "name": "list_tasks",
+                        "description": "List tasks with optional filtering",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "owner_agent_name": {"type": "string"},
+                                "state": {"type": "string"},
+                                "limit": {"type": "integer"},
+                                "offset": {"type": "integer"}
+                            }
+                        }
+                    },
+                    {
+                        "name": "assign_task",
+                        "description": "Assign task to a different agent",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "integer"},
+                                "new_owner_agent_name": {"type": "string"}
+                            },
+                            "required": ["id", "new_owner_agent_name"]
+                        }
+                    },
+                    {
+                        "name": "archive_task",
+                        "description": "Archive a completed task",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "integer"}
+                            },
+                            "required": ["id"]
+                        }
+                    },
+                    {
+                        "name": "health_check",
+                        "description": "Check server health",
+                        "inputSchema": {
+                            "type": "object"
+                        }
+                    },
+                    {
+                        "name": "discover_work",
+                        "description": "Discover available work based on agent capabilities",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "agent_name": {"type": "string"},
+                                "capabilities": {"type": "array", "items": {"type": "string"}},
+                                "max_tasks": {"type": "integer"}
+                            },
+                            "required": ["agent_name", "capabilities"]
+                        }
+                    },
+                    {
+                        "name": "claim_task",
+                        "description": "Atomically claim a task for execution",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "task_id": {"type": "integer"},
+                                "agent_name": {"type": "string"}
+                            },
+                            "required": ["task_id", "agent_name"]
+                        }
+                    },
+                    {
+                        "name": "release_task",
+                        "description": "Release a claimed task back to the pool",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "task_id": {"type": "integer"},
+                                "agent_name": {"type": "string"}
+                            },
+                            "required": ["task_id", "agent_name"]
+                        }
+                    },
+                    {
+                        "name": "start_work_session",
+                        "description": "Start a work session for task tracking",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "task_id": {"type": "integer"},
+                                "agent_name": {"type": "string"}
+                            },
+                            "required": ["task_id", "agent_name"]
+                        }
+                    },
+                    {
+                        "name": "end_work_session",
+                        "description": "End a work session with productivity metrics",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "session_id": {"type": "integer"},
+                                "productivity_score": {"type": "number"}
+                            },
+                            "required": ["session_id"]
+                        }
+                    },
+                    {
+                        "name": "create_task_message",
+                        "description": "Create a message within a task context",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "task_code": {"type": "string"},
+                                "author_agent_name": {"type": "string"},
+                                "target_agent_name": {"type": "string"},
+                                "message_type": {"type": "string"},
+                                "content": {"type": "string"},
+                                "reply_to_message_id": {"type": "integer"}
+                            },
+                            "required": ["task_code", "author_agent_name", "message_type", "content"]
+                        }
+                    },
+                    {
+                        "name": "get_task_messages",
+                        "description": "Get messages from a task with filtering",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "task_code": {"type": "string"},
+                                "author_agent_name": {"type": "string"},
+                                "target_agent_name": {"type": "string"},
+                                "message_type": {"type": "string"},
+                                "reply_to_message_id": {"type": "integer"},
+                                "limit": {"type": "integer"}
+                            },
+                            "required": ["task_code"]
+                        }
+                    },
+                    {
+                        "name": "get_setup_instructions",
+                        "description": "Generate AI workspace setup instructions",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "workspace_id": {"type": "string"},
+                                "prd_content": {"type": "string"}
+                            },
+                            "required": ["workspace_id"]
+                        }
+                    },
+                    {
+                        "name": "get_agentic_workflow_description",
+                        "description": "Get recommended agent workflow for workspace",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "workspace_id": {"type": "string"},
+                                "prd_content": {"type": "string"}
+                            },
+                            "required": ["workspace_id"]
+                        }
+                    },
+                    {
+                        "name": "register_agent",
+                        "description": "Register an AI agent in the workspace",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "workspace_id": {"type": "string"},
+                                "agent_name": {"type": "string"},
+                                "agent_type": {"type": "string"},
+                                "capabilities": {"type": "array", "items": {"type": "string"}},
+                                "description": {"type": "string"}
+                            },
+                            "required": ["workspace_id", "agent_name", "agent_type", "capabilities"]
+                        }
+                    },
+                    {
+                        "name": "get_instructions_for_main_ai_file",
+                        "description": "Get instructions for creating main AI coordination file",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "workspace_id": {"type": "string"},
+                                "file_type": {"type": "string"}
+                            },
+                            "required": ["workspace_id"]
+                        }
+                    },
+                    {
+                        "name": "create_main_ai_file",
+                        "description": "Create the main AI coordination file",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "workspace_id": {"type": "string"},
+                                "file_path": {"type": "string"},
+                                "content": {"type": "string"}
+                            },
+                            "required": ["workspace_id", "file_path", "content"]
+                        }
+                    },
+                    {
+                        "name": "get_workspace_manifest",
+                        "description": "Generate complete workspace manifest",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "workspace_id": {"type": "string"}
+                            },
+                            "required": ["workspace_id"]
+                        }
+                    }
+                ]
+            });
+            create_success_response(id, tools_list)
+        }
         _ => McpError::Protocol(format!("Unknown method: {method}")).to_json_rpc_error(id),
     }
 }
@@ -410,7 +690,7 @@ async fn sse_handler<
 {
     let (tx, rx) = mpsc::unbounded_channel();
 
-    // Send initial connection event
+    // Send initial connection event (this is legacy SSE, not proper MCP)
     let welcome_event = axum::response::sse::Event::default().data(
         json!({
             "jsonrpc": "2.0",
@@ -419,17 +699,7 @@ async fn sse_handler<
                 "server": "mcp-task-server",
                 "version": env!("CARGO_PKG_VERSION"),
                 "protocol_version": MCP_PROTOCOL_VERSION,
-                "capabilities": [
-                    "create_task", "update_task", "set_task_state",
-                    "get_task_by_id", "get_task_by_code", "list_tasks",
-                    "assign_task", "archive_task", "health_check",
-                    "discover_work", "claim_task", "release_task",
-                    "start_work_session", "end_work_session",
-                    "create_task_message", "get_task_messages",
-                    "get_setup_instructions", "get_agentic_workflow_description",
-                    "register_agent", "get_instructions_for_main_ai_file",
-                    "create_main_ai_file", "get_workspace_manifest"
-                ]
+                "note": "This is legacy SSE transport. For proper MCP, use HTTP POST to /mcp endpoint with initialize request."
             }
         })
         .to_string(),

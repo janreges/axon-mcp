@@ -219,10 +219,6 @@ fn replace_binary(new_binary: &Path, current_binary: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Version information for --version flag
-pub fn print_version() {
-    println!("axon-mcp {}", env!("CARGO_PKG_VERSION"));
-}
 
 #[cfg(test)]
 mod tests {

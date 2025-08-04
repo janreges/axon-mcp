@@ -38,17 +38,13 @@ struct Cli {
     #[arg(long, env = "LOG_LEVEL")]
     log_level: Option<String>,
 
-    /// Transport mode: 'http' for web server (default) or 'stdio' for stdin/stdout
-    #[arg(long, default_value = "http")]
+    /// Transport mode: 'stdio' for stdin/stdout (default) or 'http' for web server
+    #[arg(long, default_value = "stdio")]
     transport: String,
 
     /// Check for updates and install if available
     #[arg(long = "self-update")]
     self_update: bool,
-
-    /// Show version information
-    #[arg(short = 'V', long = "version")]
-    version: bool,
 }
 
 fn load_config(cli: &Cli) -> Result<Config> {
@@ -91,11 +87,6 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Handle special commands first
-    if cli.version {
-        self_update::print_version();
-        return Ok(());
-    }
-
     if cli.self_update {
         return self_update::self_update(env!("CARGO_PKG_VERSION")).await;
     }

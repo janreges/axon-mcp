@@ -324,7 +324,7 @@ configure_claude() {
         # Try project scope first if in a project directory
         if [ -d ".git" ] || [ -d ".claude" ]; then
             info "Attempting project-scoped MCP configuration..."
-            if claude mcp add -s project "$MCP_NAME" -- "$BINARY_PATH" --transport stdio 2>/dev/null; then
+            if claude mcp add -s project "$MCP_NAME" -- "$BINARY_PATH" 2>/dev/null; then
                 success "Claude Code configured successfully in project scope!"
                 return 0
             else
@@ -334,7 +334,7 @@ configure_claude() {
         
         # Try user scope as fallback
         info "Attempting user-scoped MCP configuration..."
-        if claude mcp add -s user "$MCP_NAME" -- "$BINARY_PATH" --transport stdio 2>/dev/null; then
+        if claude mcp add -s user "$MCP_NAME" -- "$BINARY_PATH" 2>/dev/null; then
             success "Claude Code configured successfully in user scope!"
             return 0
         else
@@ -343,7 +343,7 @@ configure_claude() {
         
         # Try local scope as final fallback
         info "Attempting local-scoped MCP configuration..."
-        if claude mcp add -s local "$MCP_NAME" -- "$BINARY_PATH" --transport stdio 2>/dev/null; then
+        if claude mcp add -s local "$MCP_NAME" -- "$BINARY_PATH" 2>/dev/null; then
             success "Claude Code configured successfully in local scope!"
             return 0
         else
@@ -545,7 +545,7 @@ main() {
                     CORRECT_BINARY_PATH="${CORRECT_BINARY_PATH}.exe"
                 fi
                 
-                (cd "$PROJECT_ROOT" && claude mcp add -s project axon-mcp -- "$CORRECT_BINARY_PATH" --transport stdio) 2>/dev/null
+                (cd "$PROJECT_ROOT" && claude mcp add -s project axon-mcp -- "$CORRECT_BINARY_PATH") 2>/dev/null
                 if [ $? -eq 0 ]; then
                     success "'claude mcp add' executed successfully in project scope."
                 else

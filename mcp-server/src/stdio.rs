@@ -164,108 +164,14 @@ impl<
                 info!("Received initialize request");
                 self.state = McpState::WaitingForInitialized;
 
-                // Return initialize response
+                // Return proper MCP initialize response with capabilities declaration
                 Ok(Some(json!({
                     "jsonrpc": "2.0",
                     "result": {
                         "protocolVersion": "2024-11-05",
                         "capabilities": {
                             "tools": {
-                                "create_task": {
-                                    "description": "Create a new task",
-                                    "inputSchema": {
-                                        "type": "object",
-                                        "properties": {
-                                            "code": {"type": "string"},
-                                            "name": {"type": "string"},
-                                            "description": {"type": "string"},
-                                            "owner_agent_name": {"type": "string"}
-                                        },
-                                        "required": ["code", "name", "description", "owner_agent_name"]
-                                    }
-                                },
-                                "update_task": {
-                                    "description": "Update an existing task",
-                                    "inputSchema": {
-                                        "type": "object",
-                                        "properties": {
-                                            "id": {"type": "integer"},
-                                            "name": {"type": "string"},
-                                            "description": {"type": "string"}
-                                        },
-                                        "required": ["id"]
-                                    }
-                                },
-                                "set_task_state": {
-                                    "description": "Set task state",
-                                    "inputSchema": {
-                                        "type": "object",
-                                        "properties": {
-                                            "id": {"type": "integer"},
-                                            "state": {"type": "string", "enum": ["Created", "InProgress", "Blocked", "Review", "Done", "Archived"]}
-                                        },
-                                        "required": ["id", "state"]
-                                    }
-                                },
-                                "get_task_by_id": {
-                                    "description": "Get task by ID",
-                                    "inputSchema": {
-                                        "type": "object",
-                                        "properties": {
-                                            "id": {"type": "integer"}
-                                        },
-                                        "required": ["id"]
-                                    }
-                                },
-                                "get_task_by_code": {
-                                    "description": "Get task by code",
-                                    "inputSchema": {
-                                        "type": "object",
-                                        "properties": {
-                                            "code": {"type": "string"}
-                                        },
-                                        "required": ["code"]
-                                    }
-                                },
-                                "list_tasks": {
-                                    "description": "List tasks with optional filtering",
-                                    "inputSchema": {
-                                        "type": "object",
-                                        "properties": {
-                                            "owner_agent_name": {"type": "string"},
-                                            "state": {"type": "string"},
-                                            "limit": {"type": "integer"},
-                                            "offset": {"type": "integer"}
-                                        }
-                                    }
-                                },
-                                "assign_task": {
-                                    "description": "Assign task to a different agent",
-                                    "inputSchema": {
-                                        "type": "object",
-                                        "properties": {
-                                            "id": {"type": "integer"},
-                                            "new_owner_agent_name": {"type": "string"}
-                                        },
-                                        "required": ["id", "new_owner_agent_name"]
-                                    }
-                                },
-                                "archive_task": {
-                                    "description": "Archive a completed task",
-                                    "inputSchema": {
-                                        "type": "object",
-                                        "properties": {
-                                            "id": {"type": "integer"}
-                                        },
-                                        "required": ["id"]
-                                    }
-                                },
-                                "health_check": {
-                                    "description": "Check server health",
-                                    "inputSchema": {
-                                        "type": "object"
-                                    }
-                                }
+                                "listChanged": true
                             }
                         },
                         "serverInfo": {
@@ -335,6 +241,285 @@ impl<
     /// Execute a tool call (task management operation)
     async fn execute_tool_call(&self, method: &str, params: Value) -> Result<Value, anyhow::Error> {
         match method {
+            "tools/list" => {
+                // Return list of all available tools per MCP specification
+                Ok(json!({
+                    "tools": [
+                        {
+                            "name": "create_task",
+                            "description": "Create a new task",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "code": {"type": "string"},
+                                    "name": {"type": "string"},
+                                    "description": {"type": "string"},
+                                    "owner_agent_name": {"type": "string"}
+                                },
+                                "required": ["code", "name", "description", "owner_agent_name"]
+                            }
+                        },
+                        {
+                            "name": "update_task",
+                            "description": "Update an existing task",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "integer"},
+                                    "name": {"type": "string"},
+                                    "description": {"type": "string"}
+                                },
+                                "required": ["id"]
+                            }
+                        },
+                        {
+                            "name": "set_task_state",
+                            "description": "Set task state",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "integer"},
+                                    "state": {"type": "string", "enum": ["Created", "InProgress", "Blocked", "Review", "Done", "Archived"]}
+                                },
+                                "required": ["id", "state"]
+                            }
+                        },
+                        {
+                            "name": "get_task_by_id",
+                            "description": "Get task by ID",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "integer"}
+                                },
+                                "required": ["id"]
+                            }
+                        },
+                        {
+                            "name": "get_task_by_code",
+                            "description": "Get task by code",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "code": {"type": "string"}
+                                },
+                                "required": ["code"]
+                            }
+                        },
+                        {
+                            "name": "list_tasks",
+                            "description": "List tasks with optional filtering",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "owner_agent_name": {"type": "string"},
+                                    "state": {"type": "string"},
+                                    "limit": {"type": "integer"},
+                                    "offset": {"type": "integer"}
+                                }
+                            }
+                        },
+                        {
+                            "name": "assign_task",
+                            "description": "Assign task to a different agent",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "integer"},
+                                    "new_owner_agent_name": {"type": "string"}
+                                },
+                                "required": ["id", "new_owner_agent_name"]
+                            }
+                        },
+                        {
+                            "name": "archive_task",
+                            "description": "Archive a completed task",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "integer"}
+                                },
+                                "required": ["id"]
+                            }
+                        },
+                        {
+                            "name": "health_check",
+                            "description": "Check server health",
+                            "inputSchema": {
+                                "type": "object"
+                            }
+                        },
+                        {
+                            "name": "discover_work",
+                            "description": "Discover available work based on agent capabilities",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "agent_name": {"type": "string"},
+                                    "capabilities": {"type": "array", "items": {"type": "string"}},
+                                    "max_tasks": {"type": "integer"}
+                                },
+                                "required": ["agent_name", "capabilities"]
+                            }
+                        },
+                        {
+                            "name": "claim_task",
+                            "description": "Atomically claim a task for execution",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "task_id": {"type": "integer"},
+                                    "agent_name": {"type": "string"}
+                                },
+                                "required": ["task_id", "agent_name"]
+                            }
+                        },
+                        {
+                            "name": "release_task",
+                            "description": "Release a claimed task back to the pool",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "task_id": {"type": "integer"},
+                                    "agent_name": {"type": "string"}
+                                },
+                                "required": ["task_id", "agent_name"]
+                            }
+                        },
+                        {
+                            "name": "start_work_session",
+                            "description": "Start a work session for task tracking",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "task_id": {"type": "integer"},
+                                    "agent_name": {"type": "string"}
+                                },
+                                "required": ["task_id", "agent_name"]
+                            }
+                        },
+                        {
+                            "name": "end_work_session",
+                            "description": "End a work session with productivity metrics",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "session_id": {"type": "integer"},
+                                    "productivity_score": {"type": "number"}
+                                },
+                                "required": ["session_id"]
+                            }
+                        },
+                        {
+                            "name": "create_task_message",
+                            "description": "Create a message within a task context",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "task_code": {"type": "string"},
+                                    "author_agent_name": {"type": "string"},
+                                    "target_agent_name": {"type": "string"},
+                                    "message_type": {"type": "string"},
+                                    "content": {"type": "string"},
+                                    "reply_to_message_id": {"type": "integer"}
+                                },
+                                "required": ["task_code", "author_agent_name", "message_type", "content"]
+                            }
+                        },
+                        {
+                            "name": "get_task_messages",
+                            "description": "Get messages from a task with filtering",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "task_code": {"type": "string"},
+                                    "author_agent_name": {"type": "string"},
+                                    "target_agent_name": {"type": "string"},
+                                    "message_type": {"type": "string"},
+                                    "reply_to_message_id": {"type": "integer"},
+                                    "limit": {"type": "integer"}
+                                },
+                                "required": ["task_code"]
+                            }
+                        },
+                        {
+                            "name": "get_setup_instructions",
+                            "description": "Generate AI workspace setup instructions",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "workspace_id": {"type": "string"},
+                                    "prd_content": {"type": "string"}
+                                },
+                                "required": ["workspace_id"]
+                            }
+                        },
+                        {
+                            "name": "get_agentic_workflow_description",
+                            "description": "Get recommended agent workflow for workspace",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "workspace_id": {"type": "string"},
+                                    "prd_content": {"type": "string"}
+                                },
+                                "required": ["workspace_id"]
+                            }
+                        },
+                        {
+                            "name": "register_agent",
+                            "description": "Register an AI agent in the workspace",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "workspace_id": {"type": "string"},
+                                    "agent_name": {"type": "string"},
+                                    "agent_type": {"type": "string"},
+                                    "capabilities": {"type": "array", "items": {"type": "string"}},
+                                    "description": {"type": "string"}
+                                },
+                                "required": ["workspace_id", "agent_name", "agent_type", "capabilities"]
+                            }
+                        },
+                        {
+                            "name": "get_instructions_for_main_ai_file",
+                            "description": "Get instructions for creating main AI coordination file",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "workspace_id": {"type": "string"},
+                                    "file_type": {"type": "string"}
+                                },
+                                "required": ["workspace_id"]
+                            }
+                        },
+                        {
+                            "name": "create_main_ai_file",
+                            "description": "Create the main AI coordination file",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "workspace_id": {"type": "string"},
+                                    "file_path": {"type": "string"},
+                                    "content": {"type": "string"}
+                                },
+                                "required": ["workspace_id", "file_path", "content"]
+                            }
+                        },
+                        {
+                            "name": "get_workspace_manifest",
+                            "description": "Generate complete workspace manifest",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "workspace_id": {"type": "string"}
+                                },
+                                "required": ["workspace_id"]
+                            }
+                        }
+                    ]
+                }))
+            }
             "tools/call" => {
                 // Extract tool name and arguments from MCP tools/call format
                 let tool_name = params
@@ -428,6 +613,107 @@ impl<
                 let health = self.handler.health_check().await?;
                 Ok(serde_json::to_value(health)?)
             }
+            
+            // Advanced Multi-Agent Coordination Functions
+            "discover_work" => {
+                use task_core::DiscoverWorkParams;
+                let params: DiscoverWorkParams =
+                    serde_json::from_value(params).context("Invalid discover_work parameters")?;
+                let tasks = self.handler.discover_work(params).await?;
+                let task_values: Result<Vec<_>, McpError> =
+                    tasks.iter().map(serialize_task_for_mcp).collect();
+                let task_values = task_values.map_err(anyhow::Error::from)?;
+                Ok(Value::Array(task_values))
+            }
+            "claim_task" => {
+                use task_core::ClaimTaskParams;
+                let params: ClaimTaskParams =
+                    serde_json::from_value(params).context("Invalid claim_task parameters")?;
+                let task = self.handler.claim_task(params).await?;
+                serialize_task_for_mcp(&task).map_err(anyhow::Error::from)
+            }
+            "release_task" => {
+                use task_core::ReleaseTaskParams;
+                let params: ReleaseTaskParams =
+                    serde_json::from_value(params).context("Invalid release_task parameters")?;
+                let task = self.handler.release_task(params).await?;
+                serialize_task_for_mcp(&task).map_err(anyhow::Error::from)
+            }
+            "start_work_session" => {
+                use task_core::StartWorkSessionParams;
+                let params: StartWorkSessionParams =
+                    serde_json::from_value(params).context("Invalid start_work_session parameters")?;
+                let session = self.handler.start_work_session(params).await?;
+                Ok(serde_json::to_value(session)?)
+            }
+            "end_work_session" => {
+                use task_core::EndWorkSessionParams;
+                let params: EndWorkSessionParams =
+                    serde_json::from_value(params).context("Invalid end_work_session parameters")?;
+                let session = self.handler.end_work_session(params).await?;
+                Ok(serde_json::to_value(session)?)
+            }
+            
+            // Inter-Agent Messaging Functions
+            "create_task_message" => {
+                use task_core::CreateTaskMessageParams;
+                let params: CreateTaskMessageParams =
+                    serde_json::from_value(params).context("Invalid create_task_message parameters")?;
+                let message = self.handler.create_task_message(params).await?;
+                Ok(serde_json::to_value(message)?)
+            }
+            "get_task_messages" => {
+                use task_core::GetTaskMessagesParams;
+                let params: GetTaskMessagesParams =
+                    serde_json::from_value(params).context("Invalid get_task_messages parameters")?;
+                let messages = self.handler.get_task_messages(params).await?;
+                Ok(Value::Array(messages.into_iter().map(|m| serde_json::to_value(m).unwrap()).collect()))
+            }
+            
+            // Workspace Setup Automation Functions
+            "get_setup_instructions" => {
+                use task_core::GetSetupInstructionsParams;
+                let params: GetSetupInstructionsParams =
+                    serde_json::from_value(params).context("Invalid get_setup_instructions parameters")?;
+                let instructions = self.handler.get_setup_instructions(params).await?;
+                Ok(serde_json::to_value(instructions)?)
+            }
+            "get_agentic_workflow_description" => {
+                use task_core::GetAgenticWorkflowDescriptionParams;
+                let params: GetAgenticWorkflowDescriptionParams =
+                    serde_json::from_value(params).context("Invalid get_agentic_workflow_description parameters")?;
+                let workflow = self.handler.get_agentic_workflow_description(params).await?;
+                Ok(serde_json::to_value(workflow)?)
+            }
+            "register_agent" => {
+                use task_core::RegisterAgentParams;
+                let params: RegisterAgentParams =
+                    serde_json::from_value(params).context("Invalid register_agent parameters")?;
+                let agent = self.handler.register_agent(params).await?;
+                Ok(serde_json::to_value(agent)?)
+            }
+            "get_instructions_for_main_ai_file" => {
+                use task_core::GetInstructionsForMainAiFileParams;
+                let params: GetInstructionsForMainAiFileParams =
+                    serde_json::from_value(params).context("Invalid get_instructions_for_main_ai_file parameters")?;
+                let instructions = self.handler.get_instructions_for_main_ai_file(params).await?;
+                Ok(serde_json::to_value(instructions)?)
+            }
+            "create_main_ai_file" => {
+                use task_core::CreateMainAiFileParams;
+                let params: CreateMainAiFileParams =
+                    serde_json::from_value(params).context("Invalid create_main_ai_file parameters")?;
+                let result = self.handler.create_main_ai_file(params).await?;
+                Ok(serde_json::to_value(result)?)
+            }
+            "get_workspace_manifest" => {
+                use task_core::GetWorkspaceManifestParams;
+                let params: GetWorkspaceManifestParams =
+                    serde_json::from_value(params).context("Invalid get_workspace_manifest parameters")?;
+                let manifest = self.handler.get_workspace_manifest(params).await?;
+                Ok(serde_json::to_value(manifest)?)
+            }
+            
             _ => Err(anyhow::anyhow!("Unknown operation: {}", operation)),
         }
     }
