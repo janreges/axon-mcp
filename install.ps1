@@ -455,13 +455,19 @@ function Configure-ClaudeCode {
     Write-Host "  $env:APPDATA\Claude\claude_desktop_config.json"
     Write-Host ""
     Write-Host "Add this to the mcpServers section:" -ForegroundColor Cyan
-    Write-Host "{" -ForegroundColor Blue
-    Write-Host "  `"mcpServers`": {" -ForegroundColor Blue
-    Write-Host "    `"$BinaryName`": {" -ForegroundColor Blue
-    Write-Host "      `"command`": [`"$($BinaryPath.Replace('\', '\\'))`"]" -ForegroundColor Blue
-    Write-Host "    }" -ForegroundColor Blue
-    Write-Host "  }" -ForegroundColor Blue
-    Write-Host "}" -ForegroundColor Blue
+    $BinaryPathEscaped = $BinaryPath.Replace('\', '\\')
+    $ConfigLines = @(
+        "{",
+        '  "mcpServers": {',
+        "    `"$BinaryName`": {",
+        "      `"command`": [`"$BinaryPathEscaped`"]",
+        "    }",
+        "  }",
+        "}"
+    )
+    foreach ($line in $ConfigLines) {
+        Write-Host $line -ForegroundColor Blue
+    }
     Write-Host ""
 }
 
