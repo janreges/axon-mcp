@@ -12,8 +12,8 @@ use ::task_core::{
     RegisterAgentParams, SetupInstructions, WorkspaceSetupService,
 };
 use ::task_core::{
-    ClaimTaskParams, DiscoverWorkParams, EndWorkSessionParams, ReleaseTaskParams,
-    StartWorkSessionParams, WorkSessionInfo,
+    ClaimTaskParams, CleanupTimedOutTasksParams, DiscoverWorkParams, EndWorkSessionParams, 
+    ReleaseTaskParams, StartWorkSessionParams, WorkSessionInfo,
 };
 use ::task_core::{CreateTaskMessageParams, GetTaskMessagesParams};
 use ::task_core::{
@@ -33,7 +33,7 @@ pub struct McpTaskHandler<R, M, W> {
     message_repository: Arc<M>,
     workspace_context_repository: Arc<W>,
     workspace_setup_service: WorkspaceSetupService,
-    project_root: Option<std::path::PathBuf>,
+    _project_root: Option<std::path::PathBuf>,
 }
 
 impl<R, M, W> McpTaskHandler<R, M, W> {
@@ -42,14 +42,14 @@ impl<R, M, W> McpTaskHandler<R, M, W> {
         repository: Arc<R>,
         message_repository: Arc<M>,
         workspace_context_repository: Arc<W>,
-        project_root: Option<std::path::PathBuf>,
+        _project_root: Option<std::path::PathBuf>,
     ) -> Self {
         Self {
             repository,
             message_repository,
             workspace_context_repository: workspace_context_repository.clone(),
             workspace_setup_service: WorkspaceSetupService::new(),
-            project_root,
+            _project_root: _project_root,
         }
     }
 
@@ -204,6 +204,12 @@ impl<
     async fn end_work_session(&self, params: EndWorkSessionParams) -> Result<()> {
         self.repository
             .end_work_session(params.session_id, params.notes, params.productivity_score)
+            .await
+    }
+
+    async fn cleanup_timed_out_tasks(&self, params: CleanupTimedOutTasksParams) -> Result<Vec<Task>> {
+        self.repository
+            .cleanup_timed_out_tasks(params.timeout_minutes)
             .await
     }
 
@@ -562,6 +568,7 @@ mod tests {
             async fn release_task(&self, task_id: i32, agent_name: &str) -> Result<Task>;
             async fn start_work_session(&self, task_id: i32, agent_name: &str) -> Result<i32>;
             async fn end_work_session(&self, session_id: i32, notes: Option<String>, productivity_score: Option<f64>) -> Result<()>;
+            async fn cleanup_timed_out_tasks(&self, timeout_minutes: i64) -> Result<Vec<Task>>;
         }
     }
 

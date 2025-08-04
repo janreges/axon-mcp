@@ -92,6 +92,7 @@ fn test_task_serialization_format() {
         state: TaskState::InProgress,
         inserted_at: Utc::now(),
         done_at: None,
+        claimed_at: None,
         workflow_definition_id: None,
         workflow_cursor: None,
         priority_score: 5.0,

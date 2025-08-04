@@ -194,6 +194,19 @@ pub trait TaskRepository: Send + Sync {
         notes: Option<String>,
         productivity_score: Option<f64>,
     ) -> Result<()>;
+
+    /// Release tasks that have been claimed for longer than the timeout duration
+    ///
+    /// This function finds tasks in InProgress state where claimed_at is older than
+    /// the specified timeout and releases them back to Created state for re-claiming.
+    ///
+    /// # Arguments
+    /// * `timeout_minutes` - Tasks claimed longer than this many minutes will be released
+    ///
+    /// # Returns
+    /// * `Ok(Vec<Task>)` - The list of tasks that were released due to timeout
+    /// * `Err(TaskError::Database)` - If the database operation fails
+    async fn cleanup_timed_out_tasks(&self, timeout_minutes: i64) -> Result<Vec<Task>>;
 }
 
 /// Repository statistics for monitoring and analytics

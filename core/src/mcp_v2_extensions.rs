@@ -385,6 +385,7 @@ mod tests {
             state: crate::models::TaskState::Created,
             inserted_at: Utc::now() - chrono::Duration::hours(2),
             done_at: None,
+            claimed_at: None,
             workflow_definition_id: None,
             workflow_cursor: None,
             priority_score: 5.0,

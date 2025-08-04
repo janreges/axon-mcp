@@ -3,7 +3,8 @@ target/
 Cargo.lock
 
 # Temporary files and directories
-**/tmp/
+**/tmp/*
+!tmp/.gitkeep
 **/*.tmp
 **/*.log
 **/*.bak

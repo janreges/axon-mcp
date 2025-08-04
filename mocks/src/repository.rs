@@ -459,6 +459,8 @@ impl TaskRepository for MockTaskRepository {
 
         // Claim the task
         task.owner_agent_name = Some(agent_name.to_string());
+        task.state = TaskState::InProgress;
+        task.claimed_at = Some(Utc::now());
 
         Ok(task.clone())
     }
@@ -484,6 +486,8 @@ impl TaskRepository for MockTaskRepository {
 
         // Release the task
         task.owner_agent_name = None;
+        task.state = TaskState::Created;
+        task.claimed_at = None;
 
         Ok(task.clone())
     }
@@ -523,5 +527,35 @@ impl TaskRepository for MockTaskRepository {
         }
 
         Ok(())
+    }
+
+    async fn cleanup_timed_out_tasks(&self, timeout_minutes: i64) -> Result<Vec<Task>> {
+        self.record_call_with_params("cleanup_timed_out_tasks", &format!("timeout_minutes={timeout_minutes}"));
+
+        // Check for error injection
+        self.check_error_injection()?;
+
+        let mut tasks = self.tasks.lock();
+        let now = Utc::now();
+        let timeout_threshold = now - chrono::Duration::minutes(timeout_minutes);
+        
+        let mut timed_out_tasks = Vec::new();
+        
+        for task in tasks.values_mut() {
+            // Check if task is InProgress and has been claimed for too long
+            if task.state == TaskState::InProgress {
+                if let Some(claimed_at) = task.claimed_at {
+                    if claimed_at < timeout_threshold {
+                        // Release the task
+                        task.state = TaskState::Created;
+                        task.owner_agent_name = None;
+                        task.claimed_at = None;
+                        timed_out_tasks.push(task.clone());
+                    }
+                }
+            }
+        }
+
+        Ok(timed_out_tasks)
     }
 }

@@ -6,6 +6,7 @@
 use axum::{
     extract::State,
     http::{header, HeaderMap, StatusCode},
+    middleware,
     response::Sse,
     routing::{get, post},
     Json, Router,
@@ -87,6 +88,7 @@ impl<
             .route("/mcp/v1", get(sse_handler)) // Legacy SSE support (deprecated)
             .route("/mcp/v1/rpc", post(rpc_handler)) // Legacy RPC support (deprecated)
             .route("/health", get(health_handler))
+            .layer(middleware::from_fn(crate::request_logger::mcp_request_logging_middleware))
             .with_state(state)
     }
 }
@@ -284,6 +286,23 @@ async fn execute_mcp_method<
             };
             match handler.end_work_session(params).await {
                 Ok(()) => create_success_response(id, Value::Null),
+                Err(e) => McpError::from(e).to_json_rpc_error(id),
+            }
+        }
+        "cleanup_timed_out_tasks" => {
+            let params: ::task_core::CleanupTimedOutTasksParams = match deserialize_mcp_params(params) {
+                Ok(p) => p,
+                Err(e) => return e.to_json_rpc_error(id),
+            };
+            match handler.cleanup_timed_out_tasks(params).await {
+                Ok(tasks) => {
+                    let task_values: Result<Vec<_>, _> =
+                        tasks.iter().map(serialize_task_for_mcp).collect();
+                    match task_values {
+                        Ok(values) => create_success_response(id, Value::Array(values)),
+                        Err(e) => e.to_json_rpc_error(id),
+                    }
+                }
                 Err(e) => McpError::from(e).to_json_rpc_error(id),
             }
         }

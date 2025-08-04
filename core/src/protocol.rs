@@ -55,6 +55,9 @@ pub trait ProtocolHandler: Send + Sync {
     /// End a work session
     async fn end_work_session(&self, params: EndWorkSessionParams) -> Result<()>;
 
+    /// Clean up tasks that have been claimed longer than the timeout duration
+    async fn cleanup_timed_out_tasks(&self, params: CleanupTimedOutTasksParams) -> Result<Vec<Task>>;
+
     // Task Communication & Messaging
 
     /// Create a task message (comments, questions, handoff protocols, etc.)
@@ -297,6 +300,12 @@ pub struct WorkSessionInfo {
     pub task_id: i32,
     pub agent_name: String,
     pub started_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// MCP parameters for cleaning up timed-out tasks
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CleanupTimedOutTasksParams {
+    pub timeout_minutes: i64,
 }
 
 // Task Messaging Parameter Types

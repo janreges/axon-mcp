@@ -31,6 +31,7 @@ pub enum TaskCode {
 ///     state: TaskState::Created,
 ///     inserted_at: Utc::now(),
 ///     done_at: None,
+///     claimed_at: None,
 ///     workflow_definition_id: None,
 ///     workflow_cursor: None,
 ///     priority_score: 5.0,
@@ -62,6 +63,8 @@ pub struct Task {
     pub inserted_at: DateTime<Utc>,
     /// Completion timestamp
     pub done_at: Option<DateTime<Utc>>,
+    /// Timestamp when task was claimed by an agent (for timeout mechanism)
+    pub claimed_at: Option<DateTime<Utc>>,
 
     // MCP v2 Extensions
     /// Workflow definition ID for structured task execution
@@ -587,6 +590,7 @@ impl Task {
             state,
             inserted_at,
             done_at,
+            claimed_at: None,
             workflow_definition_id: None,
             workflow_cursor: None,
             priority_score: 5.0,
@@ -671,6 +675,7 @@ mod tests {
             state: TaskState::Created,
             inserted_at: Utc::now(),
             done_at: None,
+            claimed_at: None,
             workflow_definition_id: None,
             workflow_cursor: None,
             priority_score: 5.0,
@@ -741,6 +746,7 @@ mod tests {
             state: TaskState::InProgress,
             inserted_at: Utc::now(),
             done_at: None,
+            claimed_at: None,
             workflow_definition_id: None,
             workflow_cursor: None,
             priority_score: 5.0,

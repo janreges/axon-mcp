@@ -47,6 +47,7 @@ pub fn row_to_task(row: &SqliteRow) -> Result<Task> {
 
     let inserted_at: DateTime<Utc> = row.get("inserted_at");
     let done_at: Option<DateTime<Utc>> = row.get("done_at");
+    let claimed_at: Option<DateTime<Utc>> = row.try_get("claimed_at").ok().flatten();
 
     // Parse required_capabilities from JSON string
     let required_capabilities: Vec<String> = row
@@ -66,6 +67,7 @@ pub fn row_to_task(row: &SqliteRow) -> Result<Task> {
         state,
         inserted_at,
         done_at,
+        claimed_at,
 
         // MCP v2 fields with proper defaults
         workflow_definition_id: row.try_get("workflow_definition_id").ok().flatten(),
@@ -132,7 +134,7 @@ pub fn sqlx_error_to_task_error(err: sqlx::Error) -> TaskError {
 #[allow(dead_code)] // Used in sqlite.rs but may not be detected by compiler
 pub fn build_filter_query(filter: &TaskFilter) -> sqlx::QueryBuilder<sqlx::Sqlite> {
     let mut query_builder: sqlx::QueryBuilder<sqlx::Sqlite> =
-        sqlx::QueryBuilder::new("SELECT id, code, name, description, owner_agent_name, state, inserted_at, done_at, workflow_definition_id, workflow_cursor, priority_score, parent_task_id, failure_count, required_capabilities, estimated_effort, confidence_threshold FROM tasks");
+        sqlx::QueryBuilder::new("SELECT id, code, name, description, owner_agent_name, state, inserted_at, done_at, claimed_at, workflow_definition_id, workflow_cursor, priority_score, parent_task_id, failure_count, required_capabilities, estimated_effort, confidence_threshold FROM tasks");
 
     let mut has_conditions = false;
 

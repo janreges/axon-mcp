@@ -146,7 +146,7 @@ impl TaskRepository for SqliteTaskRepository {
             r#"
             INSERT INTO tasks (code, name, description, owner_agent_name, state, inserted_at)
             VALUES (?, ?, ?, ?, ?, ?)
-            RETURNING id, code, name, description, owner_agent_name, state, inserted_at, done_at
+            RETURNING id, code, name, description, owner_agent_name, state, inserted_at, done_at, claimed_at
             "#,
         )
         .bind(&task.code)
@@ -266,7 +266,7 @@ impl TaskRepository for SqliteTaskRepository {
 
     async fn get_by_id(&self, id: i32) -> Result<Option<Task>> {
         let result = sqlx::query(
-            "SELECT id, code, name, description, owner_agent_name, state, inserted_at, done_at FROM tasks WHERE id = ?"
+            "SELECT id, code, name, description, owner_agent_name, state, inserted_at, done_at, claimed_at FROM tasks WHERE id = ?"
         )
         .bind(id)
         .fetch_optional(&self.pool)
@@ -281,7 +281,7 @@ impl TaskRepository for SqliteTaskRepository {
 
     async fn get_by_code(&self, code: &str) -> Result<Option<Task>> {
         let result = sqlx::query(
-            "SELECT id, code, name, description, owner_agent_name, state, inserted_at, done_at FROM tasks WHERE code = ?"
+            "SELECT id, code, name, description, owner_agent_name, state, inserted_at, done_at, claimed_at FROM tasks WHERE code = ?"
         )
         .bind(code)
         .fetch_optional(&self.pool)
@@ -480,10 +480,11 @@ impl TaskRepository for SqliteTaskRepository {
 
         // Use atomic UPDATE with WHERE conditions to prevent race conditions
         // This will only update if the task is in Created state and unowned/owned by same agent
+        let now = chrono::Utc::now();
         let updated_rows = sqlx::query(
             r#"
             UPDATE tasks 
-            SET owner_agent_name = ?, state = ? 
+            SET owner_agent_name = ?, state = ?, claimed_at = ?
             WHERE id = ? 
               AND state = 'Created' 
               AND (owner_agent_name IS NULL OR owner_agent_name = '' OR owner_agent_name = ?)
@@ -491,6 +492,7 @@ impl TaskRepository for SqliteTaskRepository {
         )
         .bind(agent_name)
         .bind(crate::common::state_to_string(TaskState::InProgress))
+        .bind(now)
         .bind(task_id)
         .bind(agent_name) // Allow re-claiming by same agent
         .execute(&mut *tx)
@@ -557,8 +559,8 @@ impl TaskRepository for SqliteTaskRepository {
             return Err(TaskError::NotOwned(agent_name.to_string(), task_id));
         }
 
-        // Clear task owner and reset state to Created for re-claiming
-        sqlx::query("UPDATE tasks SET owner_agent_name = NULL, state = ? WHERE id = ?")
+        // Clear task owner, reset state to Created, and clear claiming timestamp
+        sqlx::query("UPDATE tasks SET owner_agent_name = NULL, state = ?, claimed_at = NULL WHERE id = ?")
             .bind(crate::common::state_to_string(TaskState::Created))
             .bind(task_id)
             .execute(&self.pool)
@@ -636,6 +638,62 @@ impl TaskRepository for SqliteTaskRepository {
         .map_err(sqlx_error_to_task_error)?;
 
         Ok(())
+    }
+
+    async fn cleanup_timed_out_tasks(&self, timeout_minutes: i64) -> Result<Vec<Task>> {
+        // Calculate timeout threshold
+        let timeout_threshold = chrono::Utc::now() - chrono::Duration::minutes(timeout_minutes);
+        
+        // Start transaction for atomic operation
+        let mut tx = self.pool.begin().await.map_err(sqlx_error_to_task_error)?;
+
+        // First, find all timed-out tasks
+        let timed_out_rows = sqlx::query(
+            r#"
+            SELECT id, code, name, description, owner_agent_name, state, inserted_at, done_at, claimed_at
+            FROM tasks 
+            WHERE state = 'InProgress' 
+              AND claimed_at IS NOT NULL 
+              AND claimed_at < ?
+            "#,
+        )
+        .bind(timeout_threshold)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(sqlx_error_to_task_error)?;
+
+        // Convert rows to tasks
+        let timed_out_tasks: Result<Vec<Task>> = timed_out_rows.iter().map(row_to_task).collect();
+        let timed_out_tasks = timed_out_tasks?;
+
+        if !timed_out_tasks.is_empty() {
+            // Release all timed-out tasks - reset to Created state and clear owner/claimed_at
+            let updated_rows = sqlx::query(
+                r#"
+                UPDATE tasks 
+                SET state = 'Created', owner_agent_name = NULL, claimed_at = NULL
+                WHERE state = 'InProgress' 
+                  AND claimed_at IS NOT NULL 
+                  AND claimed_at < ?
+                "#,
+            )
+            .bind(timeout_threshold)
+            .execute(&mut *tx)
+            .await
+            .map_err(sqlx_error_to_task_error)?;
+
+            // Log the cleanup operation
+            tracing::info!(
+                "Cleaned up {} timed-out tasks (timeout: {} minutes, rows updated: {})",
+                timed_out_tasks.len(),
+                timeout_minutes,
+                updated_rows.rows_affected()
+            );
+        }
+
+        tx.commit().await.map_err(sqlx_error_to_task_error)?;
+
+        Ok(timed_out_tasks)
     }
 }
 

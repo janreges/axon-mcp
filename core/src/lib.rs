@@ -75,6 +75,7 @@ pub use protocol::{
     ArchiveTaskParams,
     AssignTaskParams,
     ClaimTaskParams,
+    CleanupTimedOutTasksParams,
     CreateMainAiFileParams,
     // Task Messaging Types
     CreateTaskMessageParams,
@@ -92,7 +93,7 @@ pub use protocol::{
     HealthStatus,
     ListTasksParams,
     ProtocolHandler,
-    RegisterAgentParams,
+    RegisterAgentParams,  
     ReleaseTaskParams,
     SetStateParams,
     StartWorkSessionParams,
