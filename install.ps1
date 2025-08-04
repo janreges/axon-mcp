@@ -384,7 +384,7 @@ function Install-Binary {
     } elseif ($InstallMode -eq "user") {
         Write-Info "Running automation steps for user-scoped installation..."
         Write-Info "Make sure '$TargetInstallDir' is in your PATH. You can add it to your PowerShell profile (`$PROFILE):"
-        Write-Info "  `$env:Path += `";$TargetInstallDir`""
+        Write-Info "  \`$env:Path += \`;$TargetInstallDir\`""
         Write-Info "Then run '. `$PROFILE' or restart terminal."
     }
     

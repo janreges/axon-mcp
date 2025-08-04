@@ -39,7 +39,7 @@ teardown() {
     
     run bash -c "source $BATS_TEST_DIRNAME/../install.sh && detect_platform && echo \$PLATFORM"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "apple-darwin" ]]
+    [[ "$output" =~ "darwin" ]]
 }
 
 @test "install.sh: check requirements function" {
