@@ -1,50 +1,53 @@
 # MCP Task Management Server
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/janreges/axon-mcp)
-[![Version](https://img.shields.io/badge/version-0.4.1-blue)](https://github.com/janreges/axon-mcp/releases)
+[![Version](https://img.shields.io/badge/version-0.4.2-blue)](https://github.com/janreges/axon-mcp/releases)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**Production-ready server pro orchestraci a koordinaci úkolů mezi více AI agenty.**
+**Production-ready server for orchestrating and coordinating tasks between multiple AI agents.**
 
-MCP Task Management Server je robustní a spolehlivé řešení navržené pro efektivní správu úkolů v multi-agentních systémech. Pokud stavíte aplikace, kde více AI agentů potřebuje spolupracovat, sdílet práci a komunikovat, náš server vám poskytne centralizovaný hub, který celý proces zjednodušší a zajistí jeho spolehlivost.
+MCP Task Management Server is a robust and reliable solution designed for efficient task management in multi-agent systems. If you're building applications where multiple AI agents need to collaborate, share work, and communicate, our server provides a centralized hub that simplifies the entire process and ensures reliable task management.
 
-Zapomeňte na složité nastavování a správu stavu. Díky zero-configuration přístupu s využitím SQLite je server připraven k použití během několika sekund. Soustřeďte se na logiku vašich agentů, ne na infrastrukturu pro správu úkolů.
+Forget about complex setup and state management. Thanks to the zero-configuration approach using SQLite, the server is ready to use within seconds. Focus on your agents' logic, not on task management infrastructure.
 
-## ✨ Klíčové vlastnosti
+## ✨ Key Features
 
-* **🤝 Seamless Multi-Agent Coordination:** Umožňuje více agentům efektivně spolupracovat na společných cílech, nárokovat si úkoly a sdílet výsledky
-* **🚀 Production-Ready & Robust:** Navrženo pro reálné nasazení s ošetřením race conditions a spolehlivým mechanismem pro timeouty úkolů (15 minut)
-* **📋 Comprehensive MCP Implementation:** Plná podpora pro 22 klíčových MCP funkcí, které pokrývají celý životní cyklus úkolů – od vytvoření přes nárokování až po dokončení
-* **⚡ Zero-Configuration Setup:** Díky integrované databázi SQLite (single-file) je spuštění serveru triviální. Žádné externí závislosti na databázových serverech
-* **💬 Built-in Messaging:** Agenti mohou komunikovat přímo mezi sebou prostřednictvím vestavěného systému zpráv, což usnadňuje komplexní koordinaci
-* **🎯 Workspace Automation:** Ideální pro automatizaci pracovních postupů, kde je potřeba dynamicky přidělovat úkoly a sledovat jejich stav
+* **🤝 Seamless Multi-Agent Coordination:** Enables multiple agents to efficiently collaborate on shared goals, claim tasks, and share results
+* **🚀 Production-Ready & Robust:** Designed for real-world deployment with race condition handling and reliable task timeout mechanism (15 minutes; timed-out tasks are automatically released back to the pool)
+* **📋 Comprehensive MCP Implementation:** Full support for 22 key MCP functions covering the entire task lifecycle – from creation through claiming to completion
+* **⚡ Zero-Configuration Setup:** Thanks to integrated SQLite database (single-file), server startup is trivial. No external database server dependencies
+* **💬 Built-in Messaging:** Agents can communicate directly with each other through the built-in messaging system, facilitating complex coordination
+* **🎯 Workspace Automation:** Ideal for workflow automation where tasks need to be dynamically assigned and their status tracked
 
-### 1. 📦 Instalace
+### 1. 📦 Installation
 
 ```bash
-# Stáhněte a nainstalujte nejnovější binárku (macOS / Linux x86_64)
+# Download and install the latest binary (macOS / Linux x86_64)
 curl -s https://raw.githubusercontent.com/janreges/axon-mcp/main/install.sh | bash
 
-# Script vypíše finální cestu, např:
+# For Windows users, please refer to the "Building from Source" section
+# or check the GitHub Releases page for pre-built binaries
+
+# Script will output the final path, e.g.:
 # Installed axon-mcp to /usr/local/bin/axon-mcp
 ```
 
-💡 **Poznámka:** Zapamatujte si vypsanou cestu – budete ji potřebovat v dalším kroku.
+💡 **Note:** Remember the displayed path – you'll need it in the next step.
 
-### 2. 🚀 Spuštění MCP serveru
+### 2. 🚀 Starting the MCP Server
 
-**Před spuštěním nahraďte parametry v <> svými hodnotami:**
+**Before starting, replace the parameters in <> with your actual values:**
 
 ```bash
-# Nahraďte <project-name> názvem vašeho projektu (bez mezer)
-# Nahraďte <full-path-to-project> úplnou cestou k vašemu projektu
+# Replace <project-name> with your project name (no spaces)
+# Replace <full-path-to-project> with the full path to your project
 axon-mcp --start \
   --port=8499 \
   --project=<project-name> \
   --project-root="<full-path-to-project>"
 ```
 
-**Příklad reálného použití:**
+**Example with real values:**
 ```bash
 axon-mcp --start \
   --port=8499 \
@@ -52,25 +55,27 @@ axon-mcp --start \
   --project-root="/Users/jan/projects/my-web-app"
 ```
 
-Co se stane:
-* Vytvoří se složky `.axon/` a `.claude/` (pokud neexistují)
-* Inicializuje se SQLite DB jako `.axon/axon.<project-name>.sqlite`
-* Server naslouchá na `http://localhost:8499`
+What happens:
+* Creates `.axon/` and `.claude/` folders (if they don't exist)
+* Initializes SQLite DB as `.axon/axon.<project-name>.sqlite`
+* Server listens on `http://localhost:8499`
 
-### 3. 🔗 Připojení Claude k běžícímu serveru
+### 3. 🔗 Connecting Claude to Running Server
+
+**Prerequisites:** Make sure you have the [Claude CLI tool](https://github.com/anthropics/claude-code) installed before proceeding.
 
 ```bash
 cd <full-path-to-project>
 claude mcp add --url http://127.0.0.1:8499
 ```
 
-**Příklad:**
+**Example:**
 ```bash
 cd /Users/jan/projects/my-web-app
 claude mcp add --url http://127.0.0.1:8499
 ```
 
-✅ **Hotovo!** Claude nyní přeposílá všechny MCP volání přes HTTP; žádné další nastavování není potřeba.
+✅ **Done!** Claude now forwards all MCP calls over HTTP; no additional setup needed.
 
 ---
 
@@ -142,13 +147,13 @@ Axon implements **22 comprehensive MCP functions** organized in four categories:
 
 ---
 
-## 6. Technické detaily
+## 6. Technical Details
 
-### Proč HTTP transport?
+### Why HTTP transport?
 
-**HTTP-only design choice:** Tradiční STDIO-based MCP servery nezvládnou současné požadavky potřebné pro multi-agent koordinaci, task discovery a long-polling workflows. Náš server používá HTTP transport pro umožnění simultánního připojení agentů a real-time koordinaci úkolů.
+**HTTP-only design choice:** Traditional STDIO-based MCP servers cannot handle concurrent requests needed for multi-agent coordination, task discovery, and long-polling workflows. Our server uses HTTP transport to enable simultaneous agent connections and real-time task coordination.
 
-### Architektura
+### Architecture
 
 **Multi-crate Rust workspace** designed for performance and maintainability:
 
@@ -161,7 +166,7 @@ axon-mcp/
 └── mocks/          # 🧪 Test utilities and fixtures
 ```
 
-### Srovnání s tradičními MCP servery
+### Comparison with Traditional MCP Servers
 
 |                 | Traditional MCPs        | Axon MCP             |
 |-----------------|-------------------------|----------------------|
@@ -170,7 +175,7 @@ axon-mcp/
 | State storage   | Flat files              | **`.axon/axon.<PROJECT>.sqlite`** |
 | Integration     | Custom configuration    | **`claude mcp add`** (built-in) |
 
-**Klíčové technické výhody:**
+**Key Technical Advantages:**
 - **Concurrent request support**: HTTP enables multiple agents to work simultaneously
 - **Task coordination**: Atomic claiming, work sessions, and inter-agent messaging
 - **Project-scoped databases**: Each project gets its own SQLite file
@@ -194,9 +199,11 @@ axon-mcp/
 
 Once your server is running, you can test it with curl:
 
+**Note:** The `MCP-Protocol-Version` header specifies the API version for compatibility.
+
 ```bash
 # Health check
-curl -X POST http://127.0.0.1:8888/mcp \
+curl -X POST http://127.0.0.1:8499/mcp \
   -H "Content-Type: application/json" \
   -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{
@@ -207,7 +214,7 @@ curl -X POST http://127.0.0.1:8888/mcp \
   }'
 
 # Create a task
-curl -X POST http://127.0.0.1:8888/mcp \
+curl -X POST http://127.0.0.1:8499/mcp \
   -H "Content-Type: application/json" \
   -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{
@@ -222,7 +229,7 @@ curl -X POST http://127.0.0.1:8888/mcp \
   }'
 
 # List tasks
-curl -X POST http://127.0.0.1:8888/mcp \
+curl -X POST http://127.0.0.1:8499/mcp \
   -H "Content-Type: application/json" \
   -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{
