@@ -517,3 +517,5 @@ get_task_messages(GetTaskMessagesParams {
    ```
 
 The server will automatically create a SQLite database using scope-based path resolution (project-specific `.axon/axon-mcp.sqlite` or user-global with project isolation) and start listening on `http://localhost:3000` with MCP endpoints available.
+
+IMPORTANT NOTE: You should ALWAYS be paranoid and distrustful, not believe or think that something is functional without really thorough and careful testing. Only declare something finished when you have really tested it and are 100% sure that everything is functional. Be really strict and demand that compilations and tests pass completely without errors and without any warnings!

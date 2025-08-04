@@ -14,3 +14,7 @@ workers = 4
 [logging]
 level = "info"
 format = "pretty"
+
+[project]
+# Project root directory for workspace operations (optional)
+# If not set, will be detected automatically or set via PROJECT_ROOT env var

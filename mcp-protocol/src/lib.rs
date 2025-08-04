@@ -71,12 +71,15 @@
 
 pub mod error;
 pub mod handler;
+pub mod request_logger;
+// pub mod rmcp_handler; // Temporarily disabled - complex trait issues
 pub mod serialization;
 pub mod server;
 
 // Re-export key types for easier usage
 pub use error::*;
 pub use handler::McpTaskHandler;
+// pub use rmcp_handler::RmcpTaskHandler; // Temporarily disabled
 pub use serialization::*;
 pub use server::McpServer;
 

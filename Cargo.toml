@@ -2,6 +2,7 @@
 members = [
     "core",
     "mcp-server", "database", "mcp-protocol", "mocks", "workspace-orchestrator",
+    "integration-tests",
 ]
 default-members = [
     "core",

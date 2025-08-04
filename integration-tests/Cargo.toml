@@ -1,0 +1,70 @@
+[package]
+name = "integration-tests"
+version = "0.3.0"
+edition = "2021"
+publish = false
+description = "Comprehensive integration tests for Axon MCP server"
+
+[[bin]]
+name = "axon-integration-tests"
+path = "src/main.rs"
+
+[[bin]]
+name = "minimal-test"
+path = "src/minimal_test.rs"
+
+[[bin]]
+name = "http-mcp-tests"
+path = "src/http_integration_main.rs"
+
+[[bin]]
+name = "rmcp-http-tests"  
+path = "src/rmcp_http_main.rs"
+
+[dependencies]
+# Async runtime and utilities
+tokio = { version = "1.0", features = ["full"] }
+futures = "0.3"
+
+# JSON-RPC client for MCP communication
+jsonrpsee = { version = "0.21", features = ["client-core", "async-client", "macros"] }
+
+# JSON handling and schema validation
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+jsonschema = "0.17"
+ron = "0.8"
+
+# Testing utilities
+assert_fs = "1.1"
+assert_cmd = "2.0"
+predicates = "3.0"
+tempfile = "3.8"
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Command line argument parsing
+clap = { version = "4.0", features = ["derive"] }
+
+# UUID generation for test isolation
+uuid = { version = "1.6", features = ["v4"] }
+
+# Path and filesystem utilities
+walkdir = "2.4"
+
+# Reference to our protocol schemas
+mcp-protocol = { path = "../mcp-protocol" }
+task-core = { path = "../core" }
+rmcp = { version = "0.3.2", features = ["client", "transport-child-process", "transport-io"] }
+rand = "0.9.2"
+reqwest = { workspace = true, features = ["json"] }
+
+[dev-dependencies]
+# Additional test utilities if needed
+rstest = "0.18"
