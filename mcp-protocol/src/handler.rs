@@ -239,10 +239,39 @@ impl<
         params: GetSetupInstructionsParams,
     ) -> Result<SetupInstructions> {
         use ::task_core::WorkspaceSetupError;
+        use task_core::protocol::DEFAULT_WORKSPACE_ID;
 
+        // Get or create workspace context with DEFAULT_WORKSPACE_ID
+        let maybe_context = self
+            .workspace_context_repository
+            .get_by_id(DEFAULT_WORKSPACE_ID)
+            .await?;
+
+        let workspace_context = maybe_context.as_ref().map(|c| c.clone()).unwrap_or_else(|| {
+            ::task_core::workspace_setup::WorkspaceContext::new(DEFAULT_WORKSPACE_ID.to_string())
+        });
+
+        // Update PRD content if provided
+        if let Some(prd_content) = params.prd_content {
+            let mut updated_context = workspace_context;
+            updated_context.prd_content = Some(prd_content);
+
+            // Save updated context
+            if maybe_context.is_some() {
+                self.workspace_context_repository
+                    .update(updated_context)
+                    .await?;
+            } else {
+                self.workspace_context_repository
+                    .create(updated_context)
+                    .await?;
+            }
+        }
+
+        // Always use ClaudeCode as default AI tool type
         let response = self
             .workspace_setup_service
-            .get_setup_instructions(params.ai_tool_type)
+            .get_setup_instructions(::task_core::workspace_setup::AiToolType::ClaudeCode)
             .await
             .map_err(|e| match e {
                 WorkspaceSetupError::UnsupportedAiTool(tool) => {
@@ -291,17 +320,18 @@ impl<
             })?;
 
         // Get-or-create workspace context for statefulness
+        use task_core::protocol::DEFAULT_WORKSPACE_ID;
         let maybe_context = self
             .workspace_context_repository
-            .get_by_id(&params.workspace_id)
+            .get_by_id(DEFAULT_WORKSPACE_ID)
             .await?;
 
         let mut workspace_context = maybe_context.clone().unwrap_or_else(|| {
-            ::task_core::workspace_setup::WorkspaceContext::new(params.workspace_id.clone())
+            ::task_core::workspace_setup::WorkspaceContext::new(DEFAULT_WORKSPACE_ID.to_string())
         });
 
         // Update context with new data
-        workspace_context.prd_content = Some(params.prd_content);
+        workspace_context.prd_content = Some(params.prd_content.clone());
         workspace_context.workflow_data = Some(response.payload.clone());
 
         // Save context (create if new, update if existing)
@@ -336,28 +366,26 @@ impl<
     }
 
     async fn register_agent(&self, params: RegisterAgentParams) -> Result<AgentRegistration> {
+        use task_core::protocol::DEFAULT_WORKSPACE_ID;
+        
         // Basic validation
-        if params.name.trim().is_empty() {
+        if params.agent_name.trim().is_empty() {
             return Err(::task_core::TaskError::Validation(
                 "Agent name cannot be empty".to_string(),
             ));
         }
 
-        if params.description.len() > 300 {
-            return Err(::task_core::TaskError::Validation(
-                "Agent description cannot exceed 300 characters".to_string(),
-            ));
-        }
-
-        if params.prompt.trim().is_empty() {
-            return Err(::task_core::TaskError::Validation(
-                "Agent prompt cannot be empty".to_string(),
-            ));
+        if let Some(ref desc) = params.description {
+            if desc.len() > 300 {
+                return Err(::task_core::TaskError::Validation(
+                    "Agent description cannot exceed 300 characters".to_string(),
+                ));
+            }
         }
 
         // Validate name format (kebab-case)
         if !params
-            .name
+            .agent_name
             .chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
         {
@@ -372,35 +400,35 @@ impl<
             // 1. Load existing context if present
             let maybe_context = self
                 .workspace_context_repository
-                .get_by_id(&params.workspace_id)
+                .get_by_id(DEFAULT_WORKSPACE_ID)
                 .await?;
 
             // 2. Check if context exists and prepare for modification
             let context_exists = maybe_context.is_some();
             let mut workspace_context = maybe_context.unwrap_or_else(|| {
-                ::task_core::workspace_setup::WorkspaceContext::new(params.workspace_id.clone())
+                ::task_core::workspace_setup::WorkspaceContext::new(DEFAULT_WORKSPACE_ID.to_string())
             });
 
             // 3. Duplicate-agent guard (in case another peer registered same name first)
             if workspace_context
                 .registered_agents
                 .iter()
-                .any(|agent| agent.name == params.name)
+                .any(|agent| agent.name == params.agent_name)
             {
                 return Err(TaskError::DuplicateKey(format!(
                     "Agent with name '{}' already exists",
-                    params.name
+                    params.agent_name
                 )));
             }
 
             // 4. Construct new AgentRegistration
             let agent_registration = AgentRegistration {
-                name: params.name.clone(),
-                description: params.description.clone(),
-                prompt: params.prompt.clone(),
+                name: params.agent_name.clone(),
+                description: params.description.clone().unwrap_or_default(),
+                prompt: format!("Agent: {}, Type: {}", params.agent_name, params.agent_type),
                 capabilities: params.capabilities.clone(),
-                ai_tool_type: params.ai_tool_type,
-                dependencies: params.dependencies.clone().unwrap_or_default(),
+                ai_tool_type: ::task_core::workspace_setup::AiToolType::ClaudeCode,
+                dependencies: Vec::new(),
             };
 
             // 5. Mutate context
@@ -442,11 +470,12 @@ impl<
 
     async fn get_instructions_for_main_ai_file(
         &self,
-        params: GetInstructionsForMainAiFileParams,
+        _params: GetInstructionsForMainAiFileParams,
     ) -> Result<MainAiFileInstructions> {
+        // Use ClaudeCode as default AI tool type, ignore file_type for now
         let response = self
             .workspace_setup_service
-            .get_main_file_instructions(params.ai_tool_type)
+            .get_main_file_instructions(::task_core::workspace_setup::AiToolType::ClaudeCode)
             .await
             .map_err(|e| {
                 ::task_core::TaskError::Protocol(format!("Main AI file instructions error: {e}"))
@@ -456,13 +485,15 @@ impl<
     }
 
     async fn create_main_ai_file(&self, params: CreateMainAiFileParams) -> Result<MainAiFileData> {
+        use task_core::protocol::DEFAULT_WORKSPACE_ID;
+        
         // Generate the main AI file (only once – outside the retry loop)
         let response = self
             .workspace_setup_service
             .create_main_file(
                 &params.content,
-                params.ai_tool_type,
-                params.project_name.as_deref(),
+                ::task_core::workspace_setup::AiToolType::ClaudeCode,
+                None, // No project name provided in simplified interface
             )
             .await
             .map_err(|e| {
@@ -472,8 +503,8 @@ impl<
         // Pre-build the file metadata so it can be reused when we retry
         let file_metadata = ::task_core::workspace_setup::GeneratedFileMetadata {
             path: response.payload.file_name.clone(),
-            description: format!("Main AI coordination file for {}", params.ai_tool_type),
-            ai_tool_type: params.ai_tool_type,
+            description: "Main AI coordination file for Claude Code".to_string(),
+            ai_tool_type: ::task_core::workspace_setup::AiToolType::ClaudeCode,
             content_type: "text/markdown".to_string(),
             created_at: chrono::Utc::now(),
         };
@@ -484,12 +515,12 @@ impl<
             // 1. Fetch or create workspace context
             let maybe_context = self
                 .workspace_context_repository
-                .get_by_id(&params.workspace_id)
+                .get_by_id(DEFAULT_WORKSPACE_ID)
                 .await?;
 
             let context_exists = maybe_context.is_some();
             let mut workspace_context = maybe_context.unwrap_or_else(|| {
-                ::task_core::workspace_setup::WorkspaceContext::new(params.workspace_id.clone())
+                ::task_core::workspace_setup::WorkspaceContext::new(DEFAULT_WORKSPACE_ID.to_string())
             });
 
             // 2. Avoid duplicate insertion on retry
@@ -537,19 +568,18 @@ impl<
 
     async fn get_workspace_manifest(
         &self,
-        params: GetWorkspaceManifestParams,
+        _params: GetWorkspaceManifestParams,
     ) -> Result<WorkspaceManifest> {
-        // Load workspace context from repository using workspace_id
+        use task_core::protocol::DEFAULT_WORKSPACE_ID;
+        
+        // Load workspace context from repository using DEFAULT_WORKSPACE_ID
         let workspace_context = self
             .workspace_context_repository
-            .get_by_id(&params.workspace_id)
+            .get_by_id(DEFAULT_WORKSPACE_ID)
             .await?
-            .ok_or_else(|| {
-                ::task_core::TaskError::NotFound(format!(
-                    "Workspace not found: {}",
-                    params.workspace_id
-                ))
-            })?;
+            .unwrap_or_else(|| {
+                ::task_core::workspace_setup::WorkspaceContext::new(DEFAULT_WORKSPACE_ID.to_string())
+            });
 
         // Parse PRD from workspace context
         let prd_content = workspace_context.prd_content.as_ref().ok_or_else(|| {
@@ -562,7 +592,7 @@ impl<
         // Use registered agents from workspace context
         let agents = workspace_context.registered_agents.clone();
 
-        let include_generated_files = params.include_generated_files.unwrap_or(true);
+        let include_generated_files = true; // Always include generated files by default
 
         let response = self
             .workspace_setup_service

@@ -330,17 +330,18 @@ pub struct GetTaskMessagesParams {
 
 // Workspace Setup Parameter Types
 
+/// Default workspace ID for per-project database isolation
+pub const DEFAULT_WORKSPACE_ID: &str = "default";
+
 /// MCP parameters for getting setup instructions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetSetupInstructionsParams {
-    pub workspace_id: String,
-    pub ai_tool_type: crate::workspace_setup::AiToolType,
+    pub prd_content: Option<String>,
 }
 
 /// MCP parameters for getting agentic workflow description
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetAgenticWorkflowDescriptionParams {
-    pub workspace_id: String,
     pub prd_content: String,
     pub requested_agent_count: Option<u32>,
 }
@@ -348,38 +349,28 @@ pub struct GetAgenticWorkflowDescriptionParams {
 /// MCP parameters for registering an agent
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisterAgentParams {
-    pub workspace_id: String,
-    pub name: String,
-    pub description: String,
-    pub prompt: String,
+    pub agent_name: String,
+    pub agent_type: String,
     pub capabilities: Vec<String>,
-    pub ai_tool_type: crate::workspace_setup::AiToolType,
-    pub dependencies: Option<Vec<String>>,
+    pub description: Option<String>,
 }
 
 /// MCP parameters for getting main AI file instructions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetInstructionsForMainAiFileParams {
-    pub workspace_id: String,
-    pub ai_tool_type: crate::workspace_setup::AiToolType,
+    pub file_type: Option<String>,
 }
 
 /// MCP parameters for creating main AI file
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateMainAiFileParams {
-    pub workspace_id: String,
     pub content: String,
-    pub ai_tool_type: crate::workspace_setup::AiToolType,
-    pub project_name: Option<String>,
-    pub overwrite_existing: Option<bool>,
 }
 
 /// MCP parameters for getting workspace manifest
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetWorkspaceManifestParams {
-    pub workspace_id: String,
-    pub ai_tool_type: crate::workspace_setup::AiToolType,
-    pub include_generated_files: Option<bool>,
+    // No parameters needed - uses current project workspace
 }
 
 #[cfg(test)]

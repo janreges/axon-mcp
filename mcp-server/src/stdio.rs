@@ -267,7 +267,8 @@ impl<
                                 "properties": {
                                     "id": {"type": "integer"},
                                     "name": {"type": "string"},
-                                    "description": {"type": "string"}
+                                    "description": {"type": "string"},
+                                    "owner_agent_name": {"type": "string"}
                                 },
                                 "required": ["id"]
                             }
@@ -312,10 +313,13 @@ impl<
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "owner_agent_name": {"type": "string"},
+                                    "owner": {"type": "string"},
                                     "state": {"type": "string"},
-                                    "limit": {"type": "integer"},
-                                    "offset": {"type": "integer"}
+                                    "created_after": {"type": "string"},
+                                    "created_before": {"type": "string"},
+                                    "completed_after": {"type": "string"},
+                                    "completed_before": {"type": "string"},
+                                    "limit": {"type": "integer"}
                                 }
                             }
                         },
@@ -326,9 +330,9 @@ impl<
                                 "type": "object",
                                 "properties": {
                                     "id": {"type": "integer"},
-                                    "new_owner_agent_name": {"type": "string"}
+                                    "new_owner": {"type": "string"}
                                 },
-                                "required": ["id", "new_owner_agent_name"]
+                                "required": ["id", "new_owner"]
                             }
                         },
                         {
@@ -405,6 +409,7 @@ impl<
                                 "type": "object",
                                 "properties": {
                                     "session_id": {"type": "integer"},
+                                    "notes": {"type": "string"},
                                     "productivity_score": {"type": "number"}
                                 },
                                 "required": ["session_id"]
@@ -448,10 +453,8 @@ impl<
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "workspace_id": {"type": "string"},
                                     "prd_content": {"type": "string"}
-                                },
-                                "required": ["workspace_id"]
+                                }
                             }
                         },
                         {
@@ -460,10 +463,10 @@ impl<
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "workspace_id": {"type": "string"},
-                                    "prd_content": {"type": "string"}
+                                    "prd_content": {"type": "string"},
+                                    "requested_agent_count": {"type": "integer"}
                                 },
-                                "required": ["workspace_id"]
+                                "required": ["prd_content"]
                             }
                         },
                         {
@@ -472,13 +475,12 @@ impl<
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "workspace_id": {"type": "string"},
                                     "agent_name": {"type": "string"},
                                     "agent_type": {"type": "string"},
                                     "capabilities": {"type": "array", "items": {"type": "string"}},
                                     "description": {"type": "string"}
                                 },
-                                "required": ["workspace_id", "agent_name", "agent_type", "capabilities"]
+                                "required": ["agent_name", "agent_type", "capabilities"]
                             }
                         },
                         {
@@ -487,10 +489,8 @@ impl<
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "workspace_id": {"type": "string"},
                                     "file_type": {"type": "string"}
-                                },
-                                "required": ["workspace_id"]
+                                }
                             }
                         },
                         {
@@ -499,22 +499,16 @@ impl<
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "workspace_id": {"type": "string"},
-                                    "file_path": {"type": "string"},
                                     "content": {"type": "string"}
                                 },
-                                "required": ["workspace_id", "file_path", "content"]
+                                "required": ["content"]
                             }
                         },
                         {
                             "name": "get_workspace_manifest",
                             "description": "Generate complete workspace manifest",
                             "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "workspace_id": {"type": "string"}
-                                },
-                                "required": ["workspace_id"]
+                                "type": "object"
                             }
                         }
                     ]
