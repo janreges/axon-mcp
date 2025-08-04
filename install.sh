@@ -240,8 +240,7 @@ download_binary_to_dir() {
         fatal "Failed to create directory $target_install_dir. Check permissions or run with sudo if necessary."
     fi
     
-    # Install binary atomically
-    info "Installing binary '$MCP_NAME' to '$target_install_dir'..."
+    # Install binary atomically with update support
     if [ "$PLATFORM_OS" = "windows" ]; then
         SOURCE_BINARY="$TMP_DIR/${MCP_NAME}.exe"
         TARGET_BINARY="$target_install_dir/${MCP_NAME}.exe"
@@ -250,16 +249,44 @@ download_binary_to_dir() {
         TARGET_BINARY="$target_install_dir/$MCP_NAME"
     fi
     
-    if ! cp "$SOURCE_BINARY" "$TARGET_BINARY"; then
-        fatal "Failed to copy binary. Check permissions."
+    # Check if binary already exists and get version info
+    if [ -f "$TARGET_BINARY" ]; then
+        EXISTING_VERSION=$("$TARGET_BINARY" --version 2>/dev/null || echo "unknown")
+        info "Found existing binary: $EXISTING_VERSION"
+        info "Updating to latest version..."
+        
+        # Create backup of existing binary
+        BACKUP_BINARY="${TARGET_BINARY}.backup"
+        if ! cp "$TARGET_BINARY" "$BACKUP_BINARY" 2>/dev/null; then
+            warning "Could not create backup of existing binary"
+        fi
+    else
+        info "Installing binary '$MCP_NAME' to '$target_install_dir'..."
     fi
-    success "Binary '$MCP_NAME' successfully copied to '$target_install_dir'."
+    
+    # Atomic installation: write to temp file first, then move
+    TEMP_BINARY="${TARGET_BINARY}.tmp"
+    if ! cp "$SOURCE_BINARY" "$TEMP_BINARY"; then
+        fatal "Failed to copy binary to temporary location. Check permissions."
+    fi
+    
+    # Atomic move to final location
+    if ! mv "$TEMP_BINARY" "$TARGET_BINARY"; then
+        fatal "Failed to install binary. Check permissions."
+    fi
+    
+    success "Binary '$MCP_NAME' successfully installed to '$target_install_dir'."
     
     # Ensure executable permissions (not needed on Windows)
     if [ "$PLATFORM_OS" != "windows" ]; then
         if ! chmod +x "$TARGET_BINARY"; then
             warning "Failed to set executable permissions for '$TARGET_BINARY'."
         fi
+    fi
+    
+    # Clean up backup file after successful installation
+    if [ -f "${TARGET_BINARY}.backup" ]; then
+        rm -f "${TARGET_BINARY}.backup" 2>/dev/null || true
     fi
 }
 
