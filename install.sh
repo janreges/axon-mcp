@@ -487,16 +487,12 @@ main() {
         fatal "Unknown installation mode: $INSTALL_MODE"
     fi
     
-    printf "\n%b📋 Pre-Installation Checks%b\n" "$BOLD" "$RESET"
-    printf "───────────────────────────\n"
     # Check requirements
     check_requirements
     
-    # Detect platform
+    # Detect platform  
     detect_platform
     
-    printf "\n%b📦 Download & Installation%b\n" "$BOLD" "$RESET"
-    printf "──────────────────────────\n"
     # Download and install with custom directory
     download_binary_to_dir "$INSTALL_DIR"
     
@@ -505,13 +501,8 @@ main() {
         configure_path
     fi
     
-    printf "\n%b🔍 Health Check%b\n" "$BOLD" "$RESET"
-    printf "───────────────\n"
     # Run health check
     health_check
-    
-    printf "\n%b⚙️  Post-Installation Setup%b\n" "$BOLD" "$RESET"  
-    printf "──────────────────────────\n"
     # --- Post-Installation Automation ---
     if [ "$INSTALL_MODE" = "project" ]; then
         info "Running automation steps for project-scoped installation..."
@@ -568,8 +559,7 @@ main() {
         info "Then run 'source ~/.bashrc' (or appropriate file) or restart terminal."
     fi
     
-    printf "\n%b%b🎉 Installation Complete!%b\n" "$GREEN" "$BOLD" "$RESET"
-    printf "%b%b═════════════════════════%b\n\n" "$GREEN" "$BOLD" "$RESET"
+    printf "\n%b🎉 Axon MCP Installed Successfully!%b\n\n" "$GREEN$BOLD" "$RESET"
     
     # Determine project root and name for server startup
     CURRENT_DIR="$(pwd)"
@@ -588,45 +578,25 @@ main() {
         BINARY_PATH="${BINARY_PATH}.exe"
     fi
     
-    printf "%b🚀 How to Start the MCP Server:%b\n" "$BOLD" "$RESET"
-    printf "═══════════════════════════════════\n\n"
-    printf "%b⚠️  IMPORTANT: Replace the placeholders below with your actual values:%b\n" "$YELLOW" "$RESET"
-    printf "   • Replace %b<project-name>%b with your project name (no spaces)\n" "$BOLD" "$RESET"
-    printf "   • Replace %b<full-path-to-project>%b with absolute path to your project\n\n" "$BOLD" "$RESET"
+    printf "%b🚀 Next Steps:%b\n\n" "$BOLD" "$RESET"
     
-    printf "1. %bOpen a new terminal window%b and run:\n\n" "$BOLD" "$RESET"
-    printf "%b%s --start --port=%s --project=<project-name> --project-root=\"<full-path-to-project>\"%b\n\n" "$BLUE" "$BINARY_PATH" "$SERVER_PORT" "$RESET"
+    printf "%b1. Start Axon MCP Server:%b\n" "$BOLD" "$RESET"
+    printf "   Open a new terminal and run:\n"
+    printf "   %b%s --start --port=%s --project=%s --project-root=\"%s\"%b\n\n" "$BLUE" "$BINARY_PATH" "$SERVER_PORT" "$PROJECT_NAME" "$STARTUP_PROJECT_ROOT" "$RESET"
     
-    printf "%bExample with real values:%b\n" "$BOLD" "$RESET"
-    printf "%b%s --start --port=%s --project=%s --project-root=\"%s\"%b\n\n" "$BLUE" "$BINARY_PATH" "$SERVER_PORT" "$PROJECT_NAME" "$STARTUP_PROJECT_ROOT" "$RESET"
+    printf "%b2. Connect Claude Code:%b\n" "$BOLD" "$RESET"
+    printf "   Once server is running:\n"
+    printf "   %bcd \"%s\"%b\n" "$BLUE" "$STARTUP_PROJECT_ROOT" "$RESET"
+    printf "   %bclaude mcp add --url http://127.0.0.1:%s%b\n\n" "$BLUE" "$SERVER_PORT" "$RESET"
     
-    printf "2. %bOnce the server is running%b, navigate to your project and add it to Claude Code:\n\n" "$BOLD" "$RESET"
-    printf "%bcd <full-path-to-project>%b\n" "$BLUE" "$RESET"
-    printf "%bclaude mcp add --url http://127.0.0.1:%s%b\n\n" "$BLUE" "$SERVER_PORT" "$RESET"
-    
-    printf "%bExample:%b\n" "$BOLD" "$RESET"
-    printf "%bcd \"%s\"%b\n" "$BLUE" "$STARTUP_PROJECT_ROOT" "$RESET"
-    printf "%bclaude mcp add --url http://127.0.0.1:%s%b\n\n" "$BLUE" "$SERVER_PORT" "$RESET"
-    
-    printf "%b📋 Quick Verification:%b\n" "$BOLD" "$RESET"
-    printf "─────────────────────\n"
-    printf "• Server health check: %bcurl http://127.0.0.1:%s/health%b\n" "$BLUE" "$SERVER_PORT" "$RESET"
-    printf "• Version check: %b%s --version%b\n" "$BLUE" "$BINARY_PATH" "$RESET"
+    printf "%b✅ Quick Test (optional):%b\n" "$BOLD" "$RESET"
+    printf "• Health check: %bcurl http://127.0.0.1:%s/health%b\n" "$BLUE" "$SERVER_PORT" "$RESET"
     printf "• In Claude Code: %b/mcp%b to verify connection\n\n" "$BLUE" "$RESET"
     
-    printf "%b🎯 Key Features:%b\n" "$BOLD" "$RESET"
-    printf "─────────────────\n"
-    printf "• HTTP-only transport for multi-agent coordination\n"
-    printf "• Project-scoped SQLite database in .axon/\n"
-    printf "• All 22 MCP functions including task claiming and timeout\n"
-    printf "• Race condition fixes and 15-minute timeout mechanism\n\n"
-    
-    printf "%b💡 Pro Tips:%b\n" "$YELLOW" "$RESET"
-    printf "─────────────\n"
-    printf "• Keep the server running in a separate terminal\n"
-    printf "• Database will be created at: %s/.axon/axon.%s.sqlite\n" "$STARTUP_PROJECT_ROOT" "$PROJECT_NAME"
-    printf "• Server logs show all MCP function calls\n"
-    printf "• Use Ctrl+C to stop the server gracefully\n\n"
+    printf "%b💡 Tips:%b\n" "$YELLOW" "$RESET"
+    printf "• Keep server running in separate terminal\n"
+    printf "• Stop server with Ctrl+C\n"
+    printf "• Database: %s/.axon/axon.%s.sqlite\n\n" "$STARTUP_PROJECT_ROOT" "$PROJECT_NAME"
 }
 
 # Run main function only if script is executed directly (not sourced)
